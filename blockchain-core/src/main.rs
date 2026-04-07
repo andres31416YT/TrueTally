@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use axum::{
     extract::{Path, State},
     http::{StatusCode, header},
@@ -14,8 +15,17 @@ use axum::{
     serve,
 };
 
+const CHAIN_DATA_PATH: &str = "/data/db/chain.json";
+
 static BLOCKCHAIN: Lazy<Arc<Mutex<Blockchain>>> = Lazy::new(|| {
-    Arc::new(Mutex::new(Blockchain::new(2, false)))
+    let chain_path = PathBuf::from(CHAIN_DATA_PATH);
+    if chain_path.exists() {
+        println!("Loading blockchain from {}", CHAIN_DATA_PATH);
+        Arc::new(Mutex::new(Blockchain::load_from_file(&chain_path, 2, false)))
+    } else {
+        println!("Creating new blockchain");
+        Arc::new(Mutex::new(Blockchain::new(2, false)))
+    }
 });
 
 #[derive(Serialize)]
@@ -101,14 +111,17 @@ async fn add_vote(
     }
 
     match chain.add_block(vote) {
-        Ok(block) => (
-            StatusCode::CREATED,
-            Json(ApiResponse::success(VoteResult {
-                index: block.index,
-                hash: block.hash,
-                timestamp: block.timestamp.to_rfc3339(),
-            })),
-        ).into_response(),
+        Ok(block) => {
+            let _ = chain.save_to_file(CHAIN_DATA_PATH);
+            (
+                StatusCode::CREATED,
+                Json(ApiResponse::success(VoteResult {
+                    index: block.index,
+                    hash: block.hash,
+                    timestamp: block.timestamp.to_rfc3339(),
+                })),
+            ).into_response()
+        }
         Err(e) => (
             StatusCode::BAD_REQUEST,
             Json(ApiResponse::<VoteResult>::error(e)),

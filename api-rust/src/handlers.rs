@@ -133,7 +133,10 @@ pub async fn get_results(
         Ok(response) => {
             if response.status().is_success() {
                 if let Ok(data) = response.json::<serde_json::Value>().await {
-                    return Ok((StatusCode::OK, Json(ApiResponse::ok(data))));
+                    let results = data.get("data")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Object(Default::default()));
+                    return Ok((StatusCode::OK, Json(ApiResponse::ok(results))));
                 }
             }
             Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err("Failed to get results from blockchain".to_string()))))
@@ -189,7 +192,7 @@ pub async fn list_candidates(
 pub async fn add_candidate(
     State(state): State<Arc<Mutex<AppState>>>,
     Json(payload): Json<NewCandidate>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<i64>>)> {
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<i32>>)> {
     let state = state.lock().await;
     
     match db::add_candidate(&state.db_pool, &payload.name, &payload.party, payload.bio.as_deref()).await {
@@ -200,4 +203,42 @@ pub async fn add_candidate(
 
 pub async fn health_check() -> &'static str {
     "OK"
+}
+
+pub async fn seed_candidates_internal(state: &Arc<Mutex<AppState>>) -> Result<String, String> {
+    use crate::db;
+    
+    let state_guard = state.lock().await;
+    
+    let candidates_exist = db::list_candidates(&state_guard.db_pool).await
+        .map(|c| !c.is_empty())
+        .unwrap_or(false);
+    
+    if candidates_exist {
+        return Ok("Candidates already exist".to_string());
+    }
+    
+    let default_candidates = vec![
+        ("Candidate A", "Party Alpha", Some("Candidate A - Proponent of technology and innovation")),
+        ("Candidate B", "Party Beta", Some("Candidate B - Champion of education reform")),
+        ("Candidate C", "Party Gamma", Some("Candidate C - Advocate for environmental protection")),
+    ];
+    
+    let mut seeded = 0;
+    for (name, party, bio) in default_candidates {
+        if db::add_candidate(&state_guard.db_pool, name, party, bio.as_deref()).await.is_ok() {
+            seeded += 1;
+        }
+    }
+    
+    Ok(format!("Seeded {} candidates", seeded))
+}
+
+pub async fn seed_candidates(
+    State(state): State<Arc<Mutex<AppState>>>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<String>>)> {
+    match seed_candidates_internal(&state).await {
+        Ok(msg) => Ok((StatusCode::OK, Json(ApiResponse::ok(msg)))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(e)))),
+    }
 }

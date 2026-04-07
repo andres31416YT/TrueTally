@@ -31,6 +31,13 @@ async fn main() {
         node_rpc_url,
     }));
     
+    let seed_state = Arc::clone(&state);
+    if let Err(e) = handlers::seed_candidates_internal(&seed_state).await {
+        eprintln!("Warning: Failed to seed candidates: {}", e);
+    } else {
+        println!("Candidates seeded successfully");
+    }
+    
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -45,6 +52,7 @@ async fn main() {
         .route("/blocks", axum::routing::get(handlers::get_blocks))
         .route("/candidates", axum::routing::get(handlers::list_candidates))
         .route("/candidates", axum::routing::post(handlers::add_candidate))
+        .route("/seed", axum::routing::post(handlers::seed_candidates))
         .layer(cors)
         .with_state(state);
     

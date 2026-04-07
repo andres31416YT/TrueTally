@@ -1,0 +1,28 @@
+[
+  {
+    "index": 0,
+    "timestamp": "2026-04-07T21:10:47.415254001Z",
+    "data": {
+      "voter_public_key": "genesis",
+      "candidate_id": "genesis",
+      "signature": "genesis",
+      "timestamp": "2026-04-07T21:10:47.415253561Z"
+    },
+    "previous_hash": "0",
+    "nonce": 0,
+    "hash": "4bc46c7bea23e4602efdd72d5c36fa1b00ba8d1381ab3cfb26de3c933019d33e"
+  },
+  {
+    "index": 1,
+    "timestamp": "2026-04-07T21:11:08.966442498Z",
+    "data": {
+      "voter_public_key": "test_persist_key",
+      "candidate_id": "2",
+      "signature": "persist_test_sig",
+      "timestamp": "2026-04-07T21:11:08.966428948Z"
+    },
+    "previous_hash": "4bc46c7bea23e4602efdd72d5c36fa1b00ba8d1381ab3cfb26de3c933019d33e",
+    "nonce": 0,
+    "hash": "cccb645d1185ee11dbca84e51a17738fc876ea111d39dfb85c0f11bf0b1ac101"
+  }
+]

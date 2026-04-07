@@ -10,7 +10,7 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS voters (
-            id SERIAL PRIMARY KEY,
+            id BIGSERIAL PRIMARY KEY,
             public_key VARCHAR(255) UNIQUE NOT NULL,
             name VARCHAR(255) NOT NULL,
             email VARCHAR(255) UNIQUE NOT NULL,
@@ -25,7 +25,7 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS candidates (
-            id SERIAL PRIMARY KEY,
+            id BIGSERIAL PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             party VARCHAR(255) NOT NULL,
             bio TEXT
@@ -111,7 +111,7 @@ pub async fn list_candidates(pool: &PgPool) -> Result<Vec<(i64, String, String, 
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| (r.get("id"), r.get("name"), r.get("party"), r.get("bio"))).collect())
+    Ok(rows.into_iter().map(|r| (r.get::<i64, _>("id"), r.get("name"), r.get("party"), r.get("bio"))).collect())
 }
 
 pub async fn add_candidate(
