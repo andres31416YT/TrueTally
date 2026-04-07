@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api, Block, Candidate, VoteRequest, VoteResponse } from './api';
+import { api, Block, Candidate, VoteRequest, VoteResponse } from '@/lib/api';
 
-interface ConnectionStatus {
+export interface ConnectionStatus {
   isConnected: boolean;
   latency?: number;
   lastChecked?: Date;

@@ -93,9 +93,10 @@ impl P2PNode {
     pub async fn connect_to_peer(&self, peer_addr: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let stream = TcpStream::connect(peer_addr).await?;
         let peers = self.peers.clone();
+        let peer_addr_owned = peer_addr.to_string();
         
         tokio::spawn(async move {
-            let _ = Self::handle_connection(stream, peer_addr.parse().unwrap(), peers, Arc::new(Mutex::new(Vec::new()))).await;
+            let _ = Self::handle_connection(stream, peer_addr_owned.parse().unwrap(), peers, Arc::new(Mutex::new(Vec::new()))).await;
         });
         
         Ok(())

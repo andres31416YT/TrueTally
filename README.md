@@ -1,40 +1,113 @@
-# TrueTally
-Sistema blockchain de votacion electrónica
+# TrueTally - Sistema de Votación Blockchain
 
-Contenedor: blockchain-node (Core)
-Es el motor principal. Si usan Substrate, este contenedor correrá el binario compilado de Rust. Si es propia, será su ejecutable.
+Sistema de votación electrónica basado en blockchain con interfaz web moderna.
 
-Responsable: Integrante A (Engine) e Integrante B (Lógica/Pallets).
+## Requisitos Previos
 
-Función: Gestionar el P2P, el consenso y el almacenamiento de los bloques en disco.
+- Docker y Docker Compose instalados
+- al menos 4GB de RAM disponibles
+- Puertos libres: 3000, 8080, 9944, 30333, 5432
 
-Puerto: 30333 (P2P) y 9944 (WebSocket/RPC para consultas).
+## Inicio Rápido
 
-Contenedor: api-gateway (Backend)
-Un servidor escrito en Rust (Axum/Actix) que actúa como intermediario. El frontend no debería hablar directamente con el nodo por seguridad y complejidad.
+### 1. Construir y ejecutar todos los servicios
 
-Responsable: Integrante C (Conector).
+```bash
+docker compose up --build
+```
 
-Función: Recibir los votos del usuario, validar el formato, y enviarlos al nodo. También consulta el estado de la votación para enviárselo al Front.
+### 2. Acceder a la aplicación
 
-Puerto: 8080.
+- **Frontend**: http://localhost:3000
+- **API Gateway**: http://localhost:8080
+- **RPC Blockchain**: http://localhost:9944
+- **Base de datos**: localhost:5432
 
-Contenedor: database-aux (PostgreSQL/Redis)
-Aunque los votos están en la blockchain, necesitas una base de datos tradicional para la gestión de la aplicación web.
+### 3. Detener los servicios
 
-Responsable: Integrante C.
+```bash
+docker compose down
+```
 
-Función: Guardar sesiones de usuario, metadatos de candidatos (biografías, fotos) y logs de auditoría.
+Para eliminar también los datos de la base de datos:
 
-Puerto: 5432.
+```bash
+docker compose down -v
+```
 
-Contenedor: frontend-app (UI)
-La aplicación en Next.js/React.
+## Servicios
 
-Responsable: Integrante D (Interface).
+| Servicio | Puerto | Descripción |
+|----------|--------|-------------|
+| frontend-app | 3000 | Interfaz de usuario (Next.js) |
+| api-gateway | 8080 | Backend API (Rust/Axum) |
+| blockchain-node | 9944 | Nodo blockchain (RPC) |
+| database-aux | 5432 | PostgreSQL |
 
-Función: Interfaz de usuario para votar y ver resultados.
+## Variables de Entorno
 
-Puerto: 3000.
+### Frontend (`frontend/.env`)
 
-Resumen de la Arquitectura en DockerContenedorImagen Base sugeridaRol del IntegranteBlockchaindebian:bookworm-slim (con binario Rust)Integrantes A y BAPI Gatewayrust:latest (o imagen optimizada)Integrante CDatabasepostgres:16-alpineIntegrante CFrontendnode:20-alpineIntegrante D
+```env
+NEXT_PUBLIC_API_URL=http://api-gateway:8080
+```
+
+### API Gateway
+
+Las variables se configuran automáticamente en Docker Compose:
+
+- `DATABASE_URL`: Conexión a PostgreSQL
+- `NODE_RPC_URL`: URL del nodo blockchain
+
+## Desarrollo
+
+Para desarrollo con reinicio automático:
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+## Solución de Problemas
+
+### Los contenedores no inician
+
+Verificar que los puertos no estén en uso:
+
+```bash
+docker compose down
+docker compose up --build
+```
+
+### Ver logs de un servicio específico
+
+```bash
+docker compose logs api-gateway
+docker compose logs blockchain-node
+docker compose logs frontend-app
+```
+
+### Reiniciar un servicio sin perder datos
+
+```bash
+docker compose restart api-gateway
+```
+
+## Credenciales
+
+| Servicio | Usuario | Contraseña |
+|----------|---------|------------|
+| PostgreSQL | user | pass |
+
+## Arquitectura
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Frontend   │────▶│ API Gateway │────▶│ Blockchain  │
+│ (Next.js)   │     │   (Rust)    │     │   Node      │
+└─────────────┘     └─────────────┘     └─────────────┘
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │ PostgreSQL  │
+                    └─────────────┘
+```

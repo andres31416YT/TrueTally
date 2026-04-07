@@ -11,6 +11,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
+    serve,
 };
 
 static BLOCKCHAIN: Lazy<Arc<Mutex<Blockchain>>> = Lazy::new(|| {
@@ -191,8 +192,8 @@ async fn main() {
     
     println!("Blockchain node running on http://{}", addr);
     
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app)
         .await
         .expect("Failed to start server");
 }

@@ -2,14 +2,7 @@ use api_gateway::{handlers, init_db};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
-use axum::Router;
-
-#[derive(Clone)]
-struct AppState {
-    db_pool: sqlx::PgPool,
-    http_client: reqwest::Client,
-    node_rpc_url: String,
-}
+use axum::{Router, serve};
 
 #[tokio::main]
 async fn main() {
@@ -32,7 +25,7 @@ async fn main() {
         }
     };
     
-    let state = Arc::new(Mutex::new(AppState {
+    let state = Arc::new(Mutex::new(handlers::AppState {
         db_pool,
         http_client: reqwest::Client::new(),
         node_rpc_url,
@@ -59,8 +52,8 @@ async fn main() {
     
     println!("API Gateway running on http://{}", addr);
     
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    serve(listener, app)
         .await
         .expect("Failed to start server");
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { ConnectionIndicator } from '@/components/ConnectionIndicator';
+import { ConnectionIndicator } from '@/components/ConnectionStatus';
 
 interface SystemStatus {
   apiConnected: boolean;

@@ -3,6 +3,8 @@ export interface KeyPair {
   secretKey: string;
 }
 
+import nacl from 'tweetnacl';
+
 export function generateKeyPair(): KeyPair {
   const box = nacl.box.keyPair();
   return {

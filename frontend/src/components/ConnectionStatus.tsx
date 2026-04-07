@@ -1,7 +1,7 @@
 'use client';
 
 import { Wifi, WifiOff, Loader2 } from 'lucide-react';
-import { ConnectionStatus } from './useBlockchain';
+import { ConnectionStatus } from '@/hooks/useBlockchain';
 
 interface ConnectionIndicatorProps {
   status: ConnectionStatus;
