@@ -58,14 +58,16 @@ export interface VoteResponse {
   message?: string;
 }
 
+export interface VoteData {
+  voter_public_key: string;
+  candidate_id: string;
+  signature: string;
+}
+
 export interface Block {
   index: number;
   timestamp: string;
-  data: {
-    voter_public_key: string;
-    candidate_id: string;
-    signature: string;
-  };
+  data: VoteData;
   previous_hash: string;
   nonce: number;
   hash: string;
