@@ -107,5 +107,11 @@ export const api = {
       body: JSON.stringify(candidate),
     }),
 
+  deleteCandidate: (id: number) =>
+    fetchApi<boolean>('/candidates', {
+      method: 'DELETE',
+      body: JSON.stringify({ id }),
+    }),
+
   health: () => fetchApi<{ status: string }>('/health', { method: 'GET' }),
 };

@@ -204,6 +204,28 @@ pub async fn add_candidate(
     }
 }
 
+pub async fn delete_candidate(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Json(payload): Json<serde_json::Value>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<bool>>)> {
+    let state = state.lock().await;
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+    
+    if id <= 0 {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Invalid candidate ID".to_string()))));
+    }
+    
+    match db::delete_candidate(&state.db_pool, id).await {
+        Ok(deleted) => {
+            if deleted {
+                let _ = db::log_audit(&state.db_pool, "candidate_deleted", &format!("id: {}", id)).await;
+            }
+            Ok((StatusCode::OK, Json(ApiResponse::ok(deleted))))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
+    }
+}
+
 pub async fn health_check() -> &'static str {
     "OK"
 }
@@ -222,9 +244,9 @@ pub async fn seed_candidates_internal(state: &Arc<Mutex<AppState>>) -> Result<St
     }
     
     let default_candidates = vec![
-        ("Candidate A", "Party Alpha", Some("Candidate A - Proponent of technology and innovation")),
-        ("Candidate B", "Party Beta", Some("Candidate B - Champion of education reform")),
-        ("Candidate C", "Party Gamma", Some("Candidate C - Advocate for environmental protection")),
+        ("María González", "Partido Progreso", Some("Candidata con más de 15 años de experiencia en políticas públicas y desarrollo social")),
+        ("Carlos Mendoza", "Unidad Nacional", Some("Abogado y exalcalde con enfoque en seguridad y economía local")),
+        ("Ana López", "Verde Ecológico", Some("Activista ambiental dedicada a la sostenibilidad y energías renovables")),
     ];
     
     let mut seeded = 0;

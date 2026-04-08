@@ -52,6 +52,7 @@ async fn main() {
         .route("/blocks", axum::routing::get(handlers::get_blocks))
         .route("/candidates", axum::routing::get(handlers::list_candidates))
         .route("/candidates", axum::routing::post(handlers::add_candidate))
+        .route("/candidates", axum::routing::delete(handlers::delete_candidate))
         .route("/seed", axum::routing::post(handlers::seed_candidates))
         .layer(cors)
         .with_state(state);

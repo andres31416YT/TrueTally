@@ -136,6 +136,19 @@ pub async fn add_candidate(
     Ok(row.get("id"))
 }
 
+pub async fn delete_candidate(pool: &PgPool, id: i64) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        DELETE FROM candidates WHERE id = $1
+        "#,
+    )
+    .bind(id)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected() > 0)
+}
+
 pub async fn log_audit(pool: &PgPool, action: &str, details: &str) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
