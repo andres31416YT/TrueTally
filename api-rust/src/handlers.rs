@@ -156,7 +156,10 @@ pub async fn get_blocks(
         Ok(response) => {
             if response.status().is_success() {
                 if let Ok(data) = response.json::<serde_json::Value>().await {
-                    return Ok((StatusCode::OK, Json(ApiResponse::ok(data))));
+                    let blocks = data.get("data")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Array(vec![]));
+                    return Ok((StatusCode::OK, Json(ApiResponse::ok(blocks))));
                 }
             }
             Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err("Failed to get blocks from blockchain".to_string()))))
