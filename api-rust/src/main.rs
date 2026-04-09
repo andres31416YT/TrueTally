@@ -31,13 +31,6 @@ async fn main() {
         node_rpc_url,
     }));
     
-    let seed_state = Arc::clone(&state);
-    if let Err(e) = handlers::seed_candidates_internal(&seed_state).await {
-        eprintln!("Warning: Failed to seed candidates: {}", e);
-    } else {
-        println!("Candidates seeded successfully");
-    }
-    
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -45,15 +38,16 @@ async fn main() {
     
     let app = Router::new()
         .route("/health", axum::routing::get(handlers::health_check))
+        .route("/elections", axum::routing::post(handlers::create_election))
+        .route("/elections", axum::routing::get(handlers::list_elections))
+        .route("/election", axum::routing::post(handlers::get_election))
+        .route("/candidates", axum::routing::post(handlers::add_candidate))
+        .route("/candidates", axum::routing::get(handlers::list_candidates))
         .route("/register", axum::routing::post(handlers::register_voter))
         .route("/voter", axum::routing::post(handlers::get_voter))
         .route("/vote", axum::routing::post(handlers::submit_vote))
-        .route("/results", axum::routing::get(handlers::get_results))
+        .route("/results", axum::routing::post(handlers::get_results))
         .route("/blocks", axum::routing::get(handlers::get_blocks))
-        .route("/candidates", axum::routing::get(handlers::list_candidates))
-        .route("/candidates", axum::routing::post(handlers::add_candidate))
-        .route("/candidates", axum::routing::delete(handlers::delete_candidate))
-        .route("/seed", axum::routing::post(handlers::seed_candidates))
         .layer(cors)
         .with_state(state);
     

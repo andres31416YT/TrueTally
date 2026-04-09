@@ -6,6 +6,7 @@ pub struct Voter {
     pub public_key: String,
     pub name: String,
     pub email: String,
+    pub election_id: String,
     pub registered_at: chrono::DateTime<chrono::Utc>,
     pub has_voted: bool,
 }
@@ -15,11 +16,30 @@ pub struct NewVoter {
     pub public_key: String,
     pub name: String,
     pub email: String,
+    pub election_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Election {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub is_active: bool,
+    pub admin_code: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewElection {
+    pub name: String,
+    pub description: Option<String>,
+    pub admin_code: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Candidate {
     pub id: i64,
+    pub election_id: String,
     pub name: String,
     pub party: String,
     pub bio: Option<String>,
@@ -27,6 +47,7 @@ pub struct Candidate {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewCandidate {
+    pub election_id: String,
     pub name: String,
     pub party: String,
     pub bio: Option<String>,
@@ -36,6 +57,7 @@ pub struct NewCandidate {
 pub struct VoteRequest {
     pub voter_public_key: String,
     pub candidate_id: String,
+    pub election_id: String,
     pub signature: String,
 }
 
