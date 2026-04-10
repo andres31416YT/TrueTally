@@ -1,45 +1,64 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { api } from '@/lib/api';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { useState, useEffect, Suspense } from 'react';
+import { api, Election } from '@/lib/api';
+import { useSearchParams } from 'next/navigation';
 
-interface Results {
-  [key: string]: number;
-}
-
-const COLORS = ['#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
-
-export default function ResultsPage() {
-  const [results, setResults] = useState<Results>({});
+function ResultsContent() {
+  const searchParams = useSearchParams();
+  const electionId = searchParams.get('election_id');
+  
+  const [results, setResults] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [candidates, setCandidates] = useState<Array<{ id: number; name: string; party: string }>>([]);
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [elections, setElections] = useState<Election[]>([]);
+  const [selectedElection, setSelectedElection] = useState<string>(electionId || '');
 
   useEffect(() => {
-    const fetchData = async () => {
-      const [resultsRes, candidatesRes] = await Promise.all([
-        api.getResults(),
-        api.getCandidates(),
-      ]);
-
-      if (resultsRes.success && resultsRes.data) {
-        setResults(resultsRes.data);
-      } else {
-        setError(resultsRes.error || 'Failed to fetch results');
-      }
-
-      if (candidatesRes.success && candidatesRes.data) {
-        setCandidates(candidatesRes.data);
-      }
-
-      setLoading(false);
-    };
-
-    fetchData();
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
+    loadElections();
   }, []);
+
+  useEffect(() => {
+    if (selectedElection) {
+      loadData();
+      const interval = setInterval(loadData, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [selectedElection]);
+
+  const loadElections = async () => {
+    const res = await api.listElections();
+    if (res.success && res.data) {
+      setElections(res.data);
+      if (res.data.length > 0 && !selectedElection) {
+        setSelectedElection(res.data[0].id);
+      }
+    }
+  };
+
+  const loadData = async () => {
+    if (!selectedElection) return;
+    
+    const [resultsRes, candidatesRes] = await Promise.all([
+      api.getResults(selectedElection),
+      api.getCandidates(selectedElection),
+    ]);
+
+    if (resultsRes.success && resultsRes.data) {
+      setResults(resultsRes.data);
+    } else {
+      setError(resultsRes.error || 'Failed to fetch results');
+    }
+
+    if (candidatesRes.success && candidatesRes.data) {
+      setCandidates(candidatesRes.data);
+    }
+
+    setLoading(false);
+  };
+
+  const totalVotes = Object.values(results).reduce((a, b) => a + b, 0);
 
   const chartData = Object.entries(results).map(([candidateId, votes]) => {
     const candidate = candidates.find(c => c.id.toString() === candidateId);
@@ -49,8 +68,6 @@ export default function ResultsPage() {
       votes,
     };
   });
-
-  const totalVotes = Object.values(results).reduce((a, b) => a + b, 0);
 
   if (loading) {
     return (
@@ -62,26 +79,25 @@ export default function ResultsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-primary-700 text-white p-4 shadow-lg">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="text-2xl font-bold">TrueTally - Resultados en Tiempo Real</h1>
+      <header className="bg-blue-600 text-white p-4 shadow-lg">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-2xl font-bold">Resultados - TrueTally</h1>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto p-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <p className="text-sm text-gray-500">Total de Votos</p>
-            <p className="text-3xl font-bold text-primary-600">{totalVotes}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <p className="text-sm text-gray-500">Candidatos</p>
-            <p className="text-3xl font-bold text-green-600">{Object.keys(results).length}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <p className="text-sm text-gray-500">Estado</p>
-            <p className="text-3xl font-bold text-emerald-600">✓ Activo</p>
-          </div>
+      <main className="max-w-4xl mx-auto p-6">
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">Seleccionar Elección</label>
+          <select
+            value={selectedElection}
+            onChange={(e) => setSelectedElection(e.target.value)}
+            className="w-full p-2 border rounded bg-white"
+          >
+            <option value="">Selecciona una elección</option>
+            {elections.map((e) => (
+              <option key={e.id} value={e.id}>{e.name}</option>
+            ))}
+          </select>
         </div>
 
         {error && (
@@ -90,91 +106,79 @@ export default function ResultsPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-lg font-semibold mb-4">Distribución de Votos</h2>
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={chartData}
-                    dataKey="votes"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    label={({ name, votes }) => `${name}: ${votes}`}
-                  >
-                    {chartData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+        {selectedElection && (
+          <>
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="bg-white rounded-lg shadow p-4">
+                <p className="text-sm text-gray-500">Total de Votos</p>
+                <p className="text-2xl font-bold text-blue-600">{totalVotes}</p>
+              </div>
+              <div className="bg-white rounded-lg shadow p-4">
+                <p className="text-sm text-gray-500">Candidatos</p>
+                <p className="text-2xl font-bold text-green-600">{candidates.length}</p>
+              </div>
+              <div className="bg-white rounded-lg shadow p-4">
+                <p className="text-sm text-gray-500">Estado</p>
+                <p className="text-2xl font-bold text-emerald-600">✓ Activo</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-lg font-semibold mb-4">Detalle por Candidato</h2>
+              {chartData.length === 0 ? (
+                <p className="text-gray-500">No hay votos registrados</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2">Candidato</th>
+                      <th className="text-left py-2">Partido</th>
+                      <th className="text-right py-2">Votos</th>
+                      <th className="text-right py-2">%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chartData.map((item, index) => (
+                      <tr key={index} className="border-b">
+                        <td className="py-2">{item.name}</td>
+                        <td className="py-2">{item.party}</td>
+                        <td className="text-right py-2 font-mono">{item.votes}</td>
+                        <td className="text-right py-2">
+                          {totalVotes > 0 ? ((item.votes / totalVotes) * 100).toFixed(1) : 0}%
+                        </td>
+                      </tr>
                     ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="text-center text-gray-500 py-12">
-                No hay votos registrados
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-lg font-semibold mb-4">Gráfico de Barras</h2>
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={chartData}>
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="votes" fill="#0ea5e9" name="Votos" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="text-center text-gray-500 py-12">
-                No hay votos registrados
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-6 bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold mb-4">Detalle por Candidato</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2">Candidato</th>
-                  <th className="text-left py-2">Partido</th>
-                  <th className="text-right py-2">Votos</th>
-                  <th className="text-right py-2">Porcentaje</th>
-                </tr>
-              </thead>
-              <tbody>
-                {chartData.map((item, index) => (
-                  <tr key={index} className="border-b">
-                    <td className="py-2">{item.name}</td>
-                    <td className="py-2">{item.party}</td>
-                    <td className="text-right py-2 font-mono">{item.votes}</td>
-                    <td className="text-right py-2">
-                      {totalVotes > 0 ? ((item.votes / totalVotes) * 100).toFixed(1) : 0}%
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="font-bold">
-                  <td className="py-2">Total</td>
-                  <td></td>
-                  <td className="text-right py-2">{totalVotes}</td>
-                  <td className="text-right py-2">100%</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
+                  </tbody>
+                  <tfoot>
+                    <tr className="font-bold">
+                      <td className="py-2">Total</td>
+                      <td></td>
+                      <td className="text-right py-2">{totalVotes}</td>
+                      <td className="text-right py-2">100%</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+          </>
+        )}
       </main>
     </div>
+  );
+}
+
+function Loading() {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-xl text-gray-600">Cargando...</div>
+    </div>
+  );
+}
+
+export default function ResultsPage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <ResultsContent />
+    </Suspense>
   );
 }

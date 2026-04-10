@@ -6,10 +6,10 @@ export interface KeyPair {
 import nacl from 'tweetnacl';
 
 export function generateKeyPair(): KeyPair {
-  const box = nacl.box.keyPair();
+  const keyPair = nacl.sign.keyPair();
   return {
-    publicKey: toHex(box.publicKey),
-    secretKey: toHex(box.secretKey),
+    publicKey: toHex(keyPair.publicKey),
+    secretKey: toHex(keyPair.secretKey),
   };
 }
 
@@ -31,23 +31,15 @@ export function verifySignature(
   return nacl.sign.detached.verify(messageBytes, signatureBytes, keyBytes);
 }
 
-export function importKeyPairFromHex(publicKey: string, secretKey: string): {
-  publicKey: Uint8Array;
-  secretKey: Uint8Array;
-} {
-  return {
-    publicKey: fromHex(publicKey),
-    secretKey: fromHex(secretKey),
-  };
-}
-
 export function createVotePayload(
   voterPublicKey: string,
-  candidateId: string
+  candidateId: string,
+  electionId: string
 ): string {
   return JSON.stringify({
     voter_public_key: voterPublicKey,
     candidate_id: candidateId,
+    election_id: electionId,
     timestamp: Date.now(),
   });
 }

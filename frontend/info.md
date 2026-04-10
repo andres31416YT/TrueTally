@@ -1,1 +1,0 @@
-Código Next.js/React

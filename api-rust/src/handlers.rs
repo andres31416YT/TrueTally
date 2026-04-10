@@ -1,4 +1,4 @@
-use crate::models::{Candidate, NewCandidate, NewVoter, VoteRequest, VoteResponse};
+use crate::models::{NewElection, NewCandidate, NewVoter, VoteRequest, VoteResponse};
 use crate::db;
 use axum::{
     extract::State,
@@ -43,20 +43,158 @@ impl<T> ApiResponse<T> {
     }
 }
 
+pub async fn create_election(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Json(payload): Json<NewElection>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<String>>)> {
+    let state = state.lock().await;
+    
+    let election_id = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    
+    match db::create_election(&state.db_pool, &election_id, &payload.name, payload.description.as_deref(), &payload.admin_code).await {
+        Ok(_) => {
+            let _ = db::log_audit(&state.db_pool, "election_created", &format!("election: {}", election_id)).await;
+            Ok((StatusCode::CREATED, Json(ApiResponse::ok(election_id))))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
+    }
+}
+
+pub async fn list_elections(
+    State(state): State<Arc<Mutex<AppState>>>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>>)> {
+    let state = state.lock().await;
+    
+    match db::list_elections(&state.db_pool).await {
+        Ok(elections) => {
+            let result: Vec<serde_json::Value> = elections
+                .into_iter()
+                .map(|(id, name, description, is_active)| {
+                    serde_json::json!({
+                        "id": id,
+                        "name": name,
+                        "description": description,
+                        "is_active": is_active
+                    })
+                })
+                .collect();
+            Ok((StatusCode::OK, Json(ApiResponse::ok(result))))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
+    }
+}
+
+pub async fn get_election(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Json(payload): Json<serde_json::Value>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<serde_json::Value>>)> {
+    let state = state.lock().await;
+    let election_id = payload.get("election_id").and_then(|v| v.as_str()).unwrap_or("");
+    
+    match db::get_election(&state.db_pool, election_id).await {
+        Ok(Some((id, name, description, is_active))) => {
+            Ok((StatusCode::OK, Json(ApiResponse::ok(serde_json::json!({
+                "id": id,
+                "name": name,
+                "description": description,
+                "is_active": is_active
+            })))))
+        }
+        Ok(None) => Err((StatusCode::NOT_FOUND, Json(ApiResponse::err("Election not found".to_string())))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
+    }
+}
+
+pub async fn add_candidate(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Json(payload): Json<NewCandidate>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<i64>>)> {
+    let state = state.lock().await;
+    
+    if payload.name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Name cannot be empty".to_string()))));
+    }
+    if payload.party.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Party cannot be empty".to_string()))));
+    }
+    if payload.photo_url.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Photo URL cannot be empty".to_string()))));
+    }
+
+    let exists = db::candidate_exists(&state.db_pool, &payload.election_id, &payload.name).await;
+    if let Ok(true) = exists {
+        return Err((StatusCode::CONFLICT, Json(ApiResponse::err("A candidate with this name already exists in this election".to_string()))));
+    }
+    
+    match db::add_candidate(&state.db_pool, &payload.election_id, &payload.name, &payload.party, payload.bio.as_deref(), Some(&payload.photo_url)).await {
+        Ok(id) => {
+            let _ = db::log_audit(&state.db_pool, "candidate_added", &format!("election: {}", payload.election_id)).await;
+            Ok((StatusCode::CREATED, Json(ApiResponse::ok(id))))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
+    }
+}
+
+pub async fn list_candidates(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Json(payload): Json<serde_json::Value>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>>)> {
+    let state = state.lock().await;
+    let election_id = payload.get("election_id").and_then(|v| v.as_str()).unwrap_or("");
+    
+    match db::list_candidates(&state.db_pool, election_id).await {
+        Ok(candidates) => {
+            let result: Vec<serde_json::Value> = candidates
+                .into_iter()
+                .map(|(id, name, party, bio, photo_url)| {
+                    serde_json::json!({
+                        "id": id,
+                        "name": name,
+                        "party": party,
+                        "bio": bio,
+                        "photo_url": photo_url
+                    })
+                })
+                .collect();
+            Ok((StatusCode::OK, Json(ApiResponse::ok(result))))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
+    }
+}
+
 pub async fn register_voter(
     State(state): State<Arc<Mutex<AppState>>>,
     Json(payload): Json<NewVoter>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<i64>>)> {
     let state = state.lock().await;
+
+    if payload.dni.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("DNI is required".to_string()))));
+    }
+    if payload.name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Name is required".to_string()))));
+    }
+    if payload.email.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Email is required".to_string()))));
+    }
+
+    let existing_voter = db::check_voter_by_dni(&state.db_pool, &payload.election_id, &payload.dni).await;
+    if let Ok(Some((_, true))) = existing_voter {
+        return Err((StatusCode::CONFLICT, Json(ApiResponse::err("Este DNI ya ha emitido un voto en esta elección".to_string()))));
+    }
     
-    match db::register_voter(&state.db_pool, &payload.public_key, &payload.name, &payload.email).await {
+    match db::register_voter(&state.db_pool, &payload.election_id, &payload.dni, &payload.public_key, &payload.name, &payload.email).await {
         Ok(id) => {
-            let _ = db::log_audit(&state.db_pool, "voter_registered", &format!("public_key: {}", payload.public_key)).await;
+            let _ = db::log_audit(&state.db_pool, "voter_registered", &format!("election: {} dni: {} public_key: {}", payload.election_id, payload.dni, payload.public_key)).await;
             Ok((StatusCode::CREATED, Json(ApiResponse::ok(id))))
         }
         Err(e) => {
             if e.to_string().contains("unique") || e.to_string().contains("duplicate") {
-                Err((StatusCode::CONFLICT, Json(ApiResponse::err("Voter already registered".to_string()))))
+                if e.to_string().contains("dni") {
+                    Err((StatusCode::CONFLICT, Json(ApiResponse::err("Este DNI ya está registrado en esta elección".to_string()))))
+                } else {
+                    Err((StatusCode::CONFLICT, Json(ApiResponse::err("Voter already registered for this election".to_string()))))
+                }
             } else {
                 Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e)))))
             }
@@ -69,9 +207,10 @@ pub async fn get_voter(
     Json(payload): Json<serde_json::Value>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<serde_json::Value>>)> {
     let state = state.lock().await;
+    let election_id = payload.get("election_id").and_then(|v| v.as_str()).unwrap_or("");
     let public_key = payload.get("public_key").and_then(|v| v.as_str()).unwrap_or("");
     
-    match db::get_voter_by_public_key(&state.db_pool, public_key).await {
+    match db::get_voter_by_public_key(&state.db_pool, election_id, public_key).await {
         Ok(Some((name, email, has_voted))) => {
             Ok((StatusCode::OK, Json(ApiResponse::ok(serde_json::json!({
                 "name": name,
@@ -90,8 +229,8 @@ pub async fn submit_vote(
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<VoteResponse>>)> {
     let state = state.lock().await;
     
-    if let Ok(Some((_, _, true))) = db::get_voter_by_public_key(&state.db_pool, &payload.voter_public_key).await {
-        return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("This voter has already voted".to_string()))));
+    if let Ok(Some((_, _, true))) = db::get_voter_by_public_key(&state.db_pool, &payload.election_id, &payload.voter_public_key).await {
+        return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("This voter has already voted in this election".to_string()))));
     }
 
     let rpc_url = format!("{}/vote", state.node_rpc_url);
@@ -104,8 +243,8 @@ pub async fn submit_vote(
     {
         Ok(response) => {
             if response.status().is_success() {
-                let _ = db::mark_voter_voted(&state.db_pool, &payload.voter_public_key).await;
-                let _ = db::log_audit(&state.db_pool, "vote_submitted", &format!("voter: {}", payload.voter_public_key)).await;
+                let _ = db::mark_voter_voted(&state.db_pool, &payload.election_id, &payload.voter_public_key).await;
+                let _ = db::log_audit(&state.db_pool, "vote_submitted", &format!("election: {} voter: {}", payload.election_id, payload.voter_public_key)).await;
                 
                 Ok((StatusCode::OK, Json(ApiResponse::ok(VoteResponse {
                     success: true,
@@ -124,10 +263,12 @@ pub async fn submit_vote(
 
 pub async fn get_results(
     State(state): State<Arc<Mutex<AppState>>>,
+    Json(payload): Json<serde_json::Value>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<serde_json::Value>>)> {
     let state = state.lock().await;
+    let election_id = payload.get("election_id").and_then(|v| v.as_str()).unwrap_or("");
     
-    let rpc_url = format!("{}/results", state.node_rpc_url);
+    let rpc_url = format!("{}/results?election={}", state.node_rpc_url, election_id);
     
     match state.http_client.get(&rpc_url).send().await {
         Ok(response) => {
@@ -168,102 +309,6 @@ pub async fn get_blocks(
     }
 }
 
-pub async fn list_candidates(
-    State(state): State<Arc<Mutex<AppState>>>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>>)> {
-    let state = state.lock().await;
-    
-    match db::list_candidates(&state.db_pool).await {
-        Ok(candidates) => {
-            let result: Vec<serde_json::Value> = candidates
-                .into_iter()
-                .map(|(id, name, party, bio)| {
-                    serde_json::json!({
-                        "id": id,
-                        "name": name,
-                        "party": party,
-                        "bio": bio
-                    })
-                })
-                .collect();
-            Ok((StatusCode::OK, Json(ApiResponse::ok(result))))
-        }
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
-    }
-}
-
-pub async fn add_candidate(
-    State(state): State<Arc<Mutex<AppState>>>,
-    Json(payload): Json<NewCandidate>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<i32>>)> {
-    let state = state.lock().await;
-    
-    match db::add_candidate(&state.db_pool, &payload.name, &payload.party, payload.bio.as_deref()).await {
-        Ok(id) => Ok((StatusCode::CREATED, Json(ApiResponse::ok(id)))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
-    }
-}
-
-pub async fn delete_candidate(
-    State(state): State<Arc<Mutex<AppState>>>,
-    Json(payload): Json<serde_json::Value>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<bool>>)> {
-    let state = state.lock().await;
-    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
-    
-    if id <= 0 {
-        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Invalid candidate ID".to_string()))));
-    }
-    
-    match db::delete_candidate(&state.db_pool, id).await {
-        Ok(deleted) => {
-            if deleted {
-                let _ = db::log_audit(&state.db_pool, "candidate_deleted", &format!("id: {}", id)).await;
-            }
-            Ok((StatusCode::OK, Json(ApiResponse::ok(deleted))))
-        }
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
-    }
-}
-
 pub async fn health_check() -> &'static str {
     "OK"
-}
-
-pub async fn seed_candidates_internal(state: &Arc<Mutex<AppState>>) -> Result<String, String> {
-    use crate::db;
-    
-    let state_guard = state.lock().await;
-    
-    let candidates_exist = db::list_candidates(&state_guard.db_pool).await
-        .map(|c| !c.is_empty())
-        .unwrap_or(false);
-    
-    if candidates_exist {
-        return Ok("Candidates already exist".to_string());
-    }
-    
-    let default_candidates = vec![
-        ("María González", "Partido Progreso", Some("Candidata con más de 15 años de experiencia en políticas públicas y desarrollo social")),
-        ("Carlos Mendoza", "Unidad Nacional", Some("Abogado y exalcalde con enfoque en seguridad y economía local")),
-        ("Ana López", "Verde Ecológico", Some("Activista ambiental dedicada a la sostenibilidad y energías renovables")),
-    ];
-    
-    let mut seeded = 0;
-    for (name, party, bio) in default_candidates {
-        if db::add_candidate(&state_guard.db_pool, name, party, bio.as_deref()).await.is_ok() {
-            seeded += 1;
-        }
-    }
-    
-    Ok(format!("Seeded {} candidates", seeded))
-}
-
-pub async fn seed_candidates(
-    State(state): State<Arc<Mutex<AppState>>>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<String>>)> {
-    match seed_candidates_internal(&state).await {
-        Ok(msg) => Ok((StatusCode::OK, Json(ApiResponse::ok(msg)))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(e)))),
-    }
 }
