@@ -40,12 +40,14 @@ export interface NewElection {
 }
 
 export interface Voter {
+  dni: string;
   name: string;
   email: string;
   has_voted: boolean;
 }
 
 export interface NewVoter {
+  dni: string;
   public_key: string;
   name: string;
   email: string;
@@ -64,12 +66,14 @@ export interface Candidate {
   name: string;
   party: string;
   bio?: string;
+  photo_url?: string;
 }
 
 export interface NewCandidate {
   election_id: string;
   name: string;
   party: string;
+  photo_url: string;
   bio?: string;
 }
 

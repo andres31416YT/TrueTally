@@ -111,7 +111,22 @@ pub async fn add_candidate(
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<i64>>)> {
     let state = state.lock().await;
     
-    match db::add_candidate(&state.db_pool, &payload.election_id, &payload.name, &payload.party, payload.bio.as_deref()).await {
+    if payload.name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Name cannot be empty".to_string()))));
+    }
+    if payload.party.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Party cannot be empty".to_string()))));
+    }
+    if payload.photo_url.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Photo URL cannot be empty".to_string()))));
+    }
+
+    let exists = db::candidate_exists(&state.db_pool, &payload.election_id, &payload.name).await;
+    if let Ok(true) = exists {
+        return Err((StatusCode::CONFLICT, Json(ApiResponse::err("A candidate with this name already exists in this election".to_string()))));
+    }
+    
+    match db::add_candidate(&state.db_pool, &payload.election_id, &payload.name, &payload.party, payload.bio.as_deref(), Some(&payload.photo_url)).await {
         Ok(id) => {
             let _ = db::log_audit(&state.db_pool, "candidate_added", &format!("election: {}", payload.election_id)).await;
             Ok((StatusCode::CREATED, Json(ApiResponse::ok(id))))
@@ -131,12 +146,13 @@ pub async fn list_candidates(
         Ok(candidates) => {
             let result: Vec<serde_json::Value> = candidates
                 .into_iter()
-                .map(|(id, name, party, bio)| {
+                .map(|(id, name, party, bio, photo_url)| {
                     serde_json::json!({
                         "id": id,
                         "name": name,
                         "party": party,
-                        "bio": bio
+                        "bio": bio,
+                        "photo_url": photo_url
                     })
                 })
                 .collect();
@@ -151,15 +167,34 @@ pub async fn register_voter(
     Json(payload): Json<NewVoter>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<i64>>)> {
     let state = state.lock().await;
+
+    if payload.dni.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("DNI is required".to_string()))));
+    }
+    if payload.name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Name is required".to_string()))));
+    }
+    if payload.email.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Email is required".to_string()))));
+    }
+
+    let existing_voter = db::check_voter_by_dni(&state.db_pool, &payload.election_id, &payload.dni).await;
+    if let Ok(Some((_, true))) = existing_voter {
+        return Err((StatusCode::CONFLICT, Json(ApiResponse::err("Este DNI ya ha emitido un voto en esta elección".to_string()))));
+    }
     
-    match db::register_voter(&state.db_pool, &payload.election_id, &payload.public_key, &payload.name, &payload.email).await {
+    match db::register_voter(&state.db_pool, &payload.election_id, &payload.dni, &payload.public_key, &payload.name, &payload.email).await {
         Ok(id) => {
-            let _ = db::log_audit(&state.db_pool, "voter_registered", &format!("election: {} public_key: {}", payload.election_id, payload.public_key)).await;
+            let _ = db::log_audit(&state.db_pool, "voter_registered", &format!("election: {} dni: {} public_key: {}", payload.election_id, payload.dni, payload.public_key)).await;
             Ok((StatusCode::CREATED, Json(ApiResponse::ok(id))))
         }
         Err(e) => {
             if e.to_string().contains("unique") || e.to_string().contains("duplicate") {
-                Err((StatusCode::CONFLICT, Json(ApiResponse::err("Voter already registered for this election".to_string()))))
+                if e.to_string().contains("dni") {
+                    Err((StatusCode::CONFLICT, Json(ApiResponse::err("Este DNI ya está registrado en esta elección".to_string()))))
+                } else {
+                    Err((StatusCode::CONFLICT, Json(ApiResponse::err("Voter already registered for this election".to_string()))))
+                }
             } else {
                 Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e)))))
             }

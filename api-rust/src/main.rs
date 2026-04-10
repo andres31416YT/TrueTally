@@ -14,14 +14,22 @@ async fn main() {
     let node_rpc_url = std::env::var("NODE_RPC_URL")
         .unwrap_or_else(|_| "http://blockchain-node:9944".to_string());
     
-    let db_pool = match init_db(&database_url).await {
-        Ok(pool) => {
-            println!("Database connected successfully");
-            pool
-        }
-        Err(e) => {
-            eprintln!("Failed to connect to database: {}", e);
-            panic!("Database connection failed");
+    let mut retries = 5;
+    let db_pool = loop {
+        match init_db(&database_url).await {
+            Ok(pool) => {
+                println!("Database connected successfully");
+                break pool;
+            }
+            Err(e) if retries > 0 => {
+                eprintln!("Failed to connect to database ({} retries left): {}", retries, e);
+                retries -= 1;
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            }
+            Err(e) => {
+                eprintln!("Failed to connect to database: {}", e);
+                panic!("Database connection failed");
+            }
         }
     };
     
