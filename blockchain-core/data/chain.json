@@ -63,5 +63,18 @@
     "previous_hash": "4ffe078ccf035869d7b611fe92e61074d9112d0b931a3d58df51b83fe802e353",
     "nonce": 0,
     "hash": "4d1bbc89d92152b05bc81f4a4de2ed563a3525ddef489fa2e68f90ba6d444b16"
+  },
+  {
+    "index": 5,
+    "timestamp": "2026-04-10T17:09:01.261056795Z",
+    "data": {
+      "voter_public_key": "f1bcc64035d3b061abc1d404df6e5bb5489b84dbb6b7743c1418db9bc8a5bbf0",
+      "candidate_id": "1",
+      "signature": "1a976887c1b50762357d78d07dca66aee5495fc3209b869fb38a8f621274b6688825e758d8708fba019cfc1c78d7f0c7636e5c0f70aec0f914239091c20e9d0c",
+      "timestamp": "2026-04-10T17:09:01.260896775Z"
+    },
+    "previous_hash": "4d1bbc89d92152b05bc81f4a4de2ed563a3525ddef489fa2e68f90ba6d444b16",
+    "nonce": 0,
+    "hash": "10811f1257dbf0e0fa57d887cac811294c36e3630afebe853398cc0ab61d50cd"
   }
 ]
