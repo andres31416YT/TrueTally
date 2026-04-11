@@ -7,7 +7,7 @@ use axum::{
     Json,
 };
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use sqlx::PgPool;
@@ -50,8 +50,10 @@ pub async fn create_election(
     let state = state.lock().await;
     
     let election_id = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let election_type = payload.election_type.unwrap_or_else(|| "general".to_string());
+    let election_category = payload.election_category.unwrap_or_else(|| "general".to_string());
     
-    match db::create_election(&state.db_pool, &election_id, &payload.name, payload.description.as_deref(), &payload.admin_code).await {
+    match db::create_election(&state.db_pool, &election_id, &payload.name, payload.description.as_deref(), &payload.admin_code, &election_type, &election_category, payload.password.as_deref(), None).await {
         Ok(_) => {
             let _ = db::log_audit(&state.db_pool, "election_created", &format!("election: {}", election_id)).await;
             Ok((StatusCode::CREATED, Json(ApiResponse::ok(election_id))))
@@ -126,7 +128,11 @@ pub async fn add_candidate(
         return Err((StatusCode::CONFLICT, Json(ApiResponse::err("A candidate with this name already exists in this election".to_string()))));
     }
     
-    match db::add_candidate(&state.db_pool, &payload.election_id, &payload.name, &payload.party, payload.bio.as_deref(), Some(&payload.photo_url)).await {
+    let category = payload.category.unwrap_or_else(|| "general".to_string());
+    let candidate_external_id = payload.candidate_external_id.as_deref();
+    let party_id = payload.party_id.as_deref();
+    
+    match db::add_candidate(&state.db_pool, &payload.election_id, candidate_external_id, party_id, &payload.name, &payload.party, &category, payload.bio.as_deref(), Some(&payload.photo_url)).await {
         Ok(id) => {
             let _ = db::log_audit(&state.db_pool, "candidate_added", &format!("election: {}", payload.election_id)).await;
             Ok((StatusCode::CREATED, Json(ApiResponse::ok(id))))
@@ -142,15 +148,18 @@ pub async fn list_candidates(
     let state = state.lock().await;
     let election_id = payload.get("election_id").and_then(|v| v.as_str()).unwrap_or("");
     
-    match db::list_candidates(&state.db_pool, election_id).await {
+match db::list_candidates(&state.db_pool, election_id).await {
         Ok(candidates) => {
             let result: Vec<serde_json::Value> = candidates
                 .into_iter()
-                .map(|(id, name, party, bio, photo_url)| {
+                .map(|(id, candidate_external_id, party_id, name, party, category, bio, photo_url)| {
                     serde_json::json!({
                         "id": id,
+                        "candidate_external_id": candidate_external_id,
+                        "party_id": party_id,
                         "name": name,
                         "party": party,
+                        "category": category,
                         "bio": bio,
                         "photo_url": photo_url
                     })
@@ -171,11 +180,11 @@ pub async fn register_voter(
     if payload.dni.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("DNI is required".to_string()))));
     }
-    if payload.name.trim().is_empty() {
-        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Name is required".to_string()))));
+    if payload.dni.len() != 8 {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("DNI must be exactly 8 digits".to_string()))));
     }
-    if payload.email.trim().is_empty() {
-        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Email is required".to_string()))));
+    if payload.dni_verifier.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("DNI verifier is required".to_string()))));
     }
 
     let existing_voter = db::check_voter_by_dni(&state.db_pool, &payload.election_id, &payload.dni).await;
@@ -183,7 +192,7 @@ pub async fn register_voter(
         return Err((StatusCode::CONFLICT, Json(ApiResponse::err("Este DNI ya ha emitido un voto en esta elección".to_string()))));
     }
     
-    match db::register_voter(&state.db_pool, &payload.election_id, &payload.dni, &payload.public_key, &payload.name, &payload.email).await {
+    match db::register_voter(&state.db_pool, &payload.election_id, &payload.dni, &payload.dni_verifier, &payload.public_key, payload.email.as_deref()).await {
         Ok(id) => {
             let _ = db::log_audit(&state.db_pool, "voter_registered", &format!("election: {} dni: {} public_key: {}", payload.election_id, payload.dni, payload.public_key)).await;
             Ok((StatusCode::CREATED, Json(ApiResponse::ok(id))))

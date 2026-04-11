@@ -40,6 +40,7 @@ export default function VotingPage() {
   const [candidates, setCandidates] = useState<CandidateDemo[]>(DEMO_CANDIDATES);
   const [keyPair, setKeyPair] = useState<KeyPair | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<number | null>(null);
+  const [blankVote, setBlankVote] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -51,7 +52,7 @@ export default function VotingPage() {
   
   const [voterData, setVoterData] = useState({
     dni: '',
-    name: '',
+    dni_verifier: '',
     email: '',
   });
 
@@ -109,13 +110,20 @@ export default function VotingPage() {
   };
 
   const handleGenerateKeys = () => {
-    if (!selectedCandidate) {
-      setError('Selecciona un candidato');
+    if (!selectedCandidate && !blankVote) {
+      setError('Selecciona un candidato o marca voto en blanco');
       return;
     }
     const keys = generateKeyPair();
     setKeyPair(keys);
     setStep('register');
+  };
+
+  const handleBlankVoteToggle = () => {
+    setBlankVote(!blankVote);
+    if (!blankVote) {
+      setSelectedCandidate(null);
+    }
   };
 
   const getActiveElectionId = (): string => {
@@ -137,16 +145,8 @@ export default function VotingPage() {
       setError('El DNI debe tener exactamente 8 dígitos');
       return;
     }
-    if (!voterData.name) {
-      setError('El nombre es requerido');
-      return;
-    }
-    if (!voterData.email) {
-      setError('El email es requerido');
-      return;
-    }
-    if (!voterData.email.toLowerCase().endsWith('@gmail.com')) {
-      setError('Solo se permiten correos @gmail.com');
+    if (!voterData.dni_verifier) {
+      setError('El dígito verificador es requerido');
       return;
     }
     
@@ -161,9 +161,9 @@ export default function VotingPage() {
 
       const res = await api.registerVoter({
         dni: voterData.dni,
+        dni_verifier: voterData.dni_verifier,
         public_key: keyPair.publicKey,
-        name: voterData.name,
-        email: voterData.email,
+        email: voterData.email || undefined,
         election_id: electionId,
       });
 
@@ -187,14 +187,21 @@ export default function VotingPage() {
     const electionId = getActiveElectionId();
 
     try {
-      const payload = createVotePayload(keyPair.publicKey, selectedCandidate.toString(), electionId);
+      const isBlank = blankVote;
+      const candidateId = isBlank ? undefined : selectedCandidate?.toString();
+      const payload = createVotePayload(
+        keyPair.publicKey, 
+        isBlank ? "blank" : selectedCandidate!.toString(), 
+        electionId
+      );
       const signature = signMessage(payload, keyPair.secretKey);
 
       const res = await api.submitVote({
         voter_public_key: keyPair.publicKey,
-        candidate_id: selectedCandidate.toString(),
+        candidate_id: candidateId,
         election_id: electionId,
         signature,
+        is_blank_vote: isBlank,
       });
 
       if (res.success) {
@@ -261,6 +268,30 @@ export default function VotingPage() {
                 className="mt-6 w-full bg-green-600 text-white px-6 py-4 rounded-lg text-lg font-semibold hover:bg-green-700"
               >
                 CONTINUAR CON MI VOTO
+              </button>
+            )}
+
+            <div className="mt-4 p-4 border-2 border-gray-300 rounded-lg">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={blankVote}
+                  onChange={handleBlankVoteToggle}
+                  className="w-5 h-5 text-blue-600"
+                />
+                <span className="ml-2 text-gray-700 font-medium">Voto en blanco</span>
+              </label>
+              <p className="text-xs text-gray-500 mt-1">
+                Selecciona esta opción si no deseas votar por ningún candidato
+              </p>
+            </div>
+
+            {blankVote && (
+              <button
+                onClick={() => setStep('vote')}
+                className="mt-2 w-full bg-gray-600 text-white px-6 py-4 rounded-lg text-lg font-semibold hover:bg-gray-700"
+              >
+                CONTINUAR CON VOTO EN BLANCO
               </button>
             )}
           </div>
@@ -415,31 +446,29 @@ export default function VotingPage() {
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Dígito Verificador</label>
               <input
                 type="text"
-                value={voterData.name}
-                onChange={(e) => setVoterData({ ...voterData, name: e.target.value })}
+                value={voterData.dni_verifier}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '').slice(0, 1);
+                  setVoterData({ ...voterData, dni_verifier: value });
+                }}
                 className="w-full p-2 border rounded"
+                placeholder="Ejemplo: 0"
+                maxLength={1}
               />
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email (@gmail.com)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email (opcional)</label>
               <input
                 type="email"
                 value={voterData.email}
                 onChange={(e) => setVoterData({ ...voterData, email: e.target.value })}
-                className={`w-full p-2 border rounded ${
-                  voterData.email && !voterData.email.toLowerCase().endsWith('@gmail.com') 
-                    ? 'border-red-500 bg-red-50' 
-                    : ''
-                }`}
-                placeholder="correo@gmail.com"
+                className="w-full p-2 border rounded"
+                placeholder="correo@gmail.com (opcional)"
               />
-              {voterData.email && !voterData.email.toLowerCase().endsWith('@gmail.com') && (
-                <p className="text-red-500 text-xs mt-1">Solo se permiten correos @gmail.com</p>
-              )}
             </div>
 
             {error && (
@@ -450,7 +479,7 @@ export default function VotingPage() {
 
             <button
               onClick={handleRegister}
-              disabled={loading || !voterData.dni || !voterData.name || !voterData.email}
+              disabled={loading || !voterData.dni || voterData.dni.length !== 8 || !voterData.dni_verifier}
               className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
             >
               {loading ? 'Registrando...' : 'Registrarse y Continuar'}
@@ -462,18 +491,25 @@ export default function VotingPage() {
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold mb-4">Confirma tu voto</h2>
             
-            {(() => {
-              const cand = candidates.find(c => c.id === selectedCandidate);
-              if (!cand) return null;
-              return (
-                <div className="p-4 border-2 border-green-500 rounded-lg bg-green-50 mb-4">
-                  <p className="text-gray-600">Votas por:</p>
-                  <h3 className="font-bold text-xl">{cand.name}</h3>
-                  <p className="text-green-700">{cand.party}</p>
-                  <p className="text-gray-600 text-sm mt-2 italic">"{cand.proposal}"</p>
-                </div>
-              );
-            })()}
+            {blankVote ? (
+              <div className="p-4 border-2 border-gray-500 rounded-lg bg-gray-50 mb-4">
+                <p className="text-gray-600">Voto en blanco</p>
+                <p className="text-gray-500 text-sm mt-2">No has seleccionado ningún candidato</p>
+              </div>
+            ) : (
+              <>{(() => {
+                const cand = candidates.find(c => c.id === selectedCandidate);
+                if (!cand) return null;
+                return (
+                  <div className="p-4 border-2 border-green-500 rounded-lg bg-green-50 mb-4">
+                    <p className="text-gray-600">Votas por:</p>
+                    <h3 className="font-bold text-xl">{cand.name}</h3>
+                    <p className="text-green-700">{cand.party}</p>
+                    <p className="text-gray-600 text-sm mt-2 italic">"{cand.proposal}"</p>
+                  </div>
+                );
+              })()}</>
+            )}
 
             {error && (
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -483,7 +519,7 @@ export default function VotingPage() {
 
             <button
               onClick={handleSubmitVote}
-              disabled={loading || !selectedCandidate}
+              disabled={loading || (!selectedCandidate && !blankVote)}
               className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 disabled:bg-gray-400"
             >
               {loading ? 'Firmando y Enviando...' : 'CONFIRMAR Y ENVIAR VOTO'}

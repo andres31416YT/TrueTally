@@ -92,20 +92,30 @@ export default function BlocksPage() {
               {index > 0 && (
                 <div className="mt-4 pt-4 border-t">
                   <h4 className="text-sm font-semibold mb-2">Datos del Voto:</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-sm">
                     <div>
                       <span className="text-gray-500">Votante:</span>
-                      <p className="font-mono text-xs">{block.data.voter_public_key.slice(0, 20)}...</p>
+                      <p className="font-mono text-xs">{block.data.voter_public_key?.slice(0, 20) || 'N/A'}...</p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Candidato:</span>
-                      <p className="font-medium">{block.data.candidate_id}</p>
+                      <span className="text-gray-500">ID Candidato:</span>
+                      <p className="font-medium">{block.data.candidate_id || 'N/A'}</p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Nonce:</span>
-                      <p className="font-mono">{block.nonce}</p>
+                      <span className="text-gray-500">ID Partido:</span>
+                      <p className="font-medium">{block.data.party_id || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">ID Evento:</span>
+                      <p className="font-medium">{block.data.election_id || 'N/A'}</p>
                     </div>
                   </div>
+                  {block.data.is_blank_vote && (
+                    <div className="mt-2 p-2 bg-gray-100 rounded text-sm">
+                      <span className="text-gray-500">Tipo de voto:</span>
+                      <span className="ml-2 font-medium">Voto en blanco</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

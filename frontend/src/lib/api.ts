@@ -31,48 +31,64 @@ export interface Election {
   name: string;
   description?: string;
   is_active: boolean;
+  election_type: string;
+  election_category: string;
+  password?: string;
+  is_official: boolean;
+  created_by?: string;
 }
 
 export interface NewElection {
   name: string;
   description?: string;
   admin_code: string;
+  election_type?: string;
+  election_category?: string;
+  password?: string;
 }
 
 export interface Voter {
   dni: string;
-  name: string;
-  email: string;
+  dni_verifier: string;
+  email?: string;
   has_voted: boolean;
+  role: string;
 }
 
 export interface NewVoter {
   dni: string;
+  dni_verifier: string;
   public_key: string;
-  name: string;
-  email: string;
+  email?: string;
   election_id: string;
 }
 
 export interface VoteRequest {
   voter_public_key: string;
-  candidate_id: string;
+  candidate_id?: string;
   election_id: string;
   signature: string;
+  is_blank_vote: boolean;
 }
 
 export interface Candidate {
   id: number;
+  candidate_external_id?: string;
+  party_id?: string;
   name: string;
   party: string;
+  category: string;
   bio?: string;
   photo_url?: string;
 }
 
 export interface NewCandidate {
   election_id: string;
+  candidate_external_id?: string;
+  party_id?: string;
   name: string;
   party: string;
+  category?: string;
   photo_url: string;
   bio?: string;
 }

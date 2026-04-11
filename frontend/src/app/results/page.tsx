@@ -58,13 +58,19 @@ function ResultsContent() {
     setLoading(false);
   };
 
-  const totalVotes = Object.values(results).reduce((a, b) => a + b, 0);
+  const blankVotes = results['blank'] || 0;
+  const totalVotes = Object.values(results).reduce((a, b) => a + b, 0) - blankVotes;
 
   const chartData = Object.entries(results).map(([candidateId, votes]) => {
     const candidate = candidates.find(c => c.id.toString() === candidateId);
+    const category = candidate?.category || 'general';
     return {
+      id: candidateId,
+      externalId: candidate?.candidate_external_id || '',
+      partyId: candidate?.party_id || '',
       name: candidate?.name || `Candidato ${candidateId}`,
       party: candidate?.party || 'Independiente',
+      category: category,
       votes,
     };
   });
@@ -108,10 +114,14 @@ function ResultsContent() {
 
         {selectedElection && (
           <>
-            <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-4 gap-4 mb-6">
               <div className="bg-white rounded-lg shadow p-4">
                 <p className="text-sm text-gray-500">Total de Votos</p>
-                <p className="text-2xl font-bold text-blue-600">{totalVotes}</p>
+                <p className="text-2xl font-bold text-blue-600">{totalVotes + blankVotes}</p>
+              </div>
+              <div className="bg-white rounded-lg shadow p-4">
+                <p className="text-sm text-gray-500">Votos en Blanco</p>
+                <p className="text-2xl font-bold text-gray-600">{blankVotes}</p>
               </div>
               <div className="bg-white rounded-lg shadow p-4">
                 <p className="text-sm text-gray-500">Candidatos</p>
@@ -131,8 +141,10 @@ function ResultsContent() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b">
+                      <th className="text-left py-2">ID</th>
                       <th className="text-left py-2">Candidato</th>
                       <th className="text-left py-2">Partido</th>
+                      <th className="text-left py-2">Categoría</th>
                       <th className="text-right py-2">Votos</th>
                       <th className="text-right py-2">%</th>
                     </tr>
@@ -140,8 +152,10 @@ function ResultsContent() {
                   <tbody>
                     {chartData.map((item, index) => (
                       <tr key={index} className="border-b">
+                        <td className="py-2 font-mono text-xs">{item.externalId || item.id}</td>
                         <td className="py-2">{item.name}</td>
                         <td className="py-2">{item.party}</td>
+                        <td className="py-2">{item.category}</td>
                         <td className="text-right py-2 font-mono">{item.votes}</td>
                         <td className="text-right py-2">
                           {totalVotes > 0 ? ((item.votes / totalVotes) * 100).toFixed(1) : 0}%
@@ -151,7 +165,9 @@ function ResultsContent() {
                   </tbody>
                   <tfoot>
                     <tr className="font-bold">
+                      <td></td>
                       <td className="py-2">Total</td>
+                      <td></td>
                       <td></td>
                       <td className="text-right py-2">{totalVotes}</td>
                       <td className="text-right py-2">100%</td>

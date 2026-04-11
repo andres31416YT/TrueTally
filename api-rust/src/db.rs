@@ -11,7 +11,12 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
             description TEXT,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             is_active BOOLEAN DEFAULT TRUE,
-            admin_code VARCHAR(50) NOT NULL
+            admin_code VARCHAR(50) NOT NULL,
+            election_type VARCHAR(50) DEFAULT 'general',
+            election_category VARCHAR(50) DEFAULT 'general',
+            password VARCHAR(255),
+            is_official BOOLEAN DEFAULT FALSE,
+            created_by VARCHAR(255)
         )
         "#,
     )
@@ -23,8 +28,11 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
         CREATE TABLE IF NOT EXISTS candidates (
             id BIGSERIAL PRIMARY KEY,
             election_id VARCHAR(50) NOT NULL REFERENCES elections(id),
+            candidate_external_id VARCHAR(50),
+            party_id VARCHAR(50),
             name VARCHAR(255) NOT NULL,
             party VARCHAR(255) NOT NULL,
+            category VARCHAR(50) DEFAULT 'general',
             bio TEXT,
             photo_url TEXT
         )
@@ -39,11 +47,14 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
             id BIGSERIAL PRIMARY KEY,
             election_id VARCHAR(50) NOT NULL REFERENCES elections(id),
             dni VARCHAR(20) NOT NULL,
+            dni_verifier VARCHAR(1) NOT NULL,
             public_key VARCHAR(255) NOT NULL,
-            name VARCHAR(255) NOT NULL,
-            email VARCHAR(255) NOT NULL,
+            email VARCHAR(255),
+            password_hash VARCHAR(255),
+            role VARCHAR(20) DEFAULT 'user',
             registered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             has_voted BOOLEAN DEFAULT FALSE,
+            has_created_password BOOLEAN DEFAULT FALSE,
             UNIQUE(election_id, dni),
             UNIQUE(election_id, public_key)
         )
@@ -110,6 +121,37 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
 
     sqlx::query(
         r#"
+        CREATE TABLE IF NOT EXISTS users (
+            id BIGSERIAL PRIMARY KEY,
+            dni VARCHAR(20) UNIQUE NOT NULL,
+            dni_verifier VARCHAR(1) NOT NULL,
+            public_key VARCHAR(255),
+            password_hash VARCHAR(255),
+            role VARCHAR(20) DEFAULT 'user',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM users WHERE dni = '00000000'
+            ) THEN
+                INSERT INTO users (dni, dni_verifier, role) VALUES ('00000000', '0', 'sudo_admin');
+            END IF;
+        END $$;
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        r#"
         CREATE TABLE IF NOT EXISTS audit_log (
             id SERIAL PRIMARY KEY,
             action VARCHAR(255) NOT NULL,
@@ -130,17 +172,28 @@ pub async fn create_election(
     name: &str,
     description: Option<&str>,
     admin_code: &str,
+    election_type: &str,
+    election_category: &str,
+    password: Option<&str>,
+    created_by: Option<&str>,
 ) -> Result<(), sqlx::Error> {
+    let is_official = matches!(created_by, Some("sudo_admin") | Some("admin"));
+    
     sqlx::query(
         r#"
-        INSERT INTO elections (id, name, description, admin_code)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO elections (id, name, description, admin_code, election_type, election_category, password, is_official, created_by)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,
     )
     .bind(id)
     .bind(name)
     .bind(description)
     .bind(admin_code)
+    .bind(election_type)
+    .bind(election_category)
+    .bind(password)
+    .bind(is_official)
+    .bind(created_by)
     .execute(pool)
     .await?;
 
@@ -186,21 +239,21 @@ pub async fn register_voter(
     pool: &PgPool,
     election_id: &str,
     dni: &str,
+    dni_verifier: &str,
     public_key: &str,
-    name: &str,
-    email: &str,
+    email: Option<&str>,
 ) -> Result<i64, sqlx::Error> {
     let row = sqlx::query(
         r#"
-        INSERT INTO voters (election_id, dni, public_key, name, email)
+        INSERT INTO voters (election_id, dni, dni_verifier, public_key, email)
         VALUES ($1, $2, $3, $4, $5)
         RETURNING id
         "#,
     )
     .bind(election_id)
     .bind(dni)
+    .bind(dni_verifier)
     .bind(public_key)
-    .bind(name)
     .bind(email)
     .fetch_one(pool)
     .await?;
@@ -276,37 +329,52 @@ pub async fn mark_voter_voted(pool: &PgPool, election_id: &str, public_key: &str
     Ok(())
 }
 
-pub async fn list_candidates(pool: &PgPool, election_id: &str) -> Result<Vec<(i64, String, String, Option<String>, Option<String>)>, sqlx::Error> {
+pub async fn list_candidates(pool: &PgPool, election_id: &str) -> Result<Vec<(i64, String, String, Option<String>, Option<String>, String, Option<String>, Option<String>)>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
-        SELECT id, name, party, bio, photo_url FROM candidates WHERE election_id = $1 ORDER BY id
+        SELECT id, candidate_external_id, party_id, name, party, category, bio, photo_url FROM candidates WHERE election_id = $1 ORDER BY id
         "#,
     )
     .bind(election_id)
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| (r.get::<i64, _>("id"), r.get("name"), r.get("party"), r.get("bio"), r.get("photo_url"))).collect())
+    Ok(rows.into_iter().map(|r| (
+        r.get::<i64, _>("id"),
+        r.get::<Option<String>, _>("candidate_external_id").unwrap_or_default(),
+        r.get::<Option<String>, _>("party_id").unwrap_or_default(),
+        r.get("name"),
+        r.get("party"),
+        r.get("category"),
+        r.get("bio"),
+        r.get("photo_url")
+    )).collect())
 }
 
 pub async fn add_candidate(
     pool: &PgPool,
     election_id: &str,
+    candidate_external_id: Option<&str>,
+    party_id: Option<&str>,
     name: &str,
     party: &str,
+    category: &str,
     bio: Option<&str>,
     photo_url: Option<&str>,
 ) -> Result<i64, sqlx::Error> {
     let row = sqlx::query(
         r#"
-        INSERT INTO candidates (election_id, name, party, bio, photo_url)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO candidates (election_id, candidate_external_id, party_id, name, party, category, bio, photo_url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id
         "#,
     )
     .bind(election_id)
+    .bind(candidate_external_id)
+    .bind(party_id)
     .bind(name)
     .bind(party)
+    .bind(category)
     .bind(bio)
     .bind(photo_url)
     .fetch_one(pool)
