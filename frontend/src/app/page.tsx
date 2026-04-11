@@ -598,13 +598,22 @@ export default function VotingPage() {
             </div>
 
             <div className="mb-4">
-              <input
-                type="text"
-                placeholder={activeTab === 'elections' ? "Buscar votaciones..." : "Buscar usuarios..."}
-                value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                className="w-full p-2 border rounded"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder={activeTab === 'elections' ? "Buscar votaciones..." : "Buscar usuarios..."}
+                  value={searchTerm}
+                  onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                  onKeyDown={(e) => e.key === 'Enter' && setCurrentPage(1)}
+                  className="flex-1 p-2 border rounded"
+                />
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                >
+                  Buscar
+                </button>
+              </div>
             </div>
 
             {activeTab === 'elections' && (
@@ -647,6 +656,12 @@ export default function VotingPage() {
                       <option value="presidential_bicameral">Presidencial Bicameral</option>
                       <option value="mesa_directivo">Mesa Directivo</option>
                     </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {newElection.election_type === 'presidential_unicameral' && 'Presidente elegido por el pueblo (1 cámara)'}
+                      {newElection.election_type === 'presidential_bicameral' && 'Presidente + 2 Vicepresidentes (2 cámaras: Senado + Diputados)'}
+                      {newElection.election_type === 'mesa_directivo' && 'Elección de mesa directiva del congreso'}
+                      {newElection.election_type === 'general' && 'Votación genérica personalizable'}
+                    </p>
                   </div>
 
                   <div>
@@ -658,21 +673,25 @@ export default function VotingPage() {
                     >
                       <option value="general">General</option>
                       <option value="president">Presidente</option>
-                      <option value="vice">Vicepresidente</option>
+                      <option value="vice">Vicepresidente(s)</option>
+                      <option value="senadores">Senadores</option>
                       <option value="diputados">Diputados</option>
+                      <option value="mesa_presidente">Presidente de Mesa</option>
+                      <option value="mesa_vice">Vicepresidente de Mesa</option>
+                      <option value="mesa_secretario">Secretario de Mesa</option>
                     </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {newElection.election_type === 'presidential_unicameral' && newElection.election_category === 'president' && '1 candidato a Presidente'}
+                      {newElection.election_type === 'presidential_unicameral' && newElection.election_category === 'vice' && 'Candidatos a Vicepresidente'}
+                      {newElection.election_type === 'presidential_bicameral' && newElection.election_category === 'president' && '1 candidato a Presidente'}
+                      {newElection.election_type === 'presidential_bicameral' && newElection.election_category === 'vice' && '2 candidatos a Vicepresidente'}
+                      {newElection.election_type === 'presidential_bicameral' && newElection.election_category === 'senadores' && 'Candidatos al Senado (5 por lista)'}
+                      {newElection.election_type === 'presidential_bicameral' && newElection.election_category === 'diputados' && 'Candidatos a Cámara de Diputados'}
+                      {newElection.election_type === 'mesa_directivo' && newElection.election_category === 'mesa_presidente' && 'Candidato a Presidente de Mesa'}
+                      {newElection.election_type === 'mesa_directivo' && newElection.election_category === 'mesa_vice' && 'Candidato a Vicepresidente de Mesa'}
+                      {newElection.election_type === 'mesa_directivo' && newElection.election_category === 'mesa_secretario' && 'Candidato a Secretario de Mesa'}
+                    </p>
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Código Admin</label>
-                  <input
-                    type="text"
-                    value={newElection.admin_code}
-                    onChange={(e) => setNewElection({ ...newElection, admin_code: e.target.value })}
-                    className="w-full p-2 border rounded"
-                    placeholder="Código para administrar"
-                  />
                 </div>
 
                 <div>
