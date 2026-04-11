@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { generateKeyPair, signMessage, createVotePayload } from '@/lib/crypto';
-import { api, Election, NewElection, Candidate, User } from '@/lib/api';
+import { api, Election, NewElection, Candidate } from '@/lib/api';
 
 interface KeyPair {
   publicKey: string;
   secretKey: string;
 }
 
-type Step = 'auth' | 'votations' | 'vote' | 'admin' | 'cast' | 'confirm';
+type Step = 'home' | 'auth' | 'vote' | 'admin' | 'cast' | 'confirm';
 
 interface UserSession {
   dni: string;
@@ -21,7 +21,7 @@ interface UserSession {
 }
 
 export default function VotingPage() {
-  const [step, setStep] = useState<Step>('auth');
+  const [step, setStep] = useState<Step>('home');
   const [session, setSession] = useState<UserSession | null>(null);
   const [keyPair, setKeyPair] = useState<KeyPair | null>(null);
   
@@ -34,6 +34,7 @@ export default function VotingPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authData, setAuthData] = useState({
     dni: '',
     dni_verifier: '',
@@ -56,7 +57,8 @@ export default function VotingPage() {
         const parsed = JSON.parse(savedSession);
         setSession(parsed);
         if (parsed.public_key) {
-          setStep('votations');
+          const keys = generateKeyPair();
+          setKeyPair({ publicKey: parsed.public_key, secretKey: keys.secretKey });
         }
       } catch (e) {
         localStorage.removeItem('user_session');
@@ -95,7 +97,7 @@ export default function VotingPage() {
       const res = await api.authenticate({
         dni: authData.dni,
         dni_verifier: authData.dni_verifier,
-        password: authData.password,
+        password: authData.password || undefined,
       });
 
       if (res.success && res.data) {
@@ -115,7 +117,7 @@ export default function VotingPage() {
           setKeyPair({ publicKey: res.data.public_key, secretKey: keys.secretKey });
         }
         
-        setStep('votations');
+        setStep('home');
       } else {
         setError(res.error || 'Error en autenticación');
       }
@@ -186,7 +188,7 @@ export default function VotingPage() {
     const res = await api.createElection(newElection);
     if (res.success) {
       await loadElections();
-      setStep('votations');
+      setStep('home');
     } else {
       setError(res.error || 'Error al crear elección');
     }
@@ -197,11 +199,13 @@ export default function VotingPage() {
     localStorage.removeItem('user_session');
     setSession(null);
     setKeyPair(null);
-    setStep('auth');
+    setStep('home');
   };
 
   const isAdmin = session?.role === 'admin' || session?.role === 'sudo_admin';
   const canVote = session && session.public_key && (!session.has_voted_election || session.has_voted_election !== selectedElection?.id);
+
+  const electionVoted = selectedElection ? session?.has_voted_election === selectedElection.id : false;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -211,7 +215,7 @@ export default function VotingPage() {
             <h1 className="text-2xl font-bold">TRUE TALLY</h1>
             <p className="text-sm">Sistema de Votación Blockchain</p>
           </div>
-          {session && (
+          {session ? (
             <div className="text-right">
               <p className="text-sm">DNI: {session.dni}</p>
               <p className="text-xs">Rol: {session.role}</p>
@@ -219,15 +223,105 @@ export default function VotingPage() {
                 Cerrar sesión
               </button>
             </div>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setAuthMode('login'); setStep('auth'); }}
+                className="bg-green-600 px-4 py-2 rounded-lg hover:bg-green-700 text-sm font-medium"
+              >
+                Iniciar Sesión
+              </button>
+              <button
+                onClick={() => { setAuthMode('register'); setStep('auth'); }}
+                className="bg-white text-blue-800 px-4 py-2 rounded-lg hover:bg-gray-100 text-sm font-medium"
+              >
+                Registrarse
+              </button>
+            </div>
           )}
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto p-6">
+        {step === 'home' && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-semibold">Votaciones Disponibles</h2>
+              {isAdmin && (
+                <button
+                  onClick={() => setStep('admin')}
+                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+                >
+                  Panel Admin
+                </button>
+              )}
+            </div>
+
+            {!session && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center mb-4">
+                <p className="text-blue-700">
+                  <button onClick={() => { setAuthMode('login'); setStep('auth'); }} className="underline font-medium">
+                    Inicia sesión
+                  </button> o 
+                  <button onClick={() => { setAuthMode('register'); setStep('auth'); }} className="underline font-medium">
+                    regístrate
+                  </button> para poder votar
+                </p>
+              </div>
+            )}
+
+            {elections.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No hay votaciones activas</p>
+            ) : (
+              <div className="grid gap-4">
+                {elections.map((election) => (
+                  <div key={election.id} className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="font-bold text-lg">{election.name}</h3>
+                        <p className="text-gray-600 text-sm">{election.description}</p>
+                        <div className="mt-2 flex gap-2">
+                          <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                            Tipo: {election.election_type}
+                          </span>
+                          <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                            Categoría: {election.election_category}
+                          </span>
+                          {election.is_official && (
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                              Oficial
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        {session && canVote && !electionVoted ? (
+                          <button
+                            onClick={() => handleSelectElection(election)}
+                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                          >
+                            Votar
+                          </button>
+                        ) : session && electionVoted ? (
+                          <span className="text-gray-400 text-sm">✓ Ya has votado</span>
+                        ) : session ? (
+                          <span className="text-gray-400 text-sm">No puedes votar</span>
+                        ) : (
+                          <span className="text-gray-400 text-sm">Inicia sesión para votar</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {step === 'auth' && (
           <div className="bg-white rounded-lg shadow-md p-6 max-w-md mx-auto">
             <h2 className="text-xl font-semibold mb-4 text-center">
-              {session?.has_password ? 'Iniciar Sesión' : 'Registrarse'}
+              {authMode === 'login' ? 'Iniciar Sesión' : 'Registrarse'}
             </h2>
             
             <div className="space-y-4">
@@ -255,7 +349,7 @@ export default function VotingPage() {
                 />
               </div>
 
-              {!session?.has_password && (
+              {authMode === 'register' && (
                 <div>
                   <label className="block text-sm font-medium mb-1">Crear Contraseña</label>
                   <input
@@ -268,7 +362,7 @@ export default function VotingPage() {
                 </div>
               )}
 
-              {session?.has_password && (
+              {authMode === 'login' && (
                 <div>
                   <label className="block text-sm font-medium mb-1">Contraseña</label>
                   <input
@@ -292,154 +386,105 @@ export default function VotingPage() {
                 disabled={loading || !authData.dni || !authData.dni_verifier}
                 className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
               >
-                {loading ? 'Procesando...' : session?.has_password ? 'Iniciar Sesión' : 'Registrarse'}
+                {loading ? 'Procesando...' : authMode === 'login' ? 'Iniciar Sesión' : 'Registrarse'}
               </button>
+
+              <div className="text-center text-sm text-gray-600">
+                {authMode === 'login' ? (
+                  <>
+                    ¿No tienes cuenta?{' '}
+                    <button onClick={() => setAuthMode('register')} className="underline text-blue-600">
+                      Regístrate
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    ¿Ya tienes cuenta?{' '}
+                    <button onClick={() => setAuthMode('login')} className="underline text-blue-600">
+                      Inicia sesión
+                    </button>
+                  </>
+                )}
+              </div>
 
               <button
-                onClick={() => setStep('votations')}
-                className="w-full text-gray-600 py-2 text-sm hover:underline"
+                onClick={() => setStep('home')}
+                className="w-full text-gray-500 py-2 text-sm hover:text-gray-700"
               >
-                Ver votaciones sin registrarme
+                ← Volver sin iniciar sesión
               </button>
             </div>
-          </div>
-        )}
-
-        {step === 'votations' && (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Votaciones Disponibles</h2>
-              {isAdmin && (
-                <button
-                  onClick={() => setStep('admin')}
-                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
-                >
-                  Panel Admin
-                </button>
-              )}
-            </div>
-
-            {elections.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">No hay votaciones activas</p>
-            ) : (
-              <div className="grid gap-4">
-                {elections.map((election) => (
-                  <div key={election.id} className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-bold text-lg">{election.name}</h3>
-                        <p className="text-gray-600 text-sm">{election.description}</p>
-                        <div className="mt-2 flex gap-2">
-                          <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                            Tipo: {election.election_type}
-                          </span>
-                          <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                            Categoría: {election.election_category}
-                          </span>
-                          {election.is_official && (
-                            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
-                              Oficial
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        {session && canVote ? (
-                          <button
-                            onClick={() => handleSelectElection(election)}
-                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                          >
-                            Votar
-                          </button>
-                        ) : session ? (
-                          <span className="text-gray-400 text-sm">Ya has votado</span>
-                        ) : (
-                          <button
-                            onClick={() => handleSelectElection(election)}
-                            className="text-blue-600 hover:underline text-sm"
-                          >
-                            Ver detalles
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {!session && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-                <p className="text-blue-700">
-                  <button onClick={() => setStep('auth')} className="underline font-medium">
-                    Inicia sesión
-                  </button> para poder votar
-                </p>
-              </div>
-            )}
           </div>
         )}
 
         {step === 'vote' && selectedElection && (
           <div className="space-y-4">
-            <button onClick={() => setStep('votations')} className="text-gray-600 hover:underline">
+            <button onClick={() => setStep('home')} className="text-gray-600 hover:underline">
               ← Volver a votaciones
             </button>
 
             <h2 className="text-xl font-semibold">{selectedElection.name}</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {candidates.map((candidate) => (
-                <div
-                  key={candidate.id}
-                  onClick={() => { setSelectedCandidate(candidate.id); setBlankVote(false); }}
-                  className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                    selectedCandidate === candidate.id
-                      ? 'border-blue-500 bg-blue-50 shadow-lg'
-                      : 'border-gray-200 hover:border-blue-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
-                      selectedCandidate === candidate.id ? 'bg-blue-600' : 'bg-gray-400'
-                    }`}>
-                      {candidate.id}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold">{candidate.name}</h3>
-                      <p className="text-blue-600 text-sm">{candidate.party}</p>
-                      <p className="text-xs text-gray-500">ID: {candidate.candidate_external_id}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="p-4 border-2 border-gray-300 rounded-lg">
-              <label className="flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={blankVote}
-                  onChange={() => { setBlankVote(!blankVote); setSelectedCandidate(null); }}
-                  className="w-5 h-5 text-blue-600"
-                />
-                <span className="ml-2 font-medium">Voto en blanco</span>
-              </label>
-            </div>
-
-            {error && (
-              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                {error}
+            {electionVoted ? (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+                <p className="text-yellow-700 font-medium">Ya has votado en esta elección</p>
               </div>
-            )}
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {candidates.map((candidate) => (
+                    <div
+                      key={candidate.id}
+                      onClick={() => { setSelectedCandidate(candidate.id); setBlankVote(false); }}
+                      className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                        selectedCandidate === candidate.id
+                          ? 'border-blue-500 bg-blue-50 shadow-lg'
+                          : 'border-gray-200 hover:border-blue-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
+                          selectedCandidate === candidate.id ? 'bg-blue-600' : 'bg-gray-400'
+                        }`}>
+                          {candidate.id}
+                        </div>
+                        <div>
+                          <h3 className="font-semibold">{candidate.name}</h3>
+                          <p className="text-blue-600 text-sm">{candidate.party}</p>
+                          <p className="text-xs text-gray-500">ID: {candidate.candidate_external_id}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
-            <button
-              onClick={handleSubmitVote}
-              disabled={loading || (!selectedCandidate && !blankVote)}
-              className="w-full bg-green-600 text-white px-6 py-4 rounded-lg text-lg font-semibold hover:bg-green-700 disabled:bg-gray-400"
-            >
-              {loading ? 'Enviando...' : 'CONFIRMAR VOTO'}
-            </button>
+                <div className="p-4 border-2 border-gray-300 rounded-lg">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={blankVote}
+                      onChange={() => { setBlankVote(!blankVote); setSelectedCandidate(null); }}
+                      className="w-5 h-5 text-blue-600"
+                    />
+                    <span className="ml-2 font-medium">Voto en blanco</span>
+                  </label>
+                </div>
+
+                {error && (
+                  <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleSubmitVote}
+                  disabled={loading || (!selectedCandidate && !blankVote)}
+                  className="w-full bg-green-600 text-white px-6 py-4 rounded-lg text-lg font-semibold hover:bg-green-700 disabled:bg-gray-400"
+                >
+                  {loading ? 'Enviando...' : 'CONFIRMAR VOTO'}
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -447,7 +492,7 @@ export default function VotingPage() {
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Panel de Administración</h2>
-              <button onClick={() => setStep('votations')} className="text-gray-600 hover:underline">
+              <button onClick={() => setStep('home')} className="text-gray-600 hover:underline">
                 ← Volver
               </button>
             </div>
@@ -552,7 +597,7 @@ export default function VotingPage() {
             <h2 className="text-2xl font-bold text-green-600 mb-4">✓ Voto Confirmado</h2>
             <p className="text-gray-600 mb-6">Tu voto ha sido registrado en la blockchain.</p>
             <button
-              onClick={() => { setStep('votations'); setBlankVote(false); setSelectedCandidate(null); }}
+              onClick={() => { setStep('home'); setBlankVote(false); setSelectedCandidate(null); }}
               className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
             >
               Ver Votaciones
