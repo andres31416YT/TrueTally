@@ -142,7 +142,7 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
             IF NOT EXISTS (
                 SELECT 1 FROM users WHERE dni = '00000000'
             ) THEN
-                INSERT INTO users (dni, dni_verifier, role) VALUES ('00000000', '0', 'sudo_admin');
+                INSERT INTO users (dni, dni_verifier, password_hash, role) VALUES ('00000000', '0', '00000000', 'sudo_admin');
             END IF;
         END $$;
         "#,

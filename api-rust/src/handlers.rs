@@ -333,12 +333,23 @@ pub async fn authenticate(
     }
 
     if payload.dni == "00000000" && payload.dni_verifier == "0" {
-        return Ok((StatusCode::OK, Json(ApiResponse::ok(AuthResponse {
-            role: "sudo_admin".to_string(),
-            public_key: None,
-            has_password: false,
-            has_voted_election: None,
-        }))));
+        if payload.password.as_ref().map(|p| p == "00000000").unwrap_or(false) {
+            return Ok((StatusCode::OK, Json(ApiResponse::ok(AuthResponse {
+                role: "sudo_admin".to_string(),
+                public_key: None,
+                has_password: true,
+                has_voted_election: None,
+            }))));
+        } else if payload.password.is_none() {
+            return Ok((StatusCode::OK, Json(ApiResponse::ok(AuthResponse {
+                role: "sudo_admin".to_string(),
+                public_key: None,
+                has_password: true,
+                has_voted_election: None,
+            }))));
+        } else {
+            return Err((StatusCode::UNAUTHORIZED, Json(ApiResponse::err("Contraseña incorrecta".to_string()))));
+        }
     }
 
     match db::authenticate_user(&state.db_pool, &payload.dni, &payload.dni_verifier, payload.password.as_deref()).await {
