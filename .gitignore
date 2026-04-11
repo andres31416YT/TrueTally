@@ -3,3 +3,23 @@ node_modules
 .env
 .env.*
 !.env.example
+
+# Rust
+target/
+Cargo.lock
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

@@ -396,3 +396,77 @@ pub async fn log_audit(pool: &PgPool, action: &str, details: &str) -> Result<(),
 
     Ok(())
 }
+
+pub async fn authenticate_user(
+    pool: &PgPool,
+    dni: &str,
+    dni_verifier: &str,
+    password: Option<&str>,
+) -> Result<Option<(String, Option<String>, bool)>, sqlx::Error> {
+    let row = sqlx::query(
+        r#"
+        SELECT role, public_key, password_hash FROM users WHERE dni = $1 AND dni_verifier = $2
+        "#,
+    )
+    .bind(dni)
+    .bind(dni_verifier)
+    .fetch_optional(pool)
+    .await?;
+
+    match row {
+        Some(r) => {
+            let role: String = r.get("role");
+            let public_key: Option<String> = r.get("public_key");
+            let password_hash: Option<String> = r.get("password_hash");
+            
+            if let Some(pwd) = password {
+                if password_hash.is_none() || password_hash.as_ref().map(|h| h == pwd).unwrap_or(false) {
+                    Ok(Some((role, public_key, password_hash.is_some())))
+                } else {
+                    Ok(None)
+                }
+            } else {
+                Ok(Some((role, public_key, password_hash.is_some())))
+            }
+        }
+        None => Ok(None),
+    }
+}
+
+pub async fn check_user_voted(pool: &PgPool, dni: &str) -> Result<Option<String>, sqlx::Error> {
+    let row = sqlx::query(
+        r#"
+        SELECT election_id FROM voters WHERE dni = $1 AND has_voted = TRUE ORDER BY registered_at DESC LIMIT 1
+        "#,
+    )
+    .bind(dni)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.map(|r| r.get("election_id")))
+}
+
+pub async fn create_user(
+    pool: &PgPool,
+    dni: &str,
+    dni_verifier: &str,
+    public_key: Option<&str>,
+    password: Option<&str>,
+    role: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO users (dni, dni_verifier, public_key, password_hash, role)
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+    )
+    .bind(dni)
+    .bind(dni_verifier)
+    .bind(public_key)
+    .bind(password)
+    .bind(role)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}

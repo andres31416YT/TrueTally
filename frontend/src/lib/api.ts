@@ -47,12 +47,26 @@ export interface NewElection {
   password?: string;
 }
 
-export interface Voter {
+export interface User {
   dni: string;
   dni_verifier: string;
-  email?: string;
-  has_voted: boolean;
+  public_key?: string;
   role: string;
+  has_password: boolean;
+  has_voted_election?: string;
+}
+
+export interface AuthRequest {
+  dni: string;
+  dni_verifier: string;
+  password?: string;
+}
+
+export interface AuthResponse {
+  role: string;
+  public_key?: string;
+  has_password: boolean;
+  has_voted_election?: string;
 }
 
 export interface NewVoter {
@@ -110,6 +124,12 @@ export interface Block {
 }
 
 export const api = {
+  authenticate: (auth: AuthRequest) =>
+    fetchApi<AuthResponse>('/auth', {
+      method: 'POST',
+      body: JSON.stringify(auth),
+    }),
+
   createElection: (election: NewElection) =>
     fetchApi<string>('/elections', {
       method: 'POST',

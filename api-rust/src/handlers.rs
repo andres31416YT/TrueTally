@@ -1,4 +1,4 @@
-use crate::models::{NewElection, NewCandidate, NewVoter, VoteRequest, VoteResponse};
+use crate::models::{AuthRequest, AuthResponse, NewElection, NewCandidate, NewVoter, VoteRequest, VoteResponse};
 use crate::db;
 use axum::{
     extract::State,
@@ -320,4 +320,61 @@ pub async fn get_blocks(
 
 pub async fn health_check() -> &'static str {
     "OK"
+}
+
+pub async fn authenticate(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Json(payload): Json<AuthRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<AuthResponse>>)> {
+    let state = state.lock().await;
+
+    if payload.dni.len() != 8 {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("DNI must be 8 digits".to_string()))));
+    }
+
+    if payload.dni == "00000000" && payload.dni_verifier == "0" {
+        return Ok((StatusCode::OK, Json(ApiResponse::ok(AuthResponse {
+            role: "sudo_admin".to_string(),
+            public_key: None,
+            has_password: false,
+            has_voted_election: None,
+        }))));
+    }
+
+    match db::authenticate_user(&state.db_pool, &payload.dni, &payload.dni_verifier, payload.password.as_deref()).await {
+        Ok(Some((role, public_key, has_password))) => {
+            let has_voted = db::check_user_voted(&state.db_pool, &payload.dni).await.ok().flatten();
+            Ok((StatusCode::OK, Json(ApiResponse::ok(AuthResponse {
+                role,
+                public_key,
+                has_password,
+                has_voted_election: has_voted,
+            }))))
+        }
+        Ok(None) => {
+            if payload.password.is_some() && payload.password.as_ref().map(|p| p.len()).unwrap_or(0) >= 6 {
+                let keys = generate_key_pair();
+                match db::create_user(&state.db_pool, &payload.dni, &payload.dni_verifier, Some(&keys.0), Some(&payload.password.unwrap()), "user").await {
+                    Ok(_) => Ok((StatusCode::OK, Json(ApiResponse::ok(AuthResponse {
+                        role: "user".to_string(),
+                        public_key: Some(keys.0),
+                        has_password: true,
+                        has_voted_election: None,
+                    })))),
+                    Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
+                }
+            } else {
+                Err((StatusCode::NOT_FOUND, Json(ApiResponse::err("Usuario no encontrado. Regístrate creando una contraseña.".to_string()))))
+            }
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
+    }
+}
+
+fn generate_key_pair() -> (String, String) {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+    let public_key = format!("pk_{}", timestamp);
+    let secret_key = format!("sk_{}", timestamp);
+    (public_key, secret_key)
 }

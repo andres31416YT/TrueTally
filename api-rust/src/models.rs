@@ -91,6 +91,21 @@ pub struct User {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthRequest {
+    pub dni: String,
+    pub dni_verifier: String,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthResponse {
+    pub role: String,
+    pub public_key: Option<String>,
+    pub has_password: bool,
+    pub has_voted_election: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoteResponse {
     pub success: bool,
     pub block_index: Option<u64>,

@@ -1,4 +1,4 @@
-use api_gateway::{handlers, init_db};
+use api_gateway::{handlers, init_db, AuthRequest};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
@@ -46,6 +46,7 @@ async fn main() {
     
     let app = Router::new()
         .route("/health", axum::routing::get(handlers::health_check))
+        .route("/auth", axum::routing::post(handlers::authenticate))
         .route("/elections", axum::routing::post(handlers::create_election))
         .route("/elections", axum::routing::get(handlers::list_elections))
         .route("/election", axum::routing::post(handlers::get_election))
