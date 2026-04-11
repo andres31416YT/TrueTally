@@ -37,12 +37,14 @@ export interface Election {
   password?: string;
   is_official?: boolean;
   created_by?: string;
+  is_published?: boolean;
 }
 
 export interface NewElection {
   name: string;
   description?: string;
   visibility?: 'public' | 'private';
+  is_published?: boolean;
   election_type?: string;
   election_category?: string;
   password?: string;
@@ -199,6 +201,24 @@ export const api = {
     fetchApi<{ dni: string; dni_verifier: string; role: string }[]>('/users', {
       method: 'POST',
       body: JSON.stringify({ admin_dni, admin_dni_verifier }),
+    }),
+
+  updateElection: (data: { election_id: string; name?: string; description?: string; visibility?: 'public' | 'private'; is_published?: boolean; password?: string; user_dni: string }) =>
+    fetchApi<string>('/update-election', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  deleteElection: (election_id: string, user_dni: string) =>
+    fetchApi<string>('/delete-election', {
+      method: 'POST',
+      body: JSON.stringify({ election_id, user_dni }),
+    }),
+
+  listMyElections: (user_dni: string) =>
+    fetchApi<Election[]>('/my-elections', {
+      method: 'POST',
+      body: JSON.stringify({ user_dni }),
     }),
 
   health: () => fetchApi<{ status: string }>('/health', { method: 'GET' }),

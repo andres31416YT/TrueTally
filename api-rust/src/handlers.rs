@@ -1,4 +1,4 @@
-use crate::models::{AuthRequest, AuthResponse, NewElection, NewCandidate, NewVoter, VoteRequest, VoteResponse, UpdateRoleRequest, ListUsersRequest};
+use crate::models::{AuthRequest, AuthResponse, NewElection, NewCandidate, NewVoter, VoteRequest, VoteResponse, UpdateRoleRequest, ListUsersRequest, UpdateElectionRequest, DeleteElectionRequest, ListMyElectionsRequest};
 use crate::db;
 use axum::{
     extract::State,
@@ -53,8 +53,9 @@ pub async fn create_election(
     let election_type = payload.election_type.unwrap_or_else(|| "general".to_string());
     let election_category = payload.election_category.unwrap_or_else(|| "general".to_string());
     let visibility = payload.visibility.unwrap_or_else(|| "public".to_string());
+    let is_published = payload.is_published.unwrap_or(false);
     
-    match db::create_election(&state.db_pool, &election_id, &payload.name, payload.description.as_deref(), &visibility, &election_type, &election_category, payload.password.as_deref(), None).await {
+    match db::create_election(&state.db_pool, &election_id, &payload.name, payload.description.as_deref(), &visibility, is_published, &election_type, &election_category, payload.password.as_deref(), None).await {
         Ok(_) => {
             let _ = db::log_audit(&state.db_pool, "election_created", &format!("election: {}", election_id)).await;
             Ok((StatusCode::CREATED, Json(ApiResponse::ok(election_id))))
@@ -453,5 +454,82 @@ pub async fn list_users(
             Ok((StatusCode::OK, Json(ApiResponse::ok(result))))
         }
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Error: {}", e))))),
+    }
+}
+
+pub async fn update_election(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Json(payload): Json<UpdateElectionRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<String>>)> {
+    let state = state.lock().await;
+
+    match db::get_election_creator(&state.db_pool, &payload.election_id).await {
+        Ok(Some(created_by)) => {
+            if created_by != payload.user_dni {
+                return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("Solo el creator puede modificar".to_string()))));
+            }
+        }
+        Ok(None) => return Err((StatusCode::NOT_FOUND, Json(ApiResponse::err("Elección no encontrada".to_string())))),
+        Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Error: {}", e))))),
+    }
+
+    match db::update_election(&state.db_pool, &payload.election_id, payload.name.as_deref(), payload.description.as_deref(), payload.visibility.as_deref(), payload.is_published, payload.password.as_deref()).await {
+        Ok(_) => {
+            let _ = db::log_audit(&state.db_pool, "election_updated", &format!("election: {}", payload.election_id)).await;
+            Ok((StatusCode::OK, Json(ApiResponse::ok("Elección actualizada".to_string()))))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Error: {}", e))))),
+    }
+}
+
+pub async fn delete_election(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Json(payload): Json<DeleteElectionRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<String>>)> {
+    let state = state.lock().await;
+
+    match db::get_election_creator(&state.db_pool, &payload.election_id).await {
+        Ok(Some(created_by)) => {
+            if created_by != payload.user_dni {
+                return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("Solo el creator puede eliminar".to_string()))));
+            }
+        }
+        Ok(None) => return Err((StatusCode::NOT_FOUND, Json(ApiResponse::err("Elección no encontrada".to_string())))),
+        Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Error: {}", e))))),
+    }
+
+    match db::delete_election(&state.db_pool, &payload.election_id).await {
+        Ok(_) => {
+            let _ = db::log_audit(&state.db_pool, "election_deleted", &format!("election: {}", payload.election_id)).await;
+            Ok((StatusCode::OK, Json(ApiResponse::ok("Elección eliminada".to_string()))))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Error: {}", e))))),
+    }
+}
+
+pub async fn list_my_elections(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Json(payload): Json<ListMyElectionsRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>>)> {
+    let state = state.lock().await;
+    
+    match db::list_elections_by_creator(&state.db_pool, &payload.user_dni).await {
+        Ok(elections) => {
+            let result: Vec<serde_json::Value> = elections
+                .into_iter()
+                .map(|(id, name, description, is_active, visibility, is_published)| {
+                    serde_json::json!({
+                        "id": id,
+                        "name": name,
+                        "description": description,
+                        "is_active": is_active,
+                        "visibility": visibility,
+                        "is_published": is_published
+                    })
+                })
+                .collect();
+            Ok((StatusCode::OK, Json(ApiResponse::ok(result))))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
     }
 }

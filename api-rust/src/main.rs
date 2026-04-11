@@ -59,6 +59,9 @@ async fn main() {
         .route("/vote", axum::routing::post(handlers::submit_vote))
         .route("/results", axum::routing::post(handlers::get_results))
         .route("/blocks", axum::routing::get(handlers::get_blocks))
+        .route("/update-election", axum::routing::post(handlers::update_election))
+        .route("/delete-election", axum::routing::post(handlers::delete_election))
+        .route("/my-elections", axum::routing::post(handlers::list_my_elections))
         .layer(cors)
         .with_state(state);
     

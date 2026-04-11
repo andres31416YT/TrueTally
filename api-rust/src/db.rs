@@ -11,6 +11,7 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
             description TEXT,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             is_active BOOLEAN DEFAULT TRUE,
+            is_published BOOLEAN DEFAULT FALSE,
             visibility VARCHAR(20) DEFAULT 'public',
             election_type VARCHAR(50) DEFAULT 'general',
             election_category VARCHAR(50) DEFAULT 'general',
@@ -23,6 +24,10 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
     .execute(&pool)
     .await?;
 
+    sqlx::query("ALTER TABLE elections ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT FALSE")
+        .execute(&pool)
+        .await?;
+    
     sqlx::query("ALTER TABLE elections ADD COLUMN IF NOT EXISTS visibility VARCHAR(20) DEFAULT 'public'")
         .execute(&pool)
         .await?;
@@ -176,6 +181,7 @@ pub async fn create_election(
     name: &str,
     description: Option<&str>,
     visibility: &str,
+    is_published: bool,
     election_type: &str,
     election_category: &str,
     password: Option<&str>,
@@ -185,14 +191,15 @@ pub async fn create_election(
     
     sqlx::query(
         r#"
-        INSERT INTO elections (id, name, description, visibility, election_type, election_category, password, is_official, created_by)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO elections (id, name, description, visibility, is_published, election_type, election_category, password, is_official, created_by)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         "#,
     )
     .bind(id)
     .bind(name)
     .bind(description)
     .bind(visibility)
+    .bind(is_published)
     .bind(election_type)
     .bind(election_category)
     .bind(password)
@@ -510,5 +517,116 @@ pub async fn list_users(
         r.get::<String, _>("dni"),
         r.get::<String, _>("dni_verifier"),
         r.get::<String, _>("role"),
+    )).collect())
+}
+
+pub async fn get_election_creator(pool: &PgPool, election_id: &str) -> Result<Option<String>, sqlx::Error> {
+    let row = sqlx::query(
+        r#"
+        SELECT created_by FROM elections WHERE id = $1
+        "#,
+    )
+    .bind(election_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.map(|r| r.get::<Option<String>, _>("created_by")).flatten())
+}
+
+pub async fn update_election(
+    pool: &PgPool,
+    election_id: &str,
+    name: Option<&str>,
+    description: Option<&str>,
+    visibility: Option<&str>,
+    is_published: Option<bool>,
+    password: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    let mut query = String::from("UPDATE elections SET ");
+    let mut updates = Vec::new();
+    let mut param_count = 1;
+
+    if let Some(n) = name {
+        updates.push(format!("name = ${}", param_count));
+        param_count += 1;
+    }
+    if let Some(d) = description {
+        updates.push(format!("description = ${}", param_count));
+        param_count += 1;
+    }
+    if let Some(v) = visibility {
+        updates.push(format!("visibility = ${}", param_count));
+        param_count += 1;
+    }
+    if let Some(p) = is_published {
+        updates.push(format!("is_published = ${}", param_count));
+        param_count += 1;
+    }
+    if let Some(pw) = password {
+        updates.push(format!("password = ${}", param_count));
+        param_count += 1;
+    }
+
+    if updates.is_empty() {
+        return Ok(());
+    }
+
+    query.push_str(&updates.join(", "));
+    query.push_str(&format!(" WHERE id = ${}", param_count));
+
+    let mut builder = sqlx::query(&query);
+    
+    if let Some(n) = name {
+        builder = builder.bind(n);
+    }
+    if let Some(d) = description {
+        builder = builder.bind(d);
+    }
+    if let Some(v) = visibility {
+        builder = builder.bind(v);
+    }
+    if let Some(p) = is_published {
+        builder = builder.bind(p);
+    }
+    if let Some(pw) = password {
+        builder = builder.bind(pw);
+    }
+    builder = builder.bind(election_id);
+
+    builder.execute(pool).await?;
+    Ok(())
+}
+
+pub async fn delete_election(pool: &PgPool, election_id: &str) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM candidates WHERE election_id = $1")
+        .bind(election_id)
+        .execute(pool)
+        .await?;
+    
+    sqlx::query("DELETE FROM elections WHERE id = $1")
+        .bind(election_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+pub async fn list_elections_by_creator(pool: &PgPool, created_by: &str) -> Result<Vec<(String, String, Option<String>, bool, String, bool)>, sqlx::Error> {
+    let rows = sqlx::query(
+        r#"
+        SELECT id, name, description, is_active, visibility, is_published FROM elections WHERE created_by = $1 ORDER BY created_at DESC
+        "#,
+    )
+    .bind(created_by)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(|r| (
+        r.get::<String, _>("id"),
+        r.get::<String, _>("name"),
+        r.get::<Option<String>, _>("description"),
+        r.get::<bool, _>("is_active"),
+        r.get::<String, _>("visibility"),
+        r.get::<bool, _>("is_published"),
     )).collect())
 }

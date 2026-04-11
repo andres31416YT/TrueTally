@@ -52,7 +52,15 @@ export default function VotingPage() {
   const [selectedElectionForEdit, setSelectedElectionForEdit] = useState<Election | null>(null);
 
   const [users, setUsers] = useState<{dni: string, dni_verifier: string, role: string}[]>([]);
-  const [activeTab, setActiveTab] = useState<'elections' | 'users'>('elections');
+  const [activeTab, setActiveTab] = useState<'elections' | 'my_elections' | 'users'>('elections');
+  const [myElections, setMyElections] = useState<Election[]>([]);
+  const [editElectionData, setEditElectionData] = useState<{
+    name: string;
+    description: string;
+    visibility: 'public' | 'private';
+    is_published: boolean;
+    password: string;
+  } | null>(null);
 
   const [roleData, setRoleData] = useState({
     target_dni: '',
@@ -129,6 +137,74 @@ export default function VotingPage() {
     }
   };
 
+  const loadMyElections = async () => {
+    if (!session) return;
+    const res = await api.listMyElections(session.dni);
+    if (res.success && res.data) {
+      setMyElections(res.data);
+    }
+  };
+
+  const handleUpdateElection = async (electionId: string) => {
+    if (!session || !editElectionData) return;
+    setLoading(true);
+    setError(null);
+
+    const res = await api.updateElection({
+      election_id: electionId,
+      name: editElectionData.name || undefined,
+      description: editElectionData.description || undefined,
+      visibility: editElectionData.visibility,
+      is_published: editElectionData.is_published,
+      password: editElectionData.password || undefined,
+      user_dni: session.dni,
+    });
+
+    if (res.success) {
+      await loadMyElections();
+      setSelectedElectionForEdit(null);
+      setEditElectionData(null);
+    } else {
+      setError(res.error || 'Error al actualizar elección');
+    }
+    setLoading(false);
+  };
+
+  const handleDeleteElection = async (electionId: string) => {
+    if (!session) return;
+    if (!confirm('¿Estás seguro de eliminar esta elección?')) return;
+    
+    setLoading(true);
+    setError(null);
+
+    const res = await api.deleteElection(electionId, session.dni);
+    if (res.success) {
+      await loadMyElections();
+    } else {
+      setError(res.error || 'Error al eliminar elección');
+    }
+    setLoading(false);
+  };
+
+  const handleTogglePublish = async (election: Election) => {
+    if (!session) return;
+    setLoading(true);
+    setError(null);
+
+    const res = await api.updateElection({
+      election_id: election.id,
+      is_published: !election.is_published,
+      user_dni: session.dni,
+    });
+
+    if (res.success) {
+      await loadMyElections();
+    } else {
+      setError(res.error || 'Error al actualizar publicación');
+    }
+    setLoading(false);
+  };
+
   const handleUpdateRole = async () => {
     if (!roleData.target_dni || roleData.target_dni.length !== 8) {
       setError('El DNI debe tener exactamente 8 dígitos');
@@ -162,6 +238,7 @@ export default function VotingPage() {
   useEffect(() => {
     if (step === 'admin' && isAdmin) {
       loadUsers();
+      loadMyElections();
     }
   }, [step]);
 
@@ -588,7 +665,13 @@ export default function VotingPage() {
                 onClick={() => { setActiveTab('elections'); setCurrentPage(1); setSearchTerm(''); }}
                 className={`px-4 py-2 ${activeTab === 'elections' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
               >
-                Votaciones
+                Crear Votación
+              </button>
+              <button
+                onClick={() => { setActiveTab('my_elections'); setCurrentPage(1); setSearchTerm(''); }}
+                className={`px-4 py-2 ${activeTab === 'my_elections' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+              >
+                Mis Votaciones
               </button>
               {session?.role === 'sudo_admin' && (
                 <button
@@ -622,7 +705,6 @@ export default function VotingPage() {
             {activeTab === 'elections' && (
 
             <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="font-semibold mb-4">Crear Nueva Votación</h3>
               
               <div className="space-y-4">
                 <div>
@@ -737,6 +819,134 @@ export default function VotingPage() {
                 </button>
               </div>
             </div>
+            )}
+
+            {activeTab === 'my_elections' && (
+              <div className="space-y-4">
+                {myElections.length === 0 ? (
+                  <div className="bg-white rounded-lg shadow-md p-6 text-center text-gray-500">
+                    No has creado ninguna votación todavía.
+                  </div>
+                ) : (
+                  myElections.map((election) => (
+                    <div key={election.id} className="bg-white rounded-lg shadow-md p-4 border-l-4 border-purple-500">
+                      {selectedElectionForEdit?.id === election.id ? (
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Nombre</label>
+                            <input
+                              type="text"
+                              value={editElectionData?.name || ''}
+                              onChange={(e) => setEditElectionData({ ...editElectionData!, name: e.target.value })}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Descripción</label>
+                            <textarea
+                              value={editElectionData?.description || ''}
+                              onChange={(e) => setEditElectionData({ ...editElectionData!, description: e.target.value })}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Visibilidad</label>
+                            <select
+                              value={editElectionData?.visibility || 'public'}
+                              onChange={(e) => setEditElectionData({ ...editElectionData!, visibility: e.target.value as 'public' | 'private' })}
+                              className="w-full p-2 border rounded"
+                            >
+                              <option value="public">Pública - Todos pueden ver</option>
+                              <option value="private">Privada - Requiere contraseña</option>
+                            </select>
+                          </div>
+                          {editElectionData?.visibility === 'private' && (
+                            <div>
+                              <label className="block text-sm font-medium mb-1">Contraseña</label>
+                              <input
+                                type="password"
+                                value={editElectionData?.password || ''}
+                                onChange={(e) => setEditElectionData({ ...editElectionData!, password: e.target.value })}
+                                className="w-full p-2 border rounded"
+                              />
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={editElectionData?.is_published || false}
+                              onChange={(e) => setEditElectionData({ ...editElectionData!, is_published: e.target.checked })}
+                              className="w-5 h-5"
+                            />
+                            <span className="font-medium">Publicada</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleUpdateElection(election.id)}
+                              disabled={loading}
+                              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                            >
+                              Guardar
+                            </button>
+                            <button
+                              onClick={() => { setSelectedElectionForEdit(null); setEditElectionData(null); }}
+                              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h3 className="font-bold text-lg">{election.name}</h3>
+                            <p className="text-gray-600 text-sm">{election.description}</p>
+                            <div className="mt-2 flex gap-2 flex-wrap">
+                              <span className={`text-xs px-2 py-1 rounded ${election.visibility === 'public' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                {election.visibility === 'public' ? 'Público' : 'Privado'}
+                              </span>
+                              <span className={`text-xs px-2 py-1 rounded ${election.is_published ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                                {election.is_published ? 'Publicado' : 'Borrador'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 ml-4">
+                            <button
+                              onClick={() => {
+                                setSelectedElectionForEdit(election);
+                                setEditElectionData({
+                                  name: election.name || '',
+                                  description: election.description || '',
+                                  visibility: election.visibility || 'public',
+                                  is_published: election.is_published || false,
+                                  password: '',
+                                });
+                              }}
+                              className="text-blue-600 hover:underline text-sm"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => handleTogglePublish(election)}
+                              disabled={loading}
+                              className={`text-sm px-2 py-1 rounded ${election.is_published ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                            >
+                              {election.is_published ? 'Despublicar' : 'Publicar'}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteElection(election.id)}
+                              disabled={loading}
+                              className="text-red-600 hover:underline text-sm"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
             )}
 
             {activeTab === 'users' && (

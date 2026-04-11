@@ -42,6 +42,7 @@ pub struct NewElection {
     pub name: String,
     pub description: Option<String>,
     pub visibility: Option<String>,
+    pub is_published: Option<bool>,
     pub election_type: Option<String>,
     pub election_category: Option<String>,
     pub password: Option<String>,
@@ -118,6 +119,28 @@ pub struct UpdateRoleRequest {
 pub struct ListUsersRequest {
     pub admin_dni: String,
     pub admin_dni_verifier: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateElectionRequest {
+    pub election_id: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub visibility: Option<String>,
+    pub is_published: Option<bool>,
+    pub password: Option<String>,
+    pub user_dni: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteElectionRequest {
+    pub election_id: String,
+    pub user_dni: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListMyElectionsRequest {
+    pub user_dni: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
