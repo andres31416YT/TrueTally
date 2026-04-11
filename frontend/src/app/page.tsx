@@ -58,6 +58,10 @@ export default function VotingPage() {
     new_role: 'user',
   });
 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
   useEffect(() => {
     loadElections();
     const savedSession = localStorage.getItem('user_session');
@@ -75,12 +79,38 @@ export default function VotingPage() {
     }
   }, []);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   const loadElections = async () => {
     const res = await api.listElections();
     if (res.success && res.data) {
-      setElections(res.data.filter((e: Election) => e.is_active));
+      setElections(res.data);
     }
   };
+
+  const filteredElections = elections.filter(e => 
+    searchTerm === '' || 
+    e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (e.description && e.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const paginatedElections = filteredElections.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const filteredUsers = users.filter(u => 
+    searchTerm === '' || 
+    u.dni.includes(searchTerm) ||
+    u.role.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   const loadCandidates = async (electionId: string) => {
     const res = await api.getCandidates(electionId);
@@ -327,7 +357,7 @@ export default function VotingPage() {
               <p className="text-gray-500 text-center py-8">No hay votaciones activas</p>
             ) : (
               <div className="grid gap-4">
-                {elections.map((election) => (
+                {paginatedElections.map((election) => (
                   <div key={election.id} className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
                     <div className="flex justify-between items-start">
                       <div>
@@ -552,17 +582,29 @@ export default function VotingPage() {
 
             <div className="flex gap-2 border-b">
               <button
-                onClick={() => setActiveTab('elections')}
+                onClick={() => { setActiveTab('elections'); setCurrentPage(1); setSearchTerm(''); }}
                 className={`px-4 py-2 ${activeTab === 'elections' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
               >
                 Votaciones
               </button>
-              <button
-                onClick={() => setActiveTab('users')}
-                className={`px-4 py-2 ${activeTab === 'users' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
-              >
-                Usuarios
-              </button>
+              {session?.role === 'sudo_admin' && (
+                <button
+                  onClick={() => { setActiveTab('users'); setCurrentPage(1); setSearchTerm(''); }}
+                  className={`px-4 py-2 ${activeTab === 'users' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+                >
+                  Usuarios
+                </button>
+              )}
+            </div>
+
+            <div className="mb-4">
+              <input
+                type="text"
+                placeholder={activeTab === 'elections' ? "Buscar votaciones..." : "Buscar usuarios..."}
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                className="w-full p-2 border rounded"
+              />
             </div>
 
             {activeTab === 'elections' && (
