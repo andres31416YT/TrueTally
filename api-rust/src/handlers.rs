@@ -52,8 +52,9 @@ pub async fn create_election(
     let election_id = uuid::Uuid::new_v4().to_string()[..8].to_string();
     let election_type = payload.election_type.unwrap_or_else(|| "general".to_string());
     let election_category = payload.election_category.unwrap_or_else(|| "general".to_string());
+    let visibility = payload.visibility.unwrap_or_else(|| "public".to_string());
     
-    match db::create_election(&state.db_pool, &election_id, &payload.name, payload.description.as_deref(), &payload.admin_code, &election_type, &election_category, payload.password.as_deref(), None).await {
+    match db::create_election(&state.db_pool, &election_id, &payload.name, payload.description.as_deref(), &visibility, &election_type, &election_category, payload.password.as_deref(), None).await {
         Ok(_) => {
             let _ = db::log_audit(&state.db_pool, "election_created", &format!("election: {}", election_id)).await;
             Ok((StatusCode::CREATED, Json(ApiResponse::ok(election_id))))

@@ -11,7 +11,7 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
             description TEXT,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             is_active BOOLEAN DEFAULT TRUE,
-            admin_code VARCHAR(50) NOT NULL,
+            visibility VARCHAR(20) DEFAULT 'public',
             election_type VARCHAR(50) DEFAULT 'general',
             election_category VARCHAR(50) DEFAULT 'general',
             password VARCHAR(255),
@@ -22,6 +22,10 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
     )
     .execute(&pool)
     .await?;
+
+    sqlx::query("ALTER TABLE elections ADD COLUMN IF NOT EXISTS visibility VARCHAR(20) DEFAULT 'public'")
+        .execute(&pool)
+        .await?;
 
     sqlx::query(
         r#"
@@ -171,7 +175,7 @@ pub async fn create_election(
     id: &str,
     name: &str,
     description: Option<&str>,
-    admin_code: &str,
+    visibility: &str,
     election_type: &str,
     election_category: &str,
     password: Option<&str>,
@@ -181,14 +185,14 @@ pub async fn create_election(
     
     sqlx::query(
         r#"
-        INSERT INTO elections (id, name, description, admin_code, election_type, election_category, password, is_official, created_by)
+        INSERT INTO elections (id, name, description, visibility, election_type, election_category, password, is_official, created_by)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,
     )
     .bind(id)
     .bind(name)
     .bind(description)
-    .bind(admin_code)
+    .bind(visibility)
     .bind(election_type)
     .bind(election_category)
     .bind(password)

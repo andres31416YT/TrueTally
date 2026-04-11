@@ -41,7 +41,7 @@ pub struct Election {
 pub struct NewElection {
     pub name: String,
     pub description: Option<String>,
-    pub admin_code: String,
+    pub visibility: Option<String>,
     pub election_type: Option<String>,
     pub election_category: Option<String>,
     pub password: Option<String>,

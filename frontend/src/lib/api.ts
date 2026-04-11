@@ -31,7 +31,7 @@ export interface Election {
   name: string;
   description?: string;
   is_active: boolean;
-  admin_code?: string;
+  visibility: 'public' | 'private';
   election_type: string;
   election_category: string;
   password?: string;
@@ -42,7 +42,7 @@ export interface Election {
 export interface NewElection {
   name: string;
   description?: string;
-  admin_code?: string;
+  visibility?: 'public' | 'private';
   election_type?: string;
   election_category?: string;
   password?: string;
