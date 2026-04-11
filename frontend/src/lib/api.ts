@@ -31,24 +31,21 @@ export interface Election {
   name: string;
   description?: string;
   is_active: boolean;
-  is_draft?: boolean;
-  visibility?: 'public' | 'private';
+  admin_code?: string;
   election_type: string;
   election_category: string;
   password?: string;
   is_official?: boolean;
   created_by?: string;
-  created_at?: string;
 }
 
 export interface NewElection {
   name: string;
   description?: string;
-  visibility?: 'public' | 'private';
+  admin_code?: string;
   election_type?: string;
   election_category?: string;
   password?: string;
-  is_draft?: boolean;
 }
 
 export interface Party {

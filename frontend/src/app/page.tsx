@@ -44,7 +44,7 @@ export default function VotingPage() {
   const [newElection, setNewElection] = useState<NewElection>({
     name: '',
     description: '',
-    visibility: 'public',
+    admin_code: '',
     election_type: 'general',
     election_category: 'general',
   });
@@ -698,29 +698,26 @@ export default function VotingPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Visibilidad</label>
-                  <select
-                    value={newElection.visibility || 'public'}
-                    onChange={(e) => setNewElection({ ...newElection, visibility: e.target.value as 'public' | 'private' })}
+                  <label className="block text-sm font-medium mb-1">Código Admin</label>
+                  <input
+                    type="text"
+                    value={newElection.admin_code || ''}
+                    onChange={(e) => setNewElection({ ...newElection, admin_code: e.target.value })}
                     className="w-full p-2 border rounded"
-                  >
-                    <option value="public">Pública - Todos pueden ver</option>
-                    <option value="private">Privada - Requiere contraseña</option>
-                  </select>
+                    placeholder="Código para administrar"
+                  />
                 </div>
 
-                {newElection.visibility === 'private' && (
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Contraseña del evento</label>
-                    <input
-                      type="password"
-                      value={newElection.password || ''}
-                      onChange={(e) => setNewElection({ ...newElection, password: e.target.value })}
-                      className="w-full p-2 border rounded"
-                      placeholder="Contraseña para acceder al evento"
-                    />
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium mb-1">Contraseña (opcional)</label>
+                  <input
+                    type="password"
+                    value={newElection.password || ''}
+                    onChange={(e) => setNewElection({ ...newElection, password: e.target.value })}
+                    className="w-full p-2 border rounded"
+                    placeholder="Proteger votación"
+                  />
+                </div>
 
                 {error && (
                   <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
