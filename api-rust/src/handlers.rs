@@ -1,4 +1,4 @@
-use crate::models::{AuthRequest, AuthResponse, NewElection, NewCandidate, NewVoter, VoteRequest, VoteResponse};
+use crate::models::{AuthRequest, AuthResponse, NewElection, NewCandidate, NewVoter, VoteRequest, VoteResponse, UpdateRoleRequest, ListUsersRequest};
 use crate::db;
 use axum::{
     extract::State,
@@ -388,4 +388,69 @@ fn generate_key_pair() -> (String, String) {
     let public_key = format!("pk_{}", timestamp);
     let secret_key = format!("sk_{}", timestamp);
     (public_key, secret_key)
+}
+
+pub async fn update_user_role(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Json(payload): Json<UpdateRoleRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<String>>)> {
+    let state = state.lock().await;
+
+    let is_sudo = payload.admin_dni == "00000000" && payload.admin_dni_verifier == "0";
+    
+    if !is_sudo {
+        let admin_check = db::authenticate_user(&state.db_pool, &payload.admin_dni, &payload.admin_dni_verifier, None).await;
+        if let Ok(Some((role, _, _))) = admin_check {
+            if role != "sudo_admin" {
+                return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("Solo sudo_admin puede cambiar roles".to_string()))));
+            }
+        } else {
+            return Err((StatusCode::UNAUTHORIZED, Json(ApiResponse::err("Usuario no autorizado".to_string()))));
+        }
+    }
+
+    match db::update_user_role(&state.db_pool, &payload.target_dni, &payload.target_dni_verifier, &payload.new_role).await {
+        Ok(_) => {
+            let _ = db::log_audit(&state.db_pool, "role_updated", &format!("user: {} new_role: {}", payload.target_dni, payload.new_role)).await;
+            Ok((StatusCode::OK, Json(ApiResponse::ok("Rol actualizado".to_string()))))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Error: {}", e))))),
+    }
+}
+
+pub async fn list_users(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Json(payload): Json<ListUsersRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>>)> {
+    let state = state.lock().await;
+
+    let is_sudo = payload.admin_dni == "00000000" && payload.admin_dni_verifier == "0";
+    
+    if !is_sudo {
+        let admin_check = db::authenticate_user(&state.db_pool, &payload.admin_dni, &payload.admin_dni_verifier, None).await;
+        if let Ok(Some((role, _, _))) = admin_check {
+            if role != "sudo_admin" && role != "admin" {
+                return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("No autorizado".to_string()))));
+            }
+        } else {
+            return Err((StatusCode::UNAUTHORIZED, Json(ApiResponse::err("Usuario no autorizado".to_string()))));
+        }
+    }
+
+    match db::list_users(&state.db_pool).await {
+        Ok(users) => {
+            let result: Vec<serde_json::Value> = users
+                .into_iter()
+                .map(|(dni, dni_verifier, role)| {
+                    serde_json::json!({
+                        "dni": dni,
+                        "dni_verifier": dni_verifier,
+                        "role": role
+                    })
+                })
+                .collect();
+            Ok((StatusCode::OK, Json(ApiResponse::ok(result))))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Error: {}", e))))),
+    }
 }

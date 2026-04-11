@@ -47,6 +47,8 @@ async fn main() {
     let app = Router::new()
         .route("/health", axum::routing::get(handlers::health_check))
         .route("/auth", axum::routing::post(handlers::authenticate))
+        .route("/update-role", axum::routing::post(handlers::update_user_role))
+        .route("/users", axum::routing::post(handlers::list_users))
         .route("/elections", axum::routing::post(handlers::create_election))
         .route("/elections", axum::routing::get(handlers::list_elections))
         .route("/election", axum::routing::post(handlers::get_election))

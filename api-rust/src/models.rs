@@ -106,6 +106,21 @@ pub struct AuthResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateRoleRequest {
+    pub target_dni: String,
+    pub target_dni_verifier: String,
+    pub new_role: String,
+    pub admin_dni: String,
+    pub admin_dni_verifier: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListUsersRequest {
+    pub admin_dni: String,
+    pub admin_dni_verifier: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoteResponse {
     pub success: bool,
     pub block_index: Option<u64>,

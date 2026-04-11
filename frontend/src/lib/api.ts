@@ -178,5 +178,17 @@ export const api = {
   getBlocks: () =>
     fetchApi<Block[]>('/blocks', { method: 'GET' }),
 
+  updateRole: (data: { target_dni: string; target_dni_verifier: string; new_role: string; admin_dni: string; admin_dni_verifier: string }) =>
+    fetchApi<string>('/update-role', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  listUsers: (admin_dni: string, admin_dni_verifier: string) =>
+    fetchApi<{ dni: string; dni_verifier: string; role: string }[]>('/users', {
+      method: 'POST',
+      body: JSON.stringify({ admin_dni, admin_dni_verifier }),
+    }),
+
   health: () => fetchApi<{ status: string }>('/health', { method: 'GET' }),
 };

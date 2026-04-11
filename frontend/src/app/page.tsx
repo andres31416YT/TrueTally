@@ -49,6 +49,15 @@ export default function VotingPage() {
     election_category: 'general',
   });
 
+  const [users, setUsers] = useState<{dni: string, dni_verifier: string, role: string}[]>([]);
+  const [activeTab, setActiveTab] = useState<'elections' | 'users'>('elections');
+
+  const [roleData, setRoleData] = useState({
+    target_dni: '',
+    target_dni_verifier: '',
+    new_role: 'user',
+  });
+
   useEffect(() => {
     loadElections();
     const savedSession = localStorage.getItem('user_session');
@@ -79,6 +88,50 @@ export default function VotingPage() {
       setCandidates(res.data);
     }
   };
+
+  const loadUsers = async () => {
+    if (!session) return;
+    const res = await api.listUsers(session.dni, session.dni_verifier);
+    if (res.success && res.data) {
+      setUsers(res.data);
+    }
+  };
+
+  const handleUpdateRole = async () => {
+    if (!roleData.target_dni || roleData.target_dni.length !== 8) {
+      setError('El DNI debe tener exactamente 8 dígitos');
+      return;
+    }
+    if (!roleData.target_dni_verifier) {
+      setError('El dígito verificador es requerido');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const res = await api.updateRole({
+      target_dni: roleData.target_dni,
+      target_dni_verifier: roleData.target_dni_verifier,
+      new_role: roleData.new_role,
+      admin_dni: session!.dni,
+      admin_dni_verifier: session!.dni_verifier,
+    });
+
+    if (res.success) {
+      await loadUsers();
+      setRoleData({ target_dni: '', target_dni_verifier: '', new_role: 'user' });
+    } else {
+      setError(res.error || 'Error al actualizar rol');
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (step === 'admin' && isAdmin) {
+      loadUsers();
+    }
+  }, [step]);
 
   const handleAuth = async () => {
     if (!authData.dni || authData.dni.length !== 8) {
@@ -497,6 +550,23 @@ export default function VotingPage() {
               </button>
             </div>
 
+            <div className="flex gap-2 border-b">
+              <button
+                onClick={() => setActiveTab('elections')}
+                className={`px-4 py-2 ${activeTab === 'elections' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+              >
+                Votaciones
+              </button>
+              <button
+                onClick={() => setActiveTab('users')}
+                className={`px-4 py-2 ${activeTab === 'users' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+              >
+                Usuarios
+              </button>
+            </div>
+
+            {activeTab === 'elections' && (
+
             <div className="bg-white rounded-lg shadow-md p-6">
               <h3 className="font-semibold mb-4">Crear Nueva Votación</h3>
               
@@ -589,6 +659,92 @@ export default function VotingPage() {
                 </button>
               </div>
             </div>
+            )}
+
+            {activeTab === 'users' && (
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h3 className="font-semibold mb-4">Gestionar Usuarios</h3>
+                
+                <div className="mb-6">
+                  <h4 className="text-sm font-medium mb-2">Lista de Usuarios</h4>
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left">DNI</th>
+                          <th className="px-4 py-2 text-left">Verificador</th>
+                          <th className="px-4 py-2 text-left">Rol</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {users.map((user, i) => (
+                          <tr key={i} className="border-t">
+                            <td className="px-4 py-2">{user.dni}</td>
+                            <td className="px-4 py-2">{user.dni_verifier}</td>
+                            <td className="px-4 py-2">
+                              <span className={`px-2 py-1 rounded text-xs ${
+                                user.role === 'sudo_admin' ? 'bg-red-100 text-red-700' :
+                                user.role === 'admin' ? 'bg-purple-100 text-purple-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {user.role}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {isAdmin && session?.role === 'sudo_admin' && (
+                  <div className="border-t pt-4">
+                    <h4 className="text-sm font-medium mb-2">Cambiar Rol de Usuario</h4>
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                      <div>
+                        <label className="block text-xs mb-1">DNI</label>
+                        <input
+                          type="text"
+                          value={roleData.target_dni}
+                          onChange={(e) => setRoleData({...roleData, target_dni: e.target.value.replace(/\D/g, '').slice(0, 8)})}
+                          className="w-full p-2 border rounded"
+                          placeholder="12345678"
+                          maxLength={8}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs mb-1">Verificador</label>
+                        <input
+                          type="text"
+                          value={roleData.target_dni_verifier}
+                          onChange={(e) => setRoleData({...roleData, target_dni_verifier: e.target.value.replace(/\D/g, '').slice(0, 1)})}
+                          className="w-full p-2 border rounded"
+                          maxLength={1}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs mb-1">Nuevo Rol</label>
+                        <select
+                          value={roleData.new_role}
+                          onChange={(e) => setRoleData({...roleData, new_role: e.target.value})}
+                          className="w-full p-2 border rounded"
+                        >
+                          <option value="user">User</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleUpdateRole}
+                      disabled={loading || !roleData.target_dni || !roleData.target_dni_verifier}
+                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                    >
+                      {loading ? 'Actualizando...' : 'Actualizar Rol'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

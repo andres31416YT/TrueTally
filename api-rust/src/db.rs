@@ -470,3 +470,41 @@ pub async fn create_user(
 
     Ok(())
 }
+
+pub async fn update_user_role(
+    pool: &PgPool,
+    dni: &str,
+    dni_verifier: &str,
+    new_role: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE users SET role = $1 WHERE dni = $2 AND dni_verifier = $3
+        "#,
+    )
+    .bind(new_role)
+    .bind(dni)
+    .bind(dni_verifier)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn list_users(
+    pool: &PgPool,
+) -> Result<Vec<(String, String, String)>, sqlx::Error> {
+    let rows = sqlx::query(
+        r#"
+        SELECT dni, dni_verifier, role FROM users ORDER BY created_at DESC
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(|r| (
+        r.get::<String, _>("dni"),
+        r.get::<String, _>("dni_verifier"),
+        r.get::<String, _>("role"),
+    )).collect())
+}
