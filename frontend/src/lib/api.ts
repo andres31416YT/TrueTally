@@ -163,12 +163,6 @@ export const api = {
       body: JSON.stringify(voter),
     }),
 
-  getVoter: (electionId: string, publicKey: string) =>
-    fetchApi<Voter>('/voter', {
-      method: 'POST',
-      body: JSON.stringify({ election_id: electionId, public_key: publicKey }),
-    }),
-
   submitVote: (vote: VoteRequest) =>
     fetchApi<VoteResponse>('/vote', {
       method: 'POST',

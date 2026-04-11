@@ -15,9 +15,9 @@ interface UserSession {
   dni: string;
   dni_verifier: string;
   role: string;
-  public_key: string | null;
+  public_key: string | undefined;
   has_password: boolean;
-  has_voted_election: string | null;
+  has_voted_election: string | undefined;
 }
 
 export default function VotingPage() {
