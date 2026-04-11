@@ -44,10 +44,12 @@ export default function VotingPage() {
   const [newElection, setNewElection] = useState<NewElection>({
     name: '',
     description: '',
-    admin_code: '',
+    visibility: 'public',
     election_type: 'general',
     election_category: 'general',
   });
+
+  const [selectedElectionForEdit, setSelectedElectionForEdit] = useState<Election | null>(null);
 
   const [users, setUsers] = useState<{dni: string, dni_verifier: string, role: string}[]>([]);
   const [activeTab, setActiveTab] = useState<'elections' | 'users'>('elections');
@@ -261,8 +263,8 @@ export default function VotingPage() {
   };
 
   const handleCreateElection = async () => {
-    if (!newElection.name || !newElection.admin_code) {
-      setError('Nombre y código de administrador son requeridos');
+    if (!newElection.name) {
+      setError('El nombre es requerido');
       return;
     }
     setLoading(true);
@@ -532,8 +534,9 @@ export default function VotingPage() {
                           {candidate.id}
                         </div>
                         <div>
-                          <h3 className="font-semibold">{candidate.name}</h3>
-                          <p className="text-blue-600 text-sm">{candidate.party}</p>
+                          <h3 className="font-semibold">{candidate.name} {candidate.last_name}</h3>
+                          <p className="text-blue-600 text-sm">{candidate.category}</p>
+                          {candidate.party_id && <p className="text-xs text-gray-500">Partido ID: {candidate.party_id}</p>}
                           <p className="text-xs text-gray-500">ID: {candidate.candidate_external_id}</p>
                         </div>
                       </div>
@@ -695,15 +698,29 @@ export default function VotingPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Contraseña (opcional)</label>
-                  <input
-                    type="password"
-                    value={newElection.password || ''}
-                    onChange={(e) => setNewElection({ ...newElection, password: e.target.value })}
+                  <label className="block text-sm font-medium mb-1">Visibilidad</label>
+                  <select
+                    value={newElection.visibility || 'public'}
+                    onChange={(e) => setNewElection({ ...newElection, visibility: e.target.value as 'public' | 'private' })}
                     className="w-full p-2 border rounded"
-                    placeholder="Proteger votación"
-                  />
+                  >
+                    <option value="public">Pública - Todos pueden ver</option>
+                    <option value="private">Privada - Requiere contraseña</option>
+                  </select>
                 </div>
+
+                {newElection.visibility === 'private' && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Contraseña del evento</label>
+                    <input
+                      type="password"
+                      value={newElection.password || ''}
+                      onChange={(e) => setNewElection({ ...newElection, password: e.target.value })}
+                      className="w-full p-2 border rounded"
+                      placeholder="Contraseña para acceder al evento"
+                    />
+                  </div>
+                )}
 
                 {error && (
                   <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">

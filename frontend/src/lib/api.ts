@@ -31,20 +31,32 @@ export interface Election {
   name: string;
   description?: string;
   is_active: boolean;
+  is_draft?: boolean;
+  visibility?: 'public' | 'private';
   election_type: string;
   election_category: string;
   password?: string;
-  is_official: boolean;
+  is_official?: boolean;
   created_by?: string;
+  created_at?: string;
 }
 
 export interface NewElection {
   name: string;
   description?: string;
-  admin_code: string;
+  visibility?: 'public' | 'private';
   election_type?: string;
   election_category?: string;
   password?: string;
+  is_draft?: boolean;
+}
+
+export interface Party {
+  id: number;
+  election_id: string;
+  name: string;
+  abbreviation?: string;
+  logo_url?: string;
 }
 
 export interface User {
@@ -87,10 +99,12 @@ export interface VoteRequest {
 
 export interface Candidate {
   id: number;
+  election_id: number;
+  party_id?: number;
   candidate_external_id?: string;
-  party_id?: string;
   name: string;
-  party: string;
+  last_name?: string;
+  position?: string;
   category: string;
   bio?: string;
   photo_url?: string;

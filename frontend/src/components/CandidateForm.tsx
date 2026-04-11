@@ -198,7 +198,7 @@ export default function CandidateForm({ electionId, onSuccess }: CandidateFormPr
                 )}
                 <div>
                   <p className="font-medium text-gray-800">{candidate.name}</p>
-                  <p className="text-sm text-gray-600">{candidate.party}</p>
+                  <p className="text-sm text-gray-600">{candidate.category}</p>
                 </div>
               </div>
             ))}
