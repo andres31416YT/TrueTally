@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { generateKeyPair, signMessage, createVotePayload } from '@/lib/crypto';
-import { api, Election, NewElection, Candidate } from '@/lib/api';
+import { api, Election, NewElection, Candidate, AuthResponse } from '@/lib/api';
 
 interface KeyPair {
   publicKey: string;
@@ -39,7 +40,10 @@ export default function VotingPage() {
     dni: '',
     dni_verifier: '',
     password: '',
+    confirmPassword: '',
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [newElection, setNewElection] = useState<NewElection>({
     name: '',
@@ -47,12 +51,16 @@ export default function VotingPage() {
     visibility: 'public',
     election_type: 'general',
     election_category: 'general',
+    start_date: '',
+    end_date: '',
   });
 
   const [selectedElectionForEdit, setSelectedElectionForEdit] = useState<Election | null>(null);
+  const [electionResults, setElectionResults] = useState<Record<string, number>>({});
+  const [loadingResults, setLoadingResults] = useState(false);
 
   const [users, setUsers] = useState<{dni: string, dni_verifier: string, role: string}[]>([]);
-  const [activeTab, setActiveTab] = useState<'elections' | 'my_elections' | 'users'>('elections');
+  const [activeTab, setActiveTab] = useState<'elections' | 'my_elections' | 'users' | 'results'>('elections');
   const [myElections, setMyElections] = useState<Election[]>([]);
   const [editElectionData, setEditElectionData] = useState<{
     name: string;
@@ -60,6 +68,8 @@ export default function VotingPage() {
     visibility: 'public' | 'private';
     is_published: boolean;
     password: string;
+    start_date: string;
+    end_date: string;
   } | null>(null);
 
   const [roleData, setRoleData] = useState({
@@ -145,6 +155,17 @@ export default function VotingPage() {
     }
   };
 
+  const loadResults = async (electionId: string) => {
+    setLoadingResults(true);
+    const res = await api.getResults(electionId);
+    if (res.success && res.data) {
+      setElectionResults(res.data);
+    } else {
+      setError(res.error || 'Error al cargar resultados');
+    }
+    setLoadingResults(false);
+  };
+
   const handleUpdateElection = async (electionId: string) => {
     if (!session || !editElectionData) return;
     setLoading(true);
@@ -157,6 +178,8 @@ export default function VotingPage() {
       visibility: editElectionData.visibility,
       is_published: editElectionData.is_published,
       password: editElectionData.password || undefined,
+      start_date: editElectionData.start_date || undefined,
+      end_date: editElectionData.end_date || undefined,
       user_dni: session.dni,
     });
 
@@ -251,6 +274,16 @@ export default function VotingPage() {
       setError('El dígito verificador es requerido');
       return;
     }
+    if (authMode === 'register') {
+      if (!authData.password || authData.password.length < 6) {
+        setError('La contraseña debe tener al menos 6 caracteres');
+        return;
+      }
+      if (authData.password !== authData.confirmPassword) {
+        setError('Las contraseñas no coinciden');
+        return;
+      }
+    }
 
     setLoading(true);
     setError(null);
@@ -262,29 +295,47 @@ export default function VotingPage() {
         password: authData.password || undefined,
       });
 
-      if (res.success && res.data) {
-        const newSession: UserSession = {
-          dni: authData.dni,
-          dni_verifier: authData.dni_verifier,
-          role: res.data.role,
-          public_key: res.data.public_key,
-          has_password: res.data.has_password,
-          has_voted_election: res.data.has_voted_election,
-        };
-        setSession(newSession);
-        localStorage.setItem('user_session', JSON.stringify(newSession));
-        
-        if (res.data.public_key) {
-          const keys = generateKeyPair();
-          setKeyPair({ publicKey: res.data.public_key, secretKey: keys.secretKey });
+      if (authMode === 'register') {
+          if (res.success && res.data && 'role' in res.data) {
+            setAuthMode('login');
+            setAuthData({ ...authData, password: '', confirmPassword: '' });
+            setShowPassword(false);
+            setShowConfirmPassword(false);
+            setError(null);
+            alert('Usuario registrado correctamente. Ahora puedes iniciar sesión.');
+          } else {
+            setError(res.error || 'Error en registro');
+          }
+        } else {
+          if (res.success && res.data && typeof res.data === 'object' && 'role' in res.data) {
+            const authDataResponse = res.data as AuthResponse;
+            const newSession: UserSession = {
+              dni: authData.dni,
+              dni_verifier: authData.dni_verifier,
+              role: authDataResponse.role,
+              public_key: authDataResponse.public_key,
+              has_password: authDataResponse.has_password,
+              has_voted_election: authDataResponse.has_voted_election,
+            };
+            setSession(newSession);
+            localStorage.setItem('user_session', JSON.stringify(newSession));
+            
+            if (authDataResponse.public_key) {
+              const keys = generateKeyPair();
+              setKeyPair({ publicKey: authDataResponse.public_key, secretKey: keys.secretKey });
+            }
+            
+setStep('home');
+          } else {
+            setError('DNI o contraseña incorrectos. Por favor, verifica tus datos.');
+          }
         }
-        
-        setStep('home');
+      } catch (err: any) {
+      if (authMode === 'login') {
+        setError('DNI o contraseña incorrectos. Por favor, verifica tus datos.');
       } else {
-        setError(res.error || 'Error en autenticación');
+        setError(err.message || 'Error en registro');
       }
-    } catch (err: any) {
-      setError(err.message || 'Error en autenticación');
     }
     setLoading(false);
   };
@@ -308,10 +359,10 @@ export default function VotingPage() {
     const electionId = selectedElection.id;
 
     try {
-      const candidateId = blankVote ? undefined : selectedCandidate?.toString();
+      const candidateId = blankVote ? "blank" : String(selectedCandidate ?? "");
       const payload = createVotePayload(
         keyPair.publicKey,
-        blankVote ? "blank" : selectedCandidate!.toString(),
+        candidateId,
         electionId
       );
       const signature = signMessage(payload, keyPair.secretKey);
@@ -514,26 +565,63 @@ export default function VotingPage() {
               {authMode === 'register' && (
                 <div>
                   <label className="block text-sm font-medium mb-1">Crear Contraseña</label>
-                  <input
-                    type="password"
-                    value={authData.password}
-                    onChange={(e) => setAuthData({ ...authData, password: e.target.value })}
-                    className="w-full p-2 border rounded"
-                    placeholder="Mínimo 6 caracteres"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={authData.password}
+                      onChange={(e) => setAuthData({ ...authData, password: e.target.value })}
+                      className="w-full p-2 pr-10 border rounded"
+                      placeholder="Mínimo 6 caracteres"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  </div>
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium mb-1">Confirmar Contraseña</label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        value={authData.confirmPassword}
+                        onChange={(e) => setAuthData({ ...authData, confirmPassword: e.target.value })}
+                        className="w-full p-2 pr-10 border rounded"
+                        placeholder="Repite tu contraseña"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      >
+                        {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {authMode === 'login' && (
                 <div>
                   <label className="block text-sm font-medium mb-1">Contraseña</label>
-                  <input
-                    type="password"
-                    value={authData.password}
-                    onChange={(e) => setAuthData({ ...authData, password: e.target.value })}
-                    className="w-full p-2 border rounded"
-                    placeholder="Tu contraseña"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={authData.password}
+                      onChange={(e) => setAuthData({ ...authData, password: e.target.value })}
+                      className="w-full p-2 pr-10 border rounded"
+                      placeholder="Tu contraseña"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -545,7 +633,7 @@ export default function VotingPage() {
 
               <button
                 onClick={handleAuth}
-                disabled={loading || !authData.dni || !authData.dni_verifier}
+                disabled={loading || !authData.dni || !authData.dni_verifier || (authMode === 'register' && (authData.password !== authData.confirmPassword || !authData.password))}
                 className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
               >
                 {loading ? 'Procesando...' : authMode === 'login' ? 'Iniciar Sesión' : 'Registrarse'}
@@ -660,7 +748,7 @@ export default function VotingPage() {
               </button>
             </div>
 
-            <div className="flex gap-2 border-b">
+            <div className="flex gap-2 border-b overflow-x-auto">
               <button
                 onClick={() => { setActiveTab('elections'); setCurrentPage(1); setSearchTerm(''); }}
                 className={`px-4 py-2 ${activeTab === 'elections' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
@@ -673,12 +761,18 @@ export default function VotingPage() {
               >
                 Mis Votaciones
               </button>
+              <button
+                onClick={() => { setActiveTab('results'); setCurrentPage(1); setSearchTerm(''); }}
+                className={`px-4 py-2 ${activeTab === 'results' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+              >
+                Resultados
+              </button>
               {session?.role === 'sudo_admin' && (
                 <button
                   onClick={() => { setActiveTab('users'); setCurrentPage(1); setSearchTerm(''); }}
                   className={`px-4 py-2 ${activeTab === 'users' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
                 >
-                  Usuarios
+                  Gestión Usuarios
                 </button>
               )}
             </div>
@@ -776,6 +870,27 @@ export default function VotingPage() {
                       {newElection.election_type === 'mesa_directivo' && newElection.election_category === 'mesa_vice' && 'Candidato a Vicepresidente de Mesa'}
                       {newElection.election_type === 'mesa_directivo' && newElection.election_category === 'mesa_secretario' && 'Candidato a Secretario de Mesa'}
                     </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Fecha de Inicio</label>
+                    <input
+                      type="datetime-local"
+                      value={newElection.start_date || ''}
+                      onChange={(e) => setNewElection({ ...newElection, start_date: e.target.value })}
+                      className="w-full p-2 border rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Fecha de Fin</label>
+                    <input
+                      type="datetime-local"
+                      value={newElection.end_date || ''}
+                      onChange={(e) => setNewElection({ ...newElection, end_date: e.target.value })}
+                      className="w-full p-2 border rounded"
+                    />
                   </div>
                 </div>
 
@@ -880,6 +995,26 @@ export default function VotingPage() {
                             />
                             <span className="font-medium">Publicada</span>
                           </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium mb-1">Fecha de Inicio</label>
+                              <input
+                                type="datetime-local"
+                                value={editElectionData?.start_date || ''}
+                                onChange={(e) => setEditElectionData({ ...editElectionData!, start_date: e.target.value })}
+                                className="w-full p-2 border rounded"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium mb-1">Fecha de Fin</label>
+                              <input
+                                type="datetime-local"
+                                value={editElectionData?.end_date || ''}
+                                onChange={(e) => setEditElectionData({ ...editElectionData!, end_date: e.target.value })}
+                                className="w-full p-2 border rounded"
+                              />
+                            </div>
+                          </div>
                           <div className="flex gap-2">
                             <button
                               onClick={() => handleUpdateElection(election.id)}
@@ -920,6 +1055,8 @@ export default function VotingPage() {
                                   visibility: election.visibility || 'public',
                                   is_published: election.is_published || false,
                                   password: '',
+                                  start_date: election.start_date || '',
+                                  end_date: election.end_date || '',
                                 });
                               }}
                               className="text-blue-600 hover:underline text-sm"
@@ -945,6 +1082,52 @@ export default function VotingPage() {
                       )}
                     </div>
                   ))
+)}
+              </div>
+            )}
+
+            {activeTab === 'results' && (
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h3 className="font-semibold mb-4">Resultados de Votaciones</h3>
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-medium mb-1">Seleccionar Votación</label>
+                  <select
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        loadResults(e.target.value);
+                      }
+                    }}
+                    className="w-full p-2 border rounded"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Selecciona una votación...</option>
+                    {elections.filter(e => e.is_published).map((election) => (
+                      <option key={election.id} value={election.id}>
+                        {election.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {loadingResults ? (
+                  <div className="text-center py-8">Cargando resultados...</div>
+                ) : Object.keys(electionResults).length > 0 ? (
+                  <div className="mt-4">
+                    <h4 className="text-sm font-medium mb-2">Votos por Candidato</h4>
+                    <div className="space-y-2">
+                      {Object.entries(electionResults).map(([candidate, votes]) => (
+                        <div key={candidate} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                          <span className="font-medium">{candidate}</span>
+                          <span className="text-lg font-bold text-blue-600">{votes}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    Selecciona una votación para ver los resultados
+                  </div>
                 )}
               </div>
             )}
@@ -954,7 +1137,7 @@ export default function VotingPage() {
                 <h3 className="font-semibold mb-4">Gestionar Usuarios</h3>
                 
                 <div className="mb-6">
-                  <h4 className="text-sm font-medium mb-2">Lista de Usuarios</h4>
+                  <h4 className="text-sm font-medium mb-2">Lista de Usuarios ({users.length})</h4>
                   <div className="border rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50">
@@ -965,7 +1148,7 @@ export default function VotingPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {users.map((user, i) => (
+                        {paginatedUsers.map((user, i) => (
                           <tr key={i} className="border-t">
                             <td className="px-4 py-2">{user.dni}</td>
                             <td className="px-4 py-2">{user.dni_verifier}</td>
@@ -983,6 +1166,27 @@ export default function VotingPage() {
                       </tbody>
                     </table>
                   </div>
+                  {filteredUsers.length > ITEMS_PER_PAGE && (
+                    <div className="flex justify-center gap-2 mt-4">
+                      <button
+                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 border rounded disabled:opacity-50"
+                      >
+                        Anterior
+                      </button>
+                      <span className="px-3 py-1">
+                        Página {currentPage} de {Math.ceil(filteredUsers.length / ITEMS_PER_PAGE)}
+                      </span>
+                      <button
+                        onClick={() => setCurrentPage(Math.min(Math.ceil(filteredUsers.length / ITEMS_PER_PAGE), currentPage + 1))}
+                        disabled={currentPage >= Math.ceil(filteredUsers.length / ITEMS_PER_PAGE)}
+                        className="px-3 py-1 border rounded disabled:opacity-50"
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {isAdmin && session?.role === 'sudo_admin' && (

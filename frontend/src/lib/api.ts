@@ -6,22 +6,64 @@ interface ApiResponse<T> {
   error?: string;
 }
 
+function getAuthHeaders(): Record<string, string> {
+  const sessionData = typeof window !== 'undefined' ? localStorage.getItem('user_session') : null;
+  if (!sessionData) return {};
+  
+  try {
+    const session = JSON.parse(sessionData);
+    return {
+      'X-User-DNI': session.dni || '',
+      'X-User-Verifier': session.dni_verifier || '',
+      'X-User-Role': session.role || '',
+    };
+  } catch {
+    return {};
+  }
+}
+
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<ApiResponse<T>> {
   try {
+    const authHeaders = getAuthHeaders();
     const response = await fetch(`${API_URL}${endpoint}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
         ...options?.headers,
       },
     });
 
-    const data = await response.json();
-    return data;
+    const responseText = await response.text();
+    
+    if (!response.ok) {
+      let errorMessage = 'Request failed';
+      try {
+        const errorData = JSON.parse(responseText);
+        errorMessage = errorData.error || errorData.message || errorMessage;
+      } catch {
+        errorMessage = responseText || errorMessage;
+      }
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+
+    try {
+      const data = JSON.parse(responseText);
+      return data;
+    } catch {
+      return {
+        success: false,
+        error: 'Invalid JSON response from server',
+      };
+    }
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: errorMsg,
     };
   }
 }
@@ -38,6 +80,8 @@ export interface Election {
   is_official?: boolean;
   created_by?: string;
   is_published?: boolean;
+  start_date?: string;
+  end_date?: string;
 }
 
 export interface NewElection {
@@ -48,6 +92,8 @@ export interface NewElection {
   election_type?: string;
   election_category?: string;
   password?: string;
+  start_date?: string;
+  end_date?: string;
 }
 
 export interface Party {
@@ -83,9 +129,10 @@ export interface AuthResponse {
 export interface NewVoter {
   dni: string;
   dni_verifier: string;
-  public_key: string;
+  public_key?: string;
   email?: string;
-  election_id: string;
+  election_id?: string;
+  password: string;
 }
 
 export interface VoteRequest {
@@ -203,7 +250,7 @@ export const api = {
       body: JSON.stringify({ admin_dni, admin_dni_verifier }),
     }),
 
-  updateElection: (data: { election_id: string; name?: string; description?: string; visibility?: 'public' | 'private'; is_published?: boolean; password?: string; user_dni: string }) =>
+  updateElection: (data: { election_id: string; name?: string; description?: string; visibility?: 'public' | 'private'; is_published?: boolean; password?: string; start_date?: string; end_date?: string; user_dni: string }) =>
     fetchApi<string>('/update-election', {
       method: 'POST',
       body: JSON.stringify(data),

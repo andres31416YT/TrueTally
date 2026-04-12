@@ -17,9 +17,10 @@ pub struct Voter {
 pub struct NewVoter {
     pub dni: String,
     pub dni_verifier: String,
-    pub public_key: String,
+    pub public_key: Option<String>,
     pub email: Option<String>,
-    pub election_id: String,
+    pub election_id: Option<String>,
+    pub password: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
