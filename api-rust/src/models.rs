@@ -72,6 +72,14 @@ pub struct DeleteCandidateRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCandidateRequest {
+    pub candidate_id: i64,
+    pub name: String,
+    pub admin_dni: String,
+    pub admin_dni_verifier: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoteRequest {
     pub voter_public_key: String,
     pub candidate_id: Option<String>,

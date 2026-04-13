@@ -376,6 +376,15 @@ pub async fn add_candidate(
     Ok(row.get("id"))
 }
 
+pub async fn update_candidate(pool: &PgPool, candidate_id: i64, name: &str) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE candidates SET name = $1 WHERE id = $2")
+        .bind(name)
+        .bind(candidate_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 pub async fn delete_candidate(pool: &PgPool, candidate_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM candidates WHERE id = $1")
         .bind(candidate_id)

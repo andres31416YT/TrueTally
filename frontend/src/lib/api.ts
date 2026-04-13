@@ -209,6 +209,12 @@ export const api = {
       body: JSON.stringify(request),
     }),
 
+  updateCandidate: (candidateId: number, name: string) =>
+    fetchApi<string>('/candidates/update', {
+      method: 'POST',
+      body: JSON.stringify({ candidate_id: candidateId, name }),
+    }),
+
   getCandidates: (electionId: string) =>
     fetchApi<Candidate[]>('/candidates?election_id=' + encodeURIComponent(electionId), {
       method: 'GET',

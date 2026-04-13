@@ -81,6 +81,7 @@ export default function VotingPage() {
   });
   const [candidateError, setCandidateError] = useState<string | null>(null);
   const [candidateLoading, setCandidateLoading] = useState(false);
+  const [editingCandidate, setEditingCandidate] = useState<{id: number, name: string} | null>(null);
   const [editPasswordVisible, setEditPasswordVisible] = useState(false);
   const [electionCandidates, setElectionCandidates] = useState<Candidate[]>([]);
 
@@ -227,6 +228,26 @@ export default function VotingPage() {
       await loadElectionCandidates(electionId);
     } else {
       setCandidateError(res.error || 'Error al eliminar candidato');
+    }
+    setCandidateLoading(false);
+  };
+
+  const handleUpdateCandidate = async (candidateId: number) => {
+    if (!session || !editingCandidate) return;
+    if (!editingCandidate.name.trim()) {
+      setCandidateError('El nombre es requerido');
+      return;
+    }
+    setCandidateLoading(true);
+    setCandidateError(null);
+
+    const res = await api.updateCandidate(candidateId, editingCandidate.name.trim());
+
+    if (res.success) {
+      setEditingCandidate(null);
+      await loadElectionCandidates(selectedElectionForCandidates!.id);
+    } else {
+      setCandidateError(res.error || 'Error al actualizar candidato');
     }
     setCandidateLoading(false);
   };
@@ -1316,21 +1337,58 @@ setStep('home');
                     <div className="space-y-2">
                       {electionCandidates.map((candidate) => (
                         <div key={candidate.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div className="flex-1">
-                            <p className="font-medium text-lg">{candidate.name}</p>
-                            <p className="text-sm text-gray-500">Código: {candidate.code}</p>
-                          </div>
-                          {session?.role === 'sudo_admin' && selectedElectionForCandidates && selectedElectionForCandidates.status !== 'Publicado' && selectedElectionForCandidates.status !== 'Terminado' && (
-                            <button
-                              onClick={() => handleDeleteCandidate(candidate.id, selectedElectionForCandidates!.id)}
-                              disabled={candidateLoading}
-                              className="text-red-600 hover:text-red-800 p-2"
-                              title="Eliminar candidato"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
+                          {editingCandidate?.id === candidate.id ? (
+                            <div className="flex-1 flex gap-2">
+                              <input
+                                type="text"
+                                value={editingCandidate.name}
+                                onChange={(e) => setEditingCandidate({ ...editingCandidate, name: e.target.value })}
+                                className="flex-1 p-2 border rounded"
+                              />
+                              <button
+                                onClick={() => handleUpdateCandidate(candidate.id)}
+                                disabled={candidateLoading}
+                                className="bg-blue-600 text-white px-3 py-1 rounded"
+                              >
+                                Guardar
+                              </button>
+                              <button
+                                onClick={() => setEditingCandidate(null)}
+                                className="bg-gray-500 text-white px-3 py-1 rounded"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex-1">
+                                <p className="font-medium text-lg">{candidate.name}</p>
+                                <p className="text-sm text-gray-500">Código: {candidate.code}</p>
+                              </div>
+                              {session?.role === 'sudo_admin' && selectedElectionForCandidates && selectedElectionForCandidates.status !== 'Publicado' && selectedElectionForCandidates.status !== 'Terminado' && (
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => setEditingCandidate({ id: candidate.id, name: candidate.name })}
+                                    className="text-blue-600 hover:text-blue-800 p-2"
+                                    title="Modificar candidato"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2l8.828-8.828z" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteCandidate(candidate.id, selectedElectionForCandidates!.id)}
+                                    disabled={candidateLoading}
+                                    className="text-red-600 hover:text-red-800 p-2"
+                                    title="Eliminar candidato"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       ))}

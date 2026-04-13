@@ -119,6 +119,30 @@ pub async fn add_candidate(
     }
 }
 
+pub async fn update_candidate(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Json(payload): Json<serde_json::Value>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<String>>)> {
+    let state = state.lock().await;
+    let candidate_id = payload.get("candidate_id").and_then(|v| v.as_i64()).unwrap_or(0);
+    let name = payload.get("name").and_then(|v| v.as_str()).unwrap_or("");
+    
+    if candidate_id == 0 {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Candidate ID is required".to_string()))));
+    }
+    if name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Name cannot be empty".to_string()))));
+    }
+
+    match db::update_candidate(&state.db_pool, candidate_id, name).await {
+        Ok(_) => {
+            let _ = db::log_audit(&state.db_pool, "candidate_updated", &format!("candidate: {}", candidate_id)).await;
+            Ok((StatusCode::OK, Json(ApiResponse::ok("Candidato actualizado".to_string()))))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
+    }
+}
+
 pub async fn delete_candidate(
     State(state): State<Arc<Mutex<AppState>>>,
     Json(payload): Json<serde_json::Value>,
