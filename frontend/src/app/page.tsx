@@ -241,7 +241,7 @@ export default function VotingPage() {
       name: editElectionData.name || undefined,
       description: editElectionData.description || undefined,
       visibility: editElectionData.visibility,
-      is_published: editElectionData.status === 'Publicado',
+      status: editElectionData.status,
       password: editElectionData.password || undefined,
       user_dni: session.dni,
     });

@@ -519,12 +519,6 @@ pub async fn update_election(
         Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Error: {}", e))))),
     }
 
-    if let Some(new_status) = &payload.status {
-        if new_status == "Publicado" || new_status == "Terminado" {
-            return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("No se puede editar una elección publicada o terminada".to_string()))));
-        }
-    }
-
     match db::update_election(&state.db_pool, &payload.election_id, payload.name.as_deref(), payload.description.as_deref(), payload.visibility.as_deref(), payload.status.as_deref(), payload.password.as_deref()).await {
         Ok(_) => {
             let _ = db::log_audit(&state.db_pool, "election_updated", &format!("election: {}", payload.election_id)).await;
