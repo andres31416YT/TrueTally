@@ -239,10 +239,10 @@ pub async fn get_election(pool: &PgPool, id: &str) -> Result<Option<(String, Str
     )))
 }
 
-pub async fn list_elections(pool: &PgPool) -> Result<Vec<(String, String, Option<String>, String, Option<String>)>, sqlx::Error> {
+pub async fn list_elections(pool: &PgPool) -> Result<Vec<(String, String, Option<String>, String, Option<String>, Option<String>)>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
-        SELECT id, name, description, status, created_by FROM elections WHERE status IN ('Borrador', 'Publicado', 'Terminado') ORDER BY created_at DESC
+        SELECT id, name, description, status, visibility, password FROM elections WHERE status IN ('Borrador', 'Publicado', 'Terminado') ORDER BY created_at DESC
         "#,
     )
     .fetch_all(pool)
@@ -253,7 +253,8 @@ pub async fn list_elections(pool: &PgPool) -> Result<Vec<(String, String, Option
         r.get::<String, _>("name"),
         r.get::<Option<String>, _>("description"),
         r.get::<String, _>("status"),
-        r.get::<Option<String>, _>("created_by"),
+        r.get::<Option<String>, _>("visibility"),
+        r.get::<Option<String>, _>("password"),
     )).collect())
 }
 
@@ -656,10 +657,10 @@ pub async fn delete_election(pool: &PgPool, election_id: &str) -> Result<(), sql
     Ok(())
 }
 
-pub async fn list_elections_by_creator(pool: &PgPool, created_by: &str) -> Result<Vec<(String, String, Option<String>, String, String)>, sqlx::Error> {
+pub async fn list_elections_by_creator(pool: &PgPool, created_by: &str) -> Result<Vec<(String, String, Option<String>, String, String, Option<String>)>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
-        SELECT id, name, description, status, visibility FROM elections WHERE created_by = $1 ORDER BY created_at DESC
+        SELECT id, name, description, status, visibility, password FROM elections WHERE created_by = $1 ORDER BY created_at DESC
         "#,
     )
     .bind(created_by)
@@ -672,5 +673,6 @@ pub async fn list_elections_by_creator(pool: &PgPool, created_by: &str) -> Resul
         r.get::<Option<String>, _>("description"),
         r.get::<String, _>("status"),
         r.get::<String, _>("visibility"),
+        r.get::<Option<String>, _>("password"),
     )).collect())
 }

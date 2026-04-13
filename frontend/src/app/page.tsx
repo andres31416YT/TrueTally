@@ -81,6 +81,7 @@ export default function VotingPage() {
   });
   const [candidateError, setCandidateError] = useState<string | null>(null);
   const [candidateLoading, setCandidateLoading] = useState(false);
+  const [editPasswordVisible, setEditPasswordVisible] = useState(false);
   const [electionCandidates, setElectionCandidates] = useState<Candidate[]>([]);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -239,14 +240,15 @@ export default function VotingPage() {
       name: editElectionData.name || undefined,
       description: editElectionData.description || undefined,
       visibility: editElectionData.visibility,
-      status: editElectionData.status,
+      is_published: editElectionData.status === 'Publicado',
       password: editElectionData.password || undefined,
       user_dni: session.dni,
     });
 
     if (res.success) {
       await loadMyElections();
-      setSelectedElectionForEdit(null);
+      setShowCandidateForm(false);
+      setSelectedElectionForCandidates(null);
       setEditElectionData(null);
     } else {
       setError(res.error || 'Error al actualizar elección');
@@ -1044,12 +1046,19 @@ setStep('home');
                             <button
                               onClick={() => {
                                 setSelectedElectionForCandidates(election);
+                                setEditElectionData({
+                                  name: election.name || '',
+                                  description: election.description || '',
+                                  visibility: election.visibility || 'public',
+                                  status: election.status || 'Borrador',
+                                  password: election.password || '',
+                                });
                                 setShowCandidateForm(true);
                                 loadElectionCandidates(election.id);
                               }}
                               className="text-blue-600 hover:underline text-sm"
                             >
-                              Modificar Candidatos
+                              Modificar
                             </button>
                             <button
                               onClick={() => handleDeleteElection(election.id)}
@@ -1193,7 +1202,7 @@ setStep('home');
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-semibold">Candidatos - {selectedElectionForCandidates.name}</h2>
+                  <h2 className="text-xl font-semibold">Modificar - {selectedElectionForCandidates.name}</h2>
                   <button
                     onClick={() => { setShowCandidateForm(false); setSelectedElectionForCandidates(null); }}
                     className="text-gray-500 hover:text-gray-700 text-2xl"
@@ -1202,29 +1211,85 @@ setStep('home');
                   </button>
                 </div>
 
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                  <h3 className="font-medium mb-3">Configuración de la Votación</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Visibilidad</label>
+                      <select
+                        value={editElectionData?.visibility || 'public'}
+                        onChange={(e) => setEditElectionData({ ...editElectionData!, visibility: e.target.value as 'public' | 'private' })}
+                        className="w-full p-2 border rounded"
+                      >
+                        <option value="public">Pública - Todos pueden ver</option>
+                        <option value="private">Privada - Requiere contraseña</option>
+                      </select>
+                    </div>
+                    {editElectionData?.visibility === 'private' && (
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Contraseña</label>
+                        <div className="relative">
+                          <input
+                            type={editPasswordVisible ? 'text' : 'password'}
+                            value={editElectionData?.password || ''}
+                            onChange={(e) => setEditElectionData({ ...editElectionData!, password: e.target.value })}
+                            className="w-full p-2 border rounded pr-10"
+                            placeholder="Crear contraseña"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setEditPasswordVisible(!editPasswordVisible)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+                          >
+                            {editPasswordVisible ? (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0118 12c0 2.075-.63 4.05-1.125 5.725m-4.875-8.45a4 4 0 015.75 0M6 6h.008v.008H6V6z" />
+                              </svg>
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Estado</label>
+                      <select
+                        value={editElectionData?.status || 'Borrador'}
+                        onChange={(e) => setEditElectionData({ ...editElectionData!, status: e.target.value as 'Borrador' | 'Publicado' | 'Terminado' })}
+                        className="w-full p-2 border rounded"
+                      >
+                        <option value="Borrador">Borrador (no publicado)</option>
+                        <option value="Publicado">Publicado</option>
+                        <option value="Terminado">Terminado</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      onClick={() => handleUpdateElection(selectedElectionForCandidates!.id)}
+                      disabled={loading}
+                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                    >
+                      {loading ? 'Guardando...' : 'Guardar Cambios'}
+                    </button>
+                  </div>
+                </div>
+
                 <div className="mb-6">
                   <h3 className="font-medium mb-3">Agregar Nuevo Candidato</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Código (auto-generado)</label>
-                      <input
-                        type="text"
-                        value={candidateFormData.code}
-                        disabled
-                        className="w-full p-2 border rounded bg-gray-100"
-                        placeholder="Se generará automáticamente"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Nombre del Candidato</label>
-                      <input
-                        type="text"
-                        value={candidateFormData.name}
-                        onChange={(e) => setCandidateFormData({ ...candidateFormData, name: e.target.value })}
-                        className="w-full p-2 border rounded"
-                        placeholder="Nombre completo"
-                      />
-                    </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1">Nombre del Candidato</label>
+                    <input
+                      type="text"
+                      value={candidateFormData.name}
+                      onChange={(e) => setCandidateFormData({ ...candidateFormData, name: e.target.value })}
+                      className="w-full p-2 border rounded"
+                      placeholder="Nombre completo"
+                    />
                   </div>
                   {candidateError && (
                     <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-4">

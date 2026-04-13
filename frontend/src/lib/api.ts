@@ -77,6 +77,7 @@ export interface Election {
   password?: string;
   is_official?: boolean;
   created_by?: string;
+  is_published?: boolean;
 }
 
 export interface NewElection {
@@ -246,7 +247,7 @@ export const api = {
       body: JSON.stringify({ admin_dni, admin_dni_verifier }),
     }),
 
-  updateElection: (data: { election_id: string; name?: string; description?: string; visibility?: 'public' | 'private'; status?: 'Borrador' | 'Publicado' | 'Terminado'; password?: string; user_dni: string }) =>
+  updateElection: (data: { election_id: string; name?: string; description?: string; visibility?: 'public' | 'private'; is_published?: boolean; password?: string; user_dni: string }) =>
     fetchApi<string>('/update-election', {
       method: 'POST',
       body: JSON.stringify(data),

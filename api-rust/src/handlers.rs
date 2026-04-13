@@ -146,13 +146,14 @@ pub async fn list_elections(
     
     match db::list_elections(&state.db_pool).await {
         Ok(elections) => {
-            let result: Vec<_> = elections.into_iter().map(|(id, name, description, status, visibility)| {
+            let result: Vec<_> = elections.into_iter().map(|(id, name, description, status, visibility, password)| {
                 serde_json::json!({
                     "id": id,
                     "name": name,
                     "description": description,
                     "status": status,
-                    "visibility": visibility
+                    "visibility": visibility,
+                    "password": password.unwrap_or_default()
                 })
             }).collect();
             Ok((StatusCode::OK, Json(ApiResponse::ok(result))))
@@ -568,13 +569,14 @@ pub async fn list_my_elections(
         Ok(elections) => {
             let result: Vec<serde_json::Value> = elections
                 .into_iter()
-                .map(|(id, name, description, status, visibility)| {
+                .map(|(id, name, description, status, visibility, password)| {
                     serde_json::json!({
                         "id": id,
                         "name": name,
                         "description": description,
                         "status": status,
-                        "visibility": visibility
+                        "visibility": visibility,
+                        "password": password.unwrap_or_default()
                     })
                 })
                 .collect();
