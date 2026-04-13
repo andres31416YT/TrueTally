@@ -209,9 +209,8 @@ export const api = {
     }),
 
   getCandidates: (electionId: string) =>
-    fetchApi<Candidate[]>('/candidates', {
-      method: 'POST',
-      body: JSON.stringify({ election_id: electionId }),
+    fetchApi<Candidate[]>('/candidates?election_id=' + encodeURIComponent(electionId), {
+      method: 'GET',
     }),
 
   registerVoter: (voter: NewVoter) =>

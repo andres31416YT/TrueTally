@@ -54,7 +54,7 @@ async fn main() {
         .route("/elections/all", axum::routing::get(handlers::list_all_elections))
         .route("/election", axum::routing::post(handlers::get_election))
         .route("/candidates", axum::routing::post(handlers::add_candidate))
-        .route("/candidates", axum::routing::get(handlers::list_candidates))
+        .route("/candidates", axum::routing::get(handlers::list_candidates_handler))
         .route("/candidates/delete", axum::routing::post(handlers::delete_candidate))
         .route("/register", axum::routing::post(handlers::register_voter))
         .route("/voter", axum::routing::post(handlers::get_voter))

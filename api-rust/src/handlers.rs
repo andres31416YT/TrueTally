@@ -2,10 +2,12 @@ use crate::models::{AuthRequest, AuthResponse, NewElection, NewCandidate, NewVot
 use crate::db;
 use axum::{
     extract::State,
+    extract::Query,
     http::StatusCode,
     response::IntoResponse,
     Json,
 };
+use serde::Deserialize;
 use reqwest::Client;
 use serde::Serialize;
 use std::sync::Arc;
@@ -152,6 +154,36 @@ pub async fn list_elections(
                     "visibility": visibility
                 })
             }).collect();
+            Ok((StatusCode::OK, Json(ApiResponse::ok(result))))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListCandidatesQuery {
+    election_id: String,
+}
+
+pub async fn list_candidates_handler(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Query(query): Query<ListCandidatesQuery>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<(JsonVec)>>)> {
+    let state = state.lock().await;
+    let election_id = &query.election_id;
+    
+    match db::list_candidates(&state.db_pool, election_id).await {
+        Ok(candidates) => {
+            let result: Vec<serde_json::Value> = candidates
+                .into_iter()
+                .map(|(id, code, name)| {
+                    serde_json::json!({
+                        "id": id,
+                        "code": code,
+                        "name": name
+                    })
+                })
+                .collect();
             Ok((StatusCode::OK, Json(ApiResponse::ok(result))))
         }
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
