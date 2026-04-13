@@ -565,7 +565,8 @@ pub async fn list_my_elections(
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<JsonVec>>)> {
     let state = state.lock().await;
     
-    match db::list_elections_by_creator(&state.db_pool, &payload.user_dni).await {
+    let search = payload.search.as_deref();
+    match db::list_elections_by_creator(&state.db_pool, &payload.user_dni, search).await {
         Ok(elections) => {
             let result: Vec<serde_json::Value> = elections
                 .into_iter()

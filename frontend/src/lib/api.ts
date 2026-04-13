@@ -259,10 +259,10 @@ export const api = {
       body: JSON.stringify({ election_id, user_dni }),
     }),
 
-  listMyElections: (user_dni: string) =>
+  listMyElections: (user_dni: string, search?: string) =>
     fetchApi<Election[]>('/my-elections', {
       method: 'POST',
-      body: JSON.stringify({ user_dni }),
+      body: JSON.stringify({ user_dni, search }),
     }),
 
   health: () => fetchApi<{ status: string }>('/health', { method: 'GET' }),

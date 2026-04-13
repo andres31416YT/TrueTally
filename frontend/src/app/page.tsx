@@ -155,7 +155,8 @@ export default function VotingPage() {
 
   const loadMyElections = async () => {
     if (!session) return;
-    const res = await api.listMyElections(session.dni);
+    const search = activeTab === 'my_elections' ? searchTerm : undefined;
+    const res = await api.listMyElections(session.dni, search);
     if (res.success && res.data) {
       setMyElections(res.data);
     }

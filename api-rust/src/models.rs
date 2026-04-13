@@ -139,6 +139,7 @@ pub struct DeleteElectionRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListMyElectionsRequest {
     pub user_dni: String,
+    pub search: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

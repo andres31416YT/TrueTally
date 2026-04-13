@@ -657,15 +657,29 @@ pub async fn delete_election(pool: &PgPool, election_id: &str) -> Result<(), sql
     Ok(())
 }
 
-pub async fn list_elections_by_creator(pool: &PgPool, created_by: &str) -> Result<Vec<(String, String, Option<String>, String, String, Option<String>)>, sqlx::Error> {
-    let rows = sqlx::query(
-        r#"
-        SELECT id, name, description, status, visibility, password FROM elections WHERE created_by = $1 ORDER BY created_at DESC
-        "#,
-    )
-    .bind(created_by)
-    .fetch_all(pool)
-    .await?;
+pub async fn list_elections_by_creator(pool: &PgPool, created_by: &str, search: Option<&str>) -> Result<Vec<(String, String, Option<String>, String, String, Option<String>)>, sqlx::Error> {
+    let query = if search.map(|s| !s.is_empty()).unwrap_or(false) {
+        sqlx::query(
+            r#"
+            SELECT id, name, description, status, visibility, password FROM elections 
+            WHERE created_by = $1 AND (LOWER(name) LIKE LOWER($2) OR LOWER(description) LIKE LOWER($2))
+            ORDER BY created_at DESC
+            "#,
+        )
+    } else {
+        sqlx::query(
+            r#"
+            SELECT id, name, description, status, visibility, password FROM elections WHERE created_by = $1 ORDER BY created_at DESC
+            "#,
+        )
+    };
+    
+    let rows = if let Some(search) = search {
+        let search_pattern = format!("%{}%", search);
+        query.bind(created_by).bind(&search_pattern).fetch_all(pool).await?
+    } else {
+        query.bind(created_by).fetch_all(pool).await?
+    };
 
     Ok(rows.into_iter().map(|r| (
         r.get::<String, _>("id"),
