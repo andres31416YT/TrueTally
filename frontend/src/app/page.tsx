@@ -846,18 +846,20 @@ setStep('home');
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder={activeTab === 'elections' ? "Buscar votaciones..." : "Buscar usuarios..."}
+                  placeholder={activeTab === 'my_elections' ? "Buscar mis votaciones..." : activeTab === 'users' ? "Buscar usuarios..." : ""}
                   value={searchTerm}
                   onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                   onKeyDown={(e) => e.key === 'Enter' && setCurrentPage(1)}
                   className="flex-1 p-2 border rounded"
                 />
-                <button
-                  onClick={() => setCurrentPage(1)}
-                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                >
-                  Buscar
-                </button>
+                {(activeTab === 'my_elections' || activeTab === 'users') && (
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                  >
+                    Buscar
+                  </button>
+                )}
               </div>
             </div>
 
