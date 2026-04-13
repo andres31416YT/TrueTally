@@ -608,7 +608,7 @@ pub async fn list_my_elections(
 }
 
 pub async fn list_all_elections(
-    State(state): State<Arc<Mutex<AppState> > >,
+    State(state): State<Arc<Mutex<AppState>> >,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<JsonVec>>)> {
     let state = state.lock().await;
     
@@ -616,13 +616,14 @@ pub async fn list_all_elections(
         Ok(elections) => {
             let result: Vec<serde_json::Value> = elections
                 .into_iter()
-                .map(|(id, name, description, status, visibility)| {
+                .map(|(id, name, description, status, visibility, password)| {
                     serde_json::json!({
                         "id": id,
                         "name": name,
                         "description": description,
                         "status": status,
-                        "visibility": visibility
+                        "visibility": visibility,
+                        "password": password.unwrap_or_default()
                     })
                 })
                 .collect();

@@ -164,6 +164,9 @@ export default function VotingPage() {
 
   const [selectedElectionForEdit, setSelectedElectionForEdit] = useState<Election | null>(null);
   const [selectedElectionForResults, setSelectedElectionForResults] = useState<Election | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [pendingElection, setPendingElection] = useState<Election | null>(null);
+  const [electionPassword, setElectionPassword] = useState('');
   const [showCandidateForm, setShowCandidateForm] = useState(false);
   const [selectedElectionForCandidates, setSelectedElectionForCandidates] = useState<Election | null>(null);
   const [electionResults, setElectionResults] = useState<Record<string, number>>({});
@@ -530,9 +533,28 @@ setStep('home');
   };
 
   const handleSelectElection = async (election: Election) => {
+    if (election.visibility === 'private' && election.password) {
+      setPendingElection(election);
+      setShowPasswordModal(true);
+      return;
+    }
     setSelectedElection(election);
     await loadCandidates(election.id);
     setStep('vote');
+  };
+
+  const handleVerifyPassword = async () => {
+    if (!pendingElection || !electionPassword) return;
+    if (electionPassword === pendingElection.password) {
+      setShowPasswordModal(false);
+      setSelectedElection(pendingElection);
+      await loadCandidates(pendingElection.id);
+      setStep('vote');
+      setElectionPassword('');
+      setPendingElection(null);
+    } else {
+      setError('Contraseña incorrecta');
+    }
   };
 
   const handleSubmitVote = async () => {
@@ -1040,27 +1062,16 @@ setStep('home');
 
                 <div>
                   <label className="block text-sm font-medium mb-1">Visibilidad</label>
-                  <select
-                    value={newElection.visibility || 'public'}
-                    onChange={(e) => setNewElection({ ...newElection, visibility: e.target.value as 'public' | 'private' })}
-                    className="w-full p-2 border rounded"
-                  >
-                    <option value="public">Pública - Todos pueden ver</option>
-                    <option value="private">Privada - Requiere contraseña</option>
-                  </select>
+                  <div className="w-full p-2 border rounded bg-gray-100 text-gray-600">
+                    Público (por defecto)
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium mb-1">Estado</label>
-                  <select
-                    value={newElection.status || 'Borrador'}
-                    onChange={(e) => setNewElection({ ...newElection, status: e.target.value as 'Borrador' | 'Publicado' | 'Terminado' | 'Eliminado' })}
-                    className="w-full p-2 border rounded"
-                  >
-                    <option value="Borrador">Borrador</option>
-                    <option value="Publicado">Publicado</option>
-                    <option value="Terminado">Terminado</option>
-                  </select>
+                  <div className="w-full p-2 border rounded bg-gray-100 text-gray-600">
+                    Borrador (por defecto)
+                  </div>
                 </div>
 
                 {newElection.visibility === 'private' && (
@@ -1535,6 +1546,44 @@ setStep('home');
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showPasswordModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+              <h2 className="text-xl font-semibold mb-4">Elección Privada</h2>
+              <p className="text-gray-600 mb-4">Ingresa la contraseña para acceder a esta votación:</p>
+              <input
+                type="password"
+                value={electionPassword}
+                onChange={(e) => setElectionPassword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleVerifyPassword(); }}
+                className="w-full p-2 border rounded mb-4"
+                placeholder="Contraseña"
+                autoFocus
+              />
+              {error && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-4">
+                  {error}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleVerifyPassword}
+                  disabled={!electionPassword}
+                  className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400"
+                >
+                  Acceder
+                </button>
+                <button
+                  onClick={() => { setShowPasswordModal(false); setPendingElection(null); setElectionPassword(''); setError(null); }}
+                  className="flex-1 bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600"
+                >
+                  Cancelar
+                </button>
               </div>
             </div>
           </div>

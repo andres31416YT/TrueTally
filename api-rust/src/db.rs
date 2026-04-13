@@ -618,10 +618,10 @@ pub async fn update_election(
     Ok(())
 }
 
-pub async fn list_all_elections(pool: &PgPool) -> Result<Vec<(String, String, Option<String>, String, String)>, sqlx::Error> {
+pub async fn list_all_elections(pool: &PgPool) -> Result<Vec<(String, String, Option<String>, String, String, Option<String>)>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
-        SELECT id, name, description, status, visibility FROM elections WHERE status IN ('Borrador', 'Publicado', 'Terminado') ORDER BY created_at DESC
+        SELECT id, name, description, status, visibility, password FROM elections WHERE status IN ('Borrador', 'Publicado', 'Terminado') ORDER BY created_at DESC
         "#,
     )
     .fetch_all(pool)
@@ -633,6 +633,7 @@ pub async fn list_all_elections(pool: &PgPool) -> Result<Vec<(String, String, Op
         r.get::<Option<String>, _>("description"),
         r.get::<String, _>("status"),
         r.get::<String, _>("visibility"),
+        r.get::<Option<String>, _>("password"),
     )).collect())
 }
 
