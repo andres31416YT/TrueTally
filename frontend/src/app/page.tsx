@@ -56,7 +56,7 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
       const candidate = candidates.find(c => c.code === candidateId);
       return {
         code: candidateId,
-        name: candidate?.name || `Candidato ${candidateId}`,
+        name: candidate?.name || 'Sin candidato',
         votes,
         percentage: totalVotes > 0 ? (votes / totalVotes) * 100 : 0,
       };
@@ -739,33 +739,32 @@ setStep('home');
                         </div>
                       </div>
                         <div className="flex items-center gap-3">
-                          {session && canVote && !electionVoted && election.status === 'Publicado' ? (
-                            <button
-                              onClick={() => handleSelectElection(election)}
-                              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                            >
-                              Votar
-                            </button>
-                          ) : election.status === 'Publicado' && session && electionVoted ? (
-                            <p className="text-gray-500 text-sm">Ya has votado en esta elección</p>
-                          ) : election.status === 'Publicado' && session ? (
-                            <button
-                              onClick={() => handleSelectElection(election)}
-                              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                            >
-                              Votar
-                            </button>
-                          ) : election.status === 'Borrador' ? (
-                            <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">Borrador</span>
-                          ) : (election.status === 'Publicado' || election.status === 'Terminado') ? (
+                          {election.status === 'Terminado' ? (
                             <button
                               onClick={() => { setSelectedElectionForResults(election); setStep('results'); }}
                               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                             >
                               Ver
                             </button>
+                          ) : election.status === 'Publicado' ? (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleSelectElection(election)}
+                                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                              >
+                                Votar
+                              </button>
+                              <button
+                                onClick={() => { setSelectedElectionForResults(election); setStep('results'); }}
+                                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                              >
+                                Ver
+                              </button>
+                            </div>
+                          ) : election.status === 'Borrador' ? (
+                            <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">Borrador</span>
                           ) : (
-                            <span className="text-gray-400 text-sm">Inicia sesión para votar</span>
+                            <span className="text-gray-400 text-sm">Espere...</span>
                           )}
                         </div>
                     </div>
