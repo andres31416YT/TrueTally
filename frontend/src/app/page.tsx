@@ -1213,7 +1213,7 @@ setStep('home');
                                 Modificar
                               </button>
                             )}
-                            {election.status !== 'Terminado' && (
+                            {election.status === 'Borrador' && (
                               <button
                                 onClick={() => handleDeleteElection(election.id)}
                                 disabled={loading}
