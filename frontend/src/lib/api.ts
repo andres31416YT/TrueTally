@@ -72,7 +72,7 @@ export interface Election {
   id: string;
   name: string;
   description?: string;
-  status: 'Borrador' | 'Publicado' | 'Terminado';
+  status: 'Borrador' | 'Publicado' | 'Terminado' | 'Eliminado';
   visibility: 'public' | 'private';
   password?: string;
   is_official?: boolean;
@@ -84,7 +84,7 @@ export interface NewElection {
   name: string;
   description?: string;
   visibility?: 'public' | 'private';
-  status?: 'Borrador' | 'Publicado' | 'Terminado';
+  status?: 'Borrador' | 'Publicado' | 'Terminado' | 'Eliminado';
   password?: string;
   created_by?: string;
 }

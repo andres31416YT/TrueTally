@@ -65,7 +65,7 @@ export default function VotingPage() {
     name: string;
     description: string;
     visibility: 'public' | 'private';
-    status: 'Borrador' | 'Publicado' | 'Terminado';
+    status: 'Borrador' | 'Publicado' | 'Terminado' | 'Eliminado';
     password: string;
   } | null>(null);
 
@@ -906,7 +906,7 @@ setStep('home');
                   <label className="block text-sm font-medium mb-1">Estado</label>
                   <select
                     value={newElection.status || 'Borrador'}
-                    onChange={(e) => setNewElection({ ...newElection, status: e.target.value as 'Borrador' | 'Publicado' | 'Terminado' })}
+                    onChange={(e) => setNewElection({ ...newElection, status: e.target.value as 'Borrador' | 'Publicado' | 'Terminado' | 'Eliminado' })}
                     className="w-full p-2 border rounded"
                   >
                     <option value="Borrador">Borrador</option>
@@ -999,7 +999,7 @@ setStep('home');
                             <label className="block text-sm font-medium mb-1">Estado</label>
                             <select
                               value={editElectionData?.status || 'Borrador'}
-                              onChange={(e) => setEditElectionData({ ...editElectionData!, status: e.target.value as 'Borrador' | 'Publicado' | 'Terminado' })}
+                              onChange={(e) => setEditElectionData({ ...editElectionData!, status: e.target.value as 'Borrador' | 'Publicado' | 'Terminado' | 'Eliminado' })}
                               className="w-full p-2 border rounded"
                               disabled={election.status === 'Publicado' || election.status === 'Terminado'}
                             >
@@ -1262,7 +1262,7 @@ setStep('home');
                       <label className="block text-sm font-medium mb-1">Estado</label>
                       <select
                         value={editElectionData?.status || 'Borrador'}
-                        onChange={(e) => setEditElectionData({ ...editElectionData!, status: e.target.value as 'Borrador' | 'Publicado' | 'Terminado' })}
+                        onChange={(e) => setEditElectionData({ ...editElectionData!, status: e.target.value as 'Borrador' | 'Publicado' | 'Terminado' | 'Eliminado' })}
                         className="w-full p-2 border rounded"
                       >
                         <option value="Borrador">Borrador (no publicado)</option>

@@ -242,7 +242,7 @@ pub async fn get_election(pool: &PgPool, id: &str) -> Result<Option<(String, Str
 pub async fn list_elections(pool: &PgPool) -> Result<Vec<(String, String, Option<String>, String, Option<String>, Option<String>)>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
-        SELECT id, name, description, status, visibility, password FROM elections WHERE status IN ('Borrador', 'Publicado', 'Terminado') ORDER BY created_at DESC
+        SELECT id, name, description, status, visibility, password FROM elections WHERE is_active = TRUE AND status IN ('Borrador', 'Publicado', 'Terminado') ORDER BY created_at DESC
         "#,
     )
     .fetch_all(pool)
@@ -644,12 +644,7 @@ pub async fn list_all_elections(pool: &PgPool) -> Result<Vec<(String, String, Op
 }
 
 pub async fn delete_election(pool: &PgPool, election_id: &str) -> Result<(), sqlx::Error> {
-    sqlx::query("DELETE FROM candidates WHERE election_id = $1")
-        .bind(election_id)
-        .execute(pool)
-        .await?;
-    
-    sqlx::query("DELETE FROM elections WHERE id = $1")
+    sqlx::query("UPDATE elections SET is_active = FALSE, status = 'Eliminado' WHERE id = $1")
         .bind(election_id)
         .execute(pool)
         .await?;
@@ -662,14 +657,14 @@ pub async fn list_elections_by_creator(pool: &PgPool, created_by: &str, search: 
         sqlx::query(
             r#"
             SELECT id, name, description, status, visibility, password FROM elections 
-            WHERE created_by = $1 AND (LOWER(name) LIKE LOWER($2) OR LOWER(description) LIKE LOWER($2))
+            WHERE is_active = TRUE AND created_by = $1 AND (LOWER(name) LIKE LOWER($2) OR LOWER(description) LIKE LOWER($2))
             ORDER BY created_at DESC
             "#,
         )
     } else {
         sqlx::query(
             r#"
-            SELECT id, name, description, status, visibility, password FROM elections WHERE created_by = $1 ORDER BY created_at DESC
+            SELECT id, name, description, status, visibility, password FROM elections WHERE is_active = TRUE AND created_by = $1 ORDER BY created_at DESC
             "#,
         )
     };
