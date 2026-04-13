@@ -851,11 +851,11 @@ setStep('home');
                   placeholder={activeTab === 'my_elections' ? "Buscar mis votaciones..." : "Buscar usuarios..."}
                   value={searchTerm}
                   onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                  onKeyDown={(e) => e.key === 'Enter' && setCurrentPage(1)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { setCurrentPage(1); loadMyElections(); } }}
                   className="flex-1 p-2 border rounded"
                 />
                 <button
-                  onClick={() => setCurrentPage(1)}
+                  onClick={() => { setCurrentPage(1); loadMyElections(); }}
                   className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
                 >
                   Buscar
