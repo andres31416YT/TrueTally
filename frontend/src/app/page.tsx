@@ -446,7 +446,12 @@ setStep('home');
     setLoading(true);
     setError(null);
 
-    const res = await api.createElection(newElection);
+    const electionWithCreator = {
+      ...newElection,
+      created_by: session?.dni,
+    };
+
+    const res = await api.createElection(electionWithCreator);
     if (res.success) {
       await loadElections();
       setStep('home');

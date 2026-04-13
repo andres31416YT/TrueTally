@@ -85,6 +85,7 @@ export interface NewElection {
   visibility?: 'public' | 'private';
   status?: 'Borrador' | 'Publicado' | 'Terminado';
   password?: string;
+  created_by?: string;
 }
 
 export interface Party {

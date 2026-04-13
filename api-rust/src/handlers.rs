@@ -56,7 +56,8 @@ pub async fn create_election(
     let visibility = payload.visibility.unwrap_or_else(|| "public".to_string());
     let status = payload.status.unwrap_or_else(|| "Borrador".to_string());
     
-    match db::create_election(&state.db_pool, &election_id, &payload.name, payload.description.as_deref(), &visibility, &status, payload.password.as_deref(), None).await {
+    let created_by = payload.created_by.as_deref();
+    match db::create_election(&state.db_pool, &election_id, &payload.name, payload.description.as_deref(), &visibility, &status, payload.password.as_deref(), created_by).await {
         Ok(_) => {
             let _ = db::log_audit(&state.db_pool, "election_created", &format!("election: {}", election_id)).await;
             Ok((StatusCode::CREATED, Json(ApiResponse::ok(election_id))))

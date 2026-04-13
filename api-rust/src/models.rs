@@ -45,6 +45,7 @@ pub struct NewElection {
     pub visibility: Option<String>,
     pub status: Option<String>,
     pub password: Option<String>,
+    pub created_by: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
