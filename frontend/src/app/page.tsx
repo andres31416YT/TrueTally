@@ -559,6 +559,12 @@ setStep('home');
                             {election.status === 'Publicado' ? 'Publicado' : 
                              election.status === 'Terminado' ? 'Terminado' : 'Borrador'}
                           </span>
+                          <span className={`text-xs px-2 py-1 rounded ${
+                            election.visibility === 'public' ? 'bg-green-100 text-green-700' :
+                            'bg-orange-100 text-orange-700'
+                          }`}>
+                            {election.visibility === 'public' ? 'Público' : 'Privado'}
+                          </span>
                           {election.is_official && (
                             <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
                               Oficial
