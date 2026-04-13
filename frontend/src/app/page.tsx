@@ -1239,7 +1239,7 @@ setStep('home');
                   )}
                   <button
                     onClick={() => handleAddCandidate(selectedElectionForCandidates.id)}
-                    disabled={candidateLoading || !candidateFormData.code.trim() || !candidateFormData.name.trim()}
+                    disabled={candidateLoading || !candidateFormData.name.trim()}
                     className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
                   >
                     {candidateLoading ? 'Agregando...' : 'Agregar Candidato'}
