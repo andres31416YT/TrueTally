@@ -179,16 +179,18 @@ export default function VotingPage() {
   };
 
   const handleAddCandidate = async (electionId: string) => {
-    if (!candidateFormData.code.trim() || !candidateFormData.name.trim()) {
-      setCandidateError('Código y nombre son requeridos');
+    if (!candidateFormData.name.trim()) {
+      setCandidateError('El nombre es requerido');
       return;
     }
     setCandidateLoading(true);
     setCandidateError(null);
 
+    const code = `CAND-${electionId.substring(0, 4).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+
     const res = await api.addCandidate({
       election_id: electionId,
-      code: candidateFormData.code.trim(),
+      code: code,
       name: candidateFormData.name.trim(),
     });
 
@@ -1210,13 +1212,13 @@ setStep('home');
                   <h3 className="font-medium mb-3">Agregar Nuevo Candidato</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Código</label>
+                      <label className="block text-sm font-medium mb-1">Código (auto-generado)</label>
                       <input
                         type="text"
                         value={candidateFormData.code}
-                        onChange={(e) => setCandidateFormData({ ...candidateFormData, code: e.target.value })}
-                        className="w-full p-2 border rounded"
-                        placeholder="01"
+                        disabled
+                        className="w-full p-2 border rounded bg-gray-100"
+                        placeholder="Se generará automáticamente"
                       />
                     </div>
                     <div>
