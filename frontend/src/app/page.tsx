@@ -850,7 +850,7 @@ setStep('home');
                   placeholder={activeTab === 'my_elections' ? "Buscar mis votaciones..." : "Buscar usuarios..."}
                   value={searchTerm}
                   onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { setCurrentPage(1); loadMyElections(); } }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && activeTab === 'my_elections') { setCurrentPage(1); loadMyElections(); } }}
                   className="flex-1 p-2 border rounded"
                 />
                 <button
