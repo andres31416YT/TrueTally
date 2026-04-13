@@ -849,18 +849,18 @@ setStep('home');
                   type="text"
                   placeholder={activeTab === 'my_elections' ? "Buscar mis votaciones..." : "Buscar usuarios..."}
                   value={searchTerm}
-                  onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && activeTab === 'my_elections') { setCurrentPage(1); loadMyElections(); } }}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { setCurrentPage(1); loadMyElections(); } }}
                   className="flex-1 p-2 border rounded"
                 />
                 <button
-                  onClick={() => { setCurrentPage(1); loadMyElections(); }}
+                  onClick={() => { setCurrentPage(1); if (activeTab === 'my_elections') { loadMyElections(); } }}
                   className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
                 >
                   Buscar
                 </button>
                 <button
-                  onClick={() => { setSearchTerm(''); setCurrentPage(1); loadMyElections(); }}
+                  onClick={() => { setSearchTerm(''); setCurrentPage(1); if (activeTab === 'my_elections') { loadMyElections(); } }}
                   className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
                 >
                   Limpiar
