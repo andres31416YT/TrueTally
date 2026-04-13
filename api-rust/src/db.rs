@@ -202,22 +202,6 @@ pub async fn create_election(
     .execute(pool)
     .await?;
 
-    for i in 1..=10 {
-        let code = format!("{:02}", i);
-        sqlx::query(
-            r#"
-            INSERT INTO candidates (election_id, code, name, party)
-            VALUES ($1, $2, $3, $4)
-            "#,
-        )
-        .bind(id)
-        .bind(code)
-        .bind(format!("Candidato {}", i))
-        .bind(format!("Partido {}", i))
-        .execute(pool)
-        .await?;
-    }
-
     Ok(())
 }
 
