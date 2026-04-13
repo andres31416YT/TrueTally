@@ -59,7 +59,7 @@ pub struct Candidate {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewCandidate {
     pub election_id: String,
-    pub code: String,
+    pub code: Option<String>,
     pub name: String,
 }
 

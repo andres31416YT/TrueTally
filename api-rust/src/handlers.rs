@@ -95,21 +95,19 @@ pub async fn add_candidate(
     
     let election_id = &payload.election_id;
     let name = &payload.name;
-    let code = &payload.code;
     
     if name.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Name cannot be empty".to_string()))));
     }
-    if code.trim().is_empty() {
-        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Code cannot be empty".to_string()))));
-    }
+
+    let code = format!("CAND-{}-{}", election_id, uuid::Uuid::new_v4().to_string()[..8].to_string());
 
     let exists = db::candidate_exists(&state.db_pool, election_id, name).await;
     if let Ok(true) = exists {
         return Err((StatusCode::CONFLICT, Json(ApiResponse::err("A candidate with this name already exists in this election".to_string()))));
     }
     
-    match db::add_candidate(&state.db_pool, election_id, code, name).await {
+    match db::add_candidate(&state.db_pool, election_id, &code, name).await {
         Ok(id) => {
             let _ = db::log_audit(&state.db_pool, "candidate_added", &format!("election: {}", election_id)).await;
             Ok((StatusCode::CREATED, Json(ApiResponse::ok(id))))
