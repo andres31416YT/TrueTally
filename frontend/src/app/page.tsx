@@ -254,6 +254,17 @@ export default function VotingPage() {
 
   const handleUpdateElection = async (electionId: string) => {
     if (!session || !editElectionData) return;
+
+    const originalElection = myElections.find(e => e.id === electionId);
+    const originalStatus = originalElection?.status || 'Borrador';
+    
+    if (editElectionData.status !== originalStatus) {
+      const confirmMessage = `¿Seguro que quieres cambiar a "${editElectionData.status}"? Esta acción no tiene marcha atrás.`;
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+    }
+
     setLoading(true);
     setError(null);
 
