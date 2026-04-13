@@ -53,9 +53,10 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
   const chartData = Object.entries(results)
     .filter(([key]) => key !== 'blank')
     .map(([candidateId, votes]) => {
-      const candidate = candidates.find(c => c.code === candidateId);
+      const numId = parseInt(candidateId);
+      const candidate = candidates.find(c => c.id === numId);
       return {
-        code: candidateId,
+        code: candidate?.code || candidateId,
         name: candidate?.name || 'Sin candidato',
         votes,
         percentage: totalVotes > 0 ? (votes / totalVotes) * 100 : 0,
