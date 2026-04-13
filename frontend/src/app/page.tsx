@@ -10,7 +10,7 @@ interface KeyPair {
   secretKey: string;
 }
 
-type Step = 'home' | 'auth' | 'vote' | 'admin' | 'cast' | 'confirm';
+type Step = 'home' | 'auth' | 'vote' | 'admin' | 'cast' | 'confirm' | 'results';
 
 interface UserSession {
   dni: string;
@@ -19,6 +19,116 @@ interface UserSession {
   public_key: string | undefined;
   has_password: boolean;
   has_voted_election: string | undefined;
+}
+
+function ResultsView({ election, onBack }: { election: Election; onBack: () => void }) {
+  const [results, setResults] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
+  }, [election.id]);
+
+  const loadData = async () => {
+    const [resultsRes, candidatesRes] = await Promise.all([
+      api.getResults(election.id),
+      api.getCandidates(election.id),
+    ]);
+
+    if (resultsRes.success && resultsRes.data) {
+      setResults(resultsRes.data);
+    }
+    if (candidatesRes.success && candidatesRes.data) {
+      setCandidates(candidatesRes.data);
+    }
+    setLoading(false);
+  };
+
+  const blankVotes = results['blank'] || 0;
+  const totalVotes = Object.values(results).reduce((a, b) => a + b, 0) - blankVotes;
+
+  const chartData = Object.entries(results)
+    .filter(([key]) => key !== 'blank')
+    .map(([candidateId, votes]) => {
+      const candidate = candidates.find(c => c.code === candidateId);
+      return {
+        code: candidateId,
+        name: candidate?.name || `Candidato ${candidateId}`,
+        votes,
+        percentage: totalVotes > 0 ? (votes / totalVotes) * 100 : 0,
+      };
+    })
+    .sort((a, b) => b.votes - a.votes);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-xl text-gray-600">Cargando resultados...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <button onClick={onBack} className="text-gray-600 hover:underline flex items-center gap-2">
+          ← Volver
+        </button>
+        <h2 className="text-2xl font-bold">{election.name}</h2>
+        <span className={`text-xs px-2 py-1 rounded ${election.status === 'Terminado' ? 'bg-gray-100 text-gray-600' : 'bg-blue-100 text-blue-700'}`}>
+          {election.status}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-white rounded-lg shadow p-4 text-center">
+          <p className="text-sm text-gray-500">Total de Votos</p>
+          <p className="text-3xl font-bold text-blue-600">{totalVotes + blankVotes}</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4 text-center">
+          <p className="text-sm text-gray-500">Votos en Blanco</p>
+          <p className="text-3xl font-bold text-gray-600">{blankVotes}</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4 text-center">
+          <p className="text-sm text-gray-500">Candidatos</p>
+          <p className="text-3xl font-bold text-green-600">{candidates.length}</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h3 className="text-lg font-semibold mb-4">Resultados por Candidato</h3>
+        {chartData.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">No hay votos registrados</p>
+        ) : (
+          <div className="space-y-4">
+            {chartData.map((item) => (
+              <div key={item.code} className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-lg">{item.name}</span>
+                    <span className="text-xs text-gray-400">{item.code}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xl font-bold text-blue-600">{item.votes}</span>
+                    <span className="text-sm text-gray-500 ml-2">({item.percentage.toFixed(1)}%)</span>
+                  </div>
+                </div>
+                <div className="h-6 bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
+                    style={{ width: `${item.percentage}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function VotingPage() {
@@ -53,6 +163,7 @@ export default function VotingPage() {
   });
 
   const [selectedElectionForEdit, setSelectedElectionForEdit] = useState<Election | null>(null);
+  const [selectedElectionForResults, setSelectedElectionForResults] = useState<Election | null>(null);
   const [showCandidateForm, setShowCandidateForm] = useState(false);
   const [selectedElectionForCandidates, setSelectedElectionForCandidates] = useState<Election | null>(null);
   const [electionResults, setElectionResults] = useState<Record<string, number>>({});
@@ -624,8 +735,13 @@ setStep('home');
                             </button>
                           ) : election.status === 'Borrador' ? (
                             <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">Borrador</span>
-                          ) : election.status === 'Terminado' ? (
-                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">Terminado</span>
+                          ) : (election.status === 'Publicado' || election.status === 'Terminado') ? (
+                            <button
+                              onClick={() => { setSelectedElectionForResults(election); setStep('results'); }}
+                              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                            >
+                              Ver
+                            </button>
                           ) : (
                             <span className="text-gray-400 text-sm">Inicia sesión para votar</span>
                           )}
@@ -1078,30 +1194,34 @@ setStep('home');
                             </div>
                           </div>
                           <div className="flex gap-2 ml-4">
-                            <button
-                              onClick={() => {
-                                setSelectedElectionForCandidates(election);
-                                setEditElectionData({
-                                  name: election.name || '',
-                                  description: election.description || '',
-                                  visibility: election.visibility || 'public',
-                                  status: election.status || 'Borrador',
-                                  password: election.password || '',
-                                });
-                                setShowCandidateForm(true);
-                                loadElectionCandidates(election.id);
-                              }}
-                              className="text-blue-600 hover:underline text-sm"
-                            >
-                              Modificar
-                            </button>
-                            <button
-                              onClick={() => handleDeleteElection(election.id)}
-                              disabled={loading}
-                              className="text-red-600 hover:underline text-sm"
-                            >
-                              Eliminar
-                            </button>
+                            {election.status !== 'Terminado' && (
+                              <button
+                                onClick={() => {
+                                  setSelectedElectionForCandidates(election);
+                                  setEditElectionData({
+                                    name: election.name || '',
+                                    description: election.description || '',
+                                    visibility: election.visibility || 'public',
+                                    status: election.status || 'Borrador',
+                                    password: election.password || '',
+                                  });
+                                  setShowCandidateForm(true);
+                                  loadElectionCandidates(election.id);
+                                }}
+                                className="text-blue-600 hover:underline text-sm"
+                              >
+                                Modificar
+                              </button>
+                            )}
+                            {election.status !== 'Terminado' && (
+                              <button
+                                onClick={() => handleDeleteElection(election.id)}
+                                disabled={loading}
+                                className="text-red-600 hover:underline text-sm"
+                              >
+                                Eliminar
+                              </button>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1232,6 +1352,13 @@ setStep('home');
           </div>
         )}
 
+        {step === 'results' && selectedElectionForResults && (
+          <ResultsView 
+            election={selectedElectionForResults} 
+            onBack={() => { setStep('home'); setSelectedElectionForResults(null); }} 
+          />
+        )}
+
         {showCandidateForm && selectedElectionForCandidates && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -1254,7 +1381,8 @@ setStep('home');
                       <select
                         value={editElectionData?.visibility || 'public'}
                         onChange={(e) => setEditElectionData({ ...editElectionData!, visibility: e.target.value as 'public' | 'private' })}
-                        className="w-full p-2 border rounded"
+                        disabled={selectedElectionForCandidates?.status === 'Publicado' || selectedElectionForCandidates?.status === 'Terminado'}
+                        className="w-full p-2 border rounded disabled:bg-gray-200"
                       >
                         <option value="public">Pública - Todos pueden ver</option>
                         <option value="private">Privada - Requiere contraseña</option>
@@ -1295,10 +1423,11 @@ setStep('home');
                       <select
                         value={editElectionData?.status || 'Borrador'}
                         onChange={(e) => setEditElectionData({ ...editElectionData!, status: e.target.value as 'Borrador' | 'Publicado' | 'Terminado' | 'Eliminado' })}
-                        className="w-full p-2 border rounded"
+                        disabled={selectedElectionForCandidates?.status === 'Terminado'}
+                        className="w-full p-2 border rounded disabled:bg-gray-200"
                       >
-                        <option value="Borrador">Borrador (no publicado)</option>
-                        <option value="Publicado">Publicado</option>
+                        <option value="Borrador" disabled={selectedElectionForCandidates?.status !== 'Borrador'}>Borrador (no publicado)</option>
+                        <option value="Publicado" disabled={selectedElectionForCandidates?.status === 'Terminado'}>Publicado</option>
                         <option value="Terminado">Terminado</option>
                       </select>
                     </div>
@@ -1333,7 +1462,7 @@ setStep('home');
                   )}
                   <button
                     onClick={() => handleAddCandidate(selectedElectionForCandidates.id)}
-                    disabled={candidateLoading || !candidateFormData.name.trim()}
+                    disabled={candidateLoading || !candidateFormData.name.trim() || selectedElectionForCandidates.status === 'Publicado' || selectedElectionForCandidates.status === 'Terminado'}
                     className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
                   >
                     {candidateLoading ? 'Agregando...' : 'Agregar Candidato'}

@@ -645,6 +645,20 @@ pub async fn delete_election(pool: &PgPool, election_id: &str) -> Result<(), sql
     Ok(())
 }
 
+pub async fn hard_delete_election(pool: &PgPool, election_id: &str) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM candidates WHERE election_id = $1")
+        .bind(election_id)
+        .execute(pool)
+        .await?;
+    
+    sqlx::query("DELETE FROM elections WHERE id = $1")
+        .bind(election_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
 pub async fn list_elections_by_creator(pool: &PgPool, created_by: &str, search: Option<&str>) -> Result<Vec<(String, String, Option<String>, String, String, Option<String>)>, sqlx::Error> {
     let query = if search.map(|s| !s.is_empty()).unwrap_or(false) {
         sqlx::query(

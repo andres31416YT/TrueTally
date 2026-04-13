@@ -560,20 +560,28 @@ pub async fn delete_election(
 
     match db::get_election_by_status(&state.db_pool, &payload.election_id).await {
         Ok(Some(status)) => {
-            if status == "Publicado" || status == "Terminado" {
-                return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("No se puede eliminar una elección publicada o terminada".to_string()))));
+            if status == "Terminado" {
+                return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("No se puede eliminar una elección terminada".to_string()))));
+            }
+            if status == "Publicado" {
+                match db::delete_election(&state.db_pool, &payload.election_id).await {
+                    Ok(_) => {
+                        let _ = db::log_audit(&state.db_pool, "election_deleted", &format!("election: {} (soft delete)", payload.election_id)).await;
+                        return Ok((StatusCode::OK, Json(ApiResponse::ok("Elección eliminada".to_string()))));
+                    }
+                    Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
+                }
+            }
+            match db::hard_delete_election(&state.db_pool, &payload.election_id).await {
+                Ok(_) => {
+                    let _ = db::log_audit(&state.db_pool, "election_deleted", &format!("election: {} (hard delete)", payload.election_id)).await;
+                    return Ok((StatusCode::OK, Json(ApiResponse::ok("Elección eliminada permanentemente".to_string()))));
+                }
+                Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
             }
         }
         Ok(None) => return Err((StatusCode::NOT_FOUND, Json(ApiResponse::err("Elección no encontrada".to_string())))),
-        Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Error: {}", e))))),
-    }
-
-    match db::delete_election(&state.db_pool, &payload.election_id).await {
-        Ok(_) => {
-            let _ = db::log_audit(&state.db_pool, "election_deleted", &format!("election: {}", payload.election_id)).await;
-            Ok((StatusCode::OK, Json(ApiResponse::ok("Elección eliminada".to_string()))))
-        }
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Error: {}", e))))),
+Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Error: {}", e))))),
     }
 }
 
