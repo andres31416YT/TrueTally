@@ -770,16 +770,10 @@ setStep('home');
                           : 'border-gray-200 hover:border-blue-300'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
-                          selectedCandidate === candidate.id ? 'bg-blue-600' : 'bg-gray-400'
-                        }`}>
-                          {candidate.code}
+                      <div className="flex-1">
+                          <h3 className="font-semibold text-lg">{candidate.name}</h3>
+                          <p className="text-sm text-gray-500">Código: {candidate.code}</p>
                         </div>
-                        <div>
-                          <h3 className="font-semibold">{candidate.name}</h3>
-                        </div>
-                      </div>
                     </div>
                   ))}
                 </div>
@@ -1254,13 +1248,9 @@ setStep('home');
                     <div className="space-y-2">
                       {electionCandidates.map((candidate) => (
                         <div key={candidate.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">
-                              {candidate.code}
-                            </div>
-                            <div>
-                              <p className="font-medium">{candidate.name}</p>
-                            </div>
+                          <div className="flex-1">
+                            <p className="font-medium text-lg">{candidate.name}</p>
+                            <p className="text-sm text-gray-500">Código: {candidate.code}</p>
                           </div>
                           {session?.role === 'sudo_admin' && selectedElectionForCandidates && selectedElectionForCandidates.status !== 'Publicado' && selectedElectionForCandidates.status !== 'Terminado' && (
                             <button

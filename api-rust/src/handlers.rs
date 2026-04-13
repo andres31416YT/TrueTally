@@ -102,7 +102,8 @@ pub async fn add_candidate(
         return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Name cannot be empty".to_string()))));
     }
 
-    let code = format!("CAND-{}-{}", election_id, uuid::Uuid::new_v4().to_string()[..8].to_string());
+    let uuid_part = &uuid::Uuid::new_v4().to_string()[..3].to_uppercase();
+    let code = format!("C{}A{}", &election_id[..std::cmp::min(3, election_id.len())].to_uppercase(), uuid_part);
 
     let exists = db::candidate_exists(&state.db_pool, election_id, name).await;
     if let Ok(true) = exists {
