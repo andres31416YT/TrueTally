@@ -117,9 +117,10 @@ export default function VotingPage() {
   };
 
   const filteredElections = elections.filter(e => 
-    searchTerm === '' || 
+    (e.status === 'Publicado' || e.status === 'Terminado') &&
+    (searchTerm === '' || 
     e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (e.description && e.description.toLowerCase().includes(searchTerm.toLowerCase()))
+    (e.description && e.description.toLowerCase().includes(searchTerm.toLowerCase())))
   );
 
   const paginatedElections = filteredElections.slice(
@@ -516,7 +517,7 @@ setStep('home');
         {step === 'home' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Votaciones Disponibles</h2>
+              <h2 className="text-xl font-semibold">Votaciones</h2>
               {isAdmin && (
                 <button
                   onClick={() => setStep('admin')}
