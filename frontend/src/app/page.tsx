@@ -153,10 +153,10 @@ export default function VotingPage() {
     }
   };
 
-  const loadMyElections = async () => {
+  const loadMyElections = async (searchQuery?: string) => {
     if (!session) return;
-    const search = activeTab === 'my_elections' ? searchTerm : undefined;
-    const res = await api.listMyElections(session.dni, search);
+    const search = (activeTab === 'my_elections' && searchQuery !== undefined) ? searchQuery : searchTerm;
+    const res = await api.listMyElections(session.dni, search || undefined);
     if (res.success && res.data) {
       setMyElections(res.data);
     }
