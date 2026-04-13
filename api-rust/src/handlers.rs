@@ -3,7 +3,6 @@ use crate::db;
 use axum::{
     extract::State,
     http::StatusCode,
-    http::HeaderMap,
     response::IntoResponse,
     Json,
 };
@@ -12,6 +11,9 @@ use serde::Serialize;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use sqlx::PgPool;
+
+type JsonValue = serde_json::Value;
+type JsonVec = Vec<serde_json::Value>;
 
 pub struct AppState {
     pub db_pool: PgPool,
@@ -63,35 +65,10 @@ pub async fn create_election(
     }
 }
 
-pub async fn list_elections(
-    State(state): State<Arc<Mutex<AppState>>>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>)> {
-    let state = state.lock().await;
-    
-    match db::list_elections(&state.db_pool).await {
-        Ok(elections) => {
-            let result: Vec<serde_json::Value> = elections
-                .into_iter()
-                .map(|(id, name, description, status, created_by)| {
-                    serde_json::json!({
-                        "id": id,
-                        "name": name,
-                        "description": description,
-                        "status": status,
-                        "created_by": created_by
-                    })
-                })
-                .collect();
-            Ok((StatusCode::OK, Json(ApiResponse::ok(result))))
-        }
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
-    }
-}
-
 pub async fn get_election(
     State(state): State<Arc<Mutex<AppState>>>,
     Json(payload): Json<serde_json::Value>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<serde_json::Value>>)> {
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<JsonValue>>)> {
     let state = state.lock().await;
     let election_id = payload.get("election_id").and_then(|v| v.as_str()).unwrap_or("");
     
@@ -115,23 +92,25 @@ pub async fn add_candidate(
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<i64>>)> {
     let state = state.lock().await;
     
-    if payload.name.trim().is_empty() {
+    let election_id = &payload.election_id;
+    let name = &payload.name;
+    let code = &payload.code;
+    
+    if name.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Name cannot be empty".to_string()))));
     }
+    if code.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Code cannot be empty".to_string()))));
+    }
 
-    let exists = db::candidate_exists(&state.db_pool, &payload.election_id, &payload.name).await;
+    let exists = db::candidate_exists(&state.db_pool, election_id, name).await;
     if let Ok(true) = exists {
         return Err((StatusCode::CONFLICT, Json(ApiResponse::err("A candidate with this name already exists in this election".to_string()))));
     }
     
-    let code = payload.code.trim().to_string();
-    if code.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Code cannot be empty".to_string()))));
-    }
-    
-    match db::add_candidate(&state.db_pool, &payload.election_id, &code, &payload.name).await {
+    match db::add_candidate(&state.db_pool, election_id, code, name).await {
         Ok(id) => {
-            let _ = db::log_audit(&state.db_pool, "candidate_added", &format!("election: {}", payload.election_id)).await;
+            let _ = db::log_audit(&state.db_pool, "candidate_added", &format!("election: {}", election_id)).await;
             Ok((StatusCode::CREATED, Json(ApiResponse::ok(id))))
         }
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
@@ -140,33 +119,41 @@ pub async fn add_candidate(
 
 pub async fn delete_candidate(
     State(state): State<Arc<Mutex<AppState>>>,
-    Json(payload): Json<DeleteCandidateRequest>,
+    Json(payload): Json<serde_json::Value>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<String>>)> {
     let state = state.lock().await;
+    let candidate_id = payload.get("candidate_id").and_then(|v| v.as_i64()).unwrap_or(0);
     
-    let is_sudo = payload.admin_dni == "00000000" && payload.admin_dni_verifier == "0";
-    
-    if !is_sudo {
-        let admin_check = db::authenticate_user(&state.db_pool, &payload.admin_dni, &payload.admin_dni_verifier, None).await;
-        if let Ok(Some((role, _, _))) = admin_check {
-            if role != "sudo_admin" {
-                return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("Solo sudo_admin puede eliminar candidatos".to_string()))));
-            }
-        } else {
-            return Err((StatusCode::UNAUTHORIZED, Json(ApiResponse::err("Usuario no autorizado".to_string()))));
-        }
+    if candidate_id == 0 {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Candidate ID is required".to_string()))));
     }
 
-    if let Ok(Some(status)) = db::get_election_status(&state.db_pool, &payload.election_id).await {
-        if status == "Publicado" || status == "Terminado" {
-            return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("No se puede modificar candidatos de una elección publicada o terminada".to_string()))));
-        }
-    }
-
-    match db::delete_candidate(&state.db_pool, payload.candidate_id).await {
+    match db::delete_candidate(&state.db_pool, candidate_id).await {
         Ok(_) => {
-            let _ = db::log_audit(&state.db_pool, "candidate_deleted", &format!("candidate: {}", payload.candidate_id)).await;
+            let _ = db::log_audit(&state.db_pool, "candidate_deleted", &format!("candidate: {}", candidate_id)).await;
             Ok((StatusCode::OK, Json(ApiResponse::ok("Candidato eliminado".to_string()))))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
+    }
+}
+
+pub async fn list_elections(
+    State(state): State<Arc<Mutex<AppState>>>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<JsonVec>>)> {
+    let state = state.lock().await;
+    
+    match db::list_elections(&state.db_pool).await {
+        Ok(elections) => {
+            let result: Vec<_> = elections.into_iter().map(|(id, name, description, status, visibility)| {
+                serde_json::json!({
+                    "id": id,
+                    "name": name,
+                    "description": description,
+                    "status": status,
+                    "visibility": visibility
+                })
+            }).collect();
+            Ok((StatusCode::OK, Json(ApiResponse::ok(result))))
         }
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
     }
@@ -175,11 +162,11 @@ pub async fn delete_candidate(
 pub async fn list_candidates(
     State(state): State<Arc<Mutex<AppState>>>,
     Json(payload): Json<serde_json::Value>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>>)> {
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<(JsonVec)>>)> {
     let state = state.lock().await;
     let election_id = payload.get("election_id").and_then(|v| v.as_str()).unwrap_or("");
     
-match db::list_candidates(&state.db_pool, election_id).await {
+    match db::list_candidates(&state.db_pool, election_id).await {
         Ok(candidates) => {
             let result: Vec<serde_json::Value> = candidates
                 .into_iter()
@@ -242,7 +229,7 @@ pub async fn register_voter(
 pub async fn get_voter(
     State(state): State<Arc<Mutex<AppState>>>,
     Json(payload): Json<serde_json::Value>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<serde_json::Value>>)> {
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<JsonValue>>)> {
     let state = state.lock().await;
     let election_id = payload.get("election_id").and_then(|v| v.as_str()).unwrap_or("");
     let public_key = payload.get("public_key").and_then(|v| v.as_str()).unwrap_or("");
@@ -301,7 +288,7 @@ pub async fn submit_vote(
 pub async fn get_results(
     State(state): State<Arc<Mutex<AppState>>>,
     Json(payload): Json<serde_json::Value>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<serde_json::Value>>)> {
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<JsonValue>>)> {
     let state = state.lock().await;
     let election_id = payload.get("election_id").and_then(|v| v.as_str()).unwrap_or("");
     
@@ -325,7 +312,7 @@ pub async fn get_results(
 
 pub async fn get_blocks(
     State(state): State<Arc<Mutex<AppState>>>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<serde_json::Value>>)> {
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<JsonValue>>)> {
     let state = state.lock().await;
     
     let rpc_url = format!("{}/blocks", state.node_rpc_url);
@@ -449,7 +436,7 @@ pub async fn update_user_role(
 pub async fn list_users(
     State(state): State<Arc<Mutex<AppState>>>,
     Json(payload): Json<ListUsersRequest>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>>)> {
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<JsonVec>>)> {
     let state = state.lock().await;
 
     let is_sudo = payload.admin_dni == "00000000" && payload.admin_dni_verifier == "0";
@@ -542,7 +529,7 @@ pub async fn delete_election(
 pub async fn list_my_elections(
     State(state): State<Arc<Mutex<AppState>>>,
     Json(payload): Json<ListMyElectionsRequest>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>>)> {
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<JsonVec>>)> {
     let state = state.lock().await;
     
     match db::list_elections_by_creator(&state.db_pool, &payload.user_dni).await {
@@ -566,8 +553,8 @@ pub async fn list_my_elections(
 }
 
 pub async fn list_all_elections(
-    State(state): State<Arc<Mutex<AppState>>>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>>)> {
+    State(state): State<Arc<Mutex<AppState> > >,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<JsonVec>>)> {
     let state = state.lock().await;
     
     match db::list_all_elections(&state.db_pool).await {
