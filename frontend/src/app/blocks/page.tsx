@@ -110,7 +110,7 @@ export default function BlocksPage() {
                       <p className="font-medium">{block.data.election_id || 'N/A'}</p>
                     </div>
                   </div>
-                  {block.data.is_blank_vote && (
+                  {block.data.candidate_id === 'blank' && (
                     <div className="mt-2 p-2 bg-gray-100 rounded text-sm">
                       <span className="text-gray-500">Tipo de voto:</span>
                       <span className="ml-2 font-medium">Voto en blanco</span>

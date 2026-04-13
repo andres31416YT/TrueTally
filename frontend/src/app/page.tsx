@@ -101,13 +101,13 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
 
       <div className="bg-white rounded-lg shadow-md p-6">
         <h3 className="text-lg font-semibold mb-4">Resultados por Candidato</h3>
-        {candidates.length === 0 ? (
+        {candidates.length === 0 && blankVotes === 0 ? (
           <p className="text-gray-500 text-center py-8">No hay candidatos agregados</p>
         ) : (
           <div className="space-y-4">
             {candidates.map((candidate) => {
               const candVotes = results[candidate.code] || 0;
-              const pct = totalVotes > 0 ? (candVotes / totalVotes) * 100 : 0;
+              const pct = (totalVotes + blankVotes) > 0 ? (candVotes / (totalVotes + blankVotes)) * 100 : 0;
               return (
                 <div key={candidate.id} className="space-y-2">
                   <div className="flex justify-between items-center">
@@ -129,6 +129,23 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
                 </div>
               );
             })}
+            <div key="blank" className="space-y-2 pt-2 border-t">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-lg">Voto en Blanco</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-xl font-bold text-gray-600">{blankVotes}</span>
+                  <span className="text-sm text-gray-500 ml-2">{totalVotes + blankVotes > 0 ? ((blankVotes / (totalVotes + blankVotes)) * 100).toFixed(1) : 0}%</span>
+                </div>
+              </div>
+              <div className="h-6 bg-gray-100 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-gray-400 to-gray-500 rounded-full transition-all duration-500"
+                  style={{ width: `${totalVotes + blankVotes > 0 ? (blankVotes / (totalVotes + blankVotes)) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
           </div>
         )}
       </div>
