@@ -349,7 +349,7 @@ pub async fn get_results(
     let state = state.lock().await;
     let election_id = payload.get("election_id").and_then(|v| v.as_str()).unwrap_or("");
     
-    let rpc_url = format!("{}/results?election={}", state.node_rpc_url, election_id);
+    let rpc_url = format!("{}/results/{}", state.node_rpc_url, election_id);
     
     match state.http_client.get(&rpc_url).send().await {
         Ok(response) => {
@@ -358,7 +358,11 @@ pub async fn get_results(
                     let results = data.get("data")
                         .cloned()
                         .unwrap_or(serde_json::Value::Object(Default::default()));
-                    return Ok((StatusCode::OK, Json(ApiResponse::ok(results))));
+                    let response_data = serde_json::json!({
+                        "election_id": election_id,
+                        "results": results
+                    });
+                    return Ok((StatusCode::OK, Json(ApiResponse::ok(response_data))));
                 }
             }
             Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err("Failed to get results from blockchain".to_string()))))

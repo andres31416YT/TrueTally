@@ -6,6 +6,7 @@ use sha2::{Digest, Sha256};
 pub struct Vote {
     pub voter_public_key: String,
     pub candidate_id: String,
+    pub election_id: String,
     pub signature: String,
     pub timestamp: DateTime<Utc>,
 }
@@ -51,7 +52,7 @@ impl Block {
             data.candidate_id,
             previous_hash
         );
-        
+
         let payload = format!("{}{}", vote_string, nonce);
         let mut hasher = Sha256::new();
         hasher.update(payload.as_bytes());
@@ -73,6 +74,7 @@ pub fn create_genesis_block() -> Block {
     let genesis_vote = Vote {
         voter_public_key: "genesis".to_string(),
         candidate_id: "genesis".to_string(),
+        election_id: "genesis".to_string(),
         signature: "genesis".to_string(),
         timestamp: Utc::now(),
     };
@@ -92,9 +94,9 @@ mod tests {
             signature: "test_sig".to_string(),
             timestamp: Utc::now(),
         };
-        
+
         let block = Block::new(1, vote, "previous_hash".to_string());
-        
+
         assert_eq!(block.index, 1);
         assert_eq!(block.previous_hash, "previous_hash".to_string());
         assert!(!block.hash.is_empty());
@@ -103,7 +105,7 @@ mod tests {
     #[test]
     fn test_genesis_block() {
         let block = create_genesis_block();
-        
+
         assert_eq!(block.index, 0);
         assert_eq!(block.previous_hash, "0");
     }

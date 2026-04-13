@@ -39,7 +39,8 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
     ]);
 
     if (resultsRes.success && resultsRes.data) {
-      setResults(resultsRes.data);
+      const resultsData = (resultsRes.data as any).results || resultsRes.data;
+      setResults(resultsData);
     }
     if (candidatesRes.success && candidatesRes.data) {
       setCandidates(candidatesRes.data);
@@ -52,12 +53,11 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
 
   const chartData = Object.entries(results)
     .filter(([key]) => key !== 'blank')
-    .map(([candidateId, votes]) => {
-      const numId = parseInt(candidateId);
-      const candidate = candidates.find(c => c.id === numId);
+    .map(([key, votes]) => {
+      const candidate = candidates.find(c => c.code === key);
       return {
-        code: candidate?.code || candidateId,
-        name: candidate?.name || 'Sin candidato',
+        code: candidate?.code || key,
+        name: candidate?.name || key,
         votes,
         percentage: totalVotes > 0 ? (votes / totalVotes) * 100 : 0,
       };
@@ -101,30 +101,34 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
 
       <div className="bg-white rounded-lg shadow-md p-6">
         <h3 className="text-lg font-semibold mb-4">Resultados por Candidato</h3>
-        {chartData.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">No hay votos registrados</p>
+        {candidates.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">No hay candidatos agregados</p>
         ) : (
           <div className="space-y-4">
-            {chartData.map((item) => (
-              <div key={item.code} className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-lg">{item.name}</span>
-                    <span className="text-xs text-gray-400">{item.code}</span>
+            {candidates.map((candidate) => {
+              const candVotes = results[candidate.code] || 0;
+              const pct = totalVotes > 0 ? (candVotes / totalVotes) * 100 : 0;
+              return (
+                <div key={candidate.id} className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-lg">{candidate.name}</span>
+                      <span className="text-xs text-gray-400">{candidate.code}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xl font-bold text-blue-600">{candVotes}</span>
+                      <span className="text-sm text-gray-500 ml-2">({pct.toFixed(1)}%)</span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xl font-bold text-blue-600">{item.votes}</span>
-                    <span className="text-sm text-gray-500 ml-2">({item.percentage.toFixed(1)}%)</span>
-                  </div>
+                  <div className="h-6 bg-gray-100 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
                 </div>
-                <div className="h-6 bg-gray-100 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
-                    style={{ width: `${item.percentage}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

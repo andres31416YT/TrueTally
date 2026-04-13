@@ -15,7 +15,7 @@ impl Blockchain {
     pub fn new(difficulty: u32, mining_enabled: bool) -> Self {
         let consensus = Consensus::new(difficulty, mining_enabled);
         let chain = vec![create_genesis_block()];
-        
+
         Blockchain {
             chain,
             voted_keys: HashSet::new(),
@@ -32,7 +32,7 @@ impl Blockchain {
                         .filter(|b| b.data.voter_public_key != "genesis")
                         .map(|b| b.data.voter_public_key.clone())
                         .collect();
-                    
+
                     return Blockchain {
                         chain,
                         voted_keys,
@@ -41,51 +41,49 @@ impl Blockchain {
                 }
             }
         }
-        
+
         Self::new(difficulty, mining_enabled)
     }
 
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
         let json = serde_json::to_string_pretty(&self.chain)
             .map_err(|e| format!("Serialization error: {}", e))?;
-        
-        fs::write(path, json)
-            .map_err(|e| format!("File write error: {}", e))
+
+        fs::write(path, json).map_err(|e| format!("File write error: {}", e))
     }
 
     pub fn add_block(&mut self, vote: Vote) -> Result<Block, String> {
         VoteValidator::validate_vote(&vote)?;
-        
+
         if self.voted_keys.contains(&vote.voter_public_key) {
             return Err("Double vote detected".to_string());
         }
-        
-        let previous_block = self.chain.last()
-            .ok_or("Chain is empty")?;
-        
+
+        let previous_block = self.chain.last().ok_or("Chain is empty")?;
+
         let new_block = Block::new(
             self.chain.len() as u64,
             vote.clone(),
             previous_block.hash.clone(),
         );
-        
+
         if self.consensus.mining_enabled {
             let mut block_to_mine = new_block;
             if !self.consensus.mine_block(&mut block_to_mine) {
                 return Err("Mining failed".to_string());
             }
-            
+
             if !self.consensus.validate_proof(&block_to_mine) {
                 return Err("Invalid proof".to_string());
             }
-            
+
             self.chain.push(block_to_mine);
         } else {
             self.chain.push(new_block);
         }
-        
+
         self.voted_keys.insert(vote.voter_public_key);
-        
+
         Ok(self.chain.last().unwrap().clone())
     }
 
@@ -93,18 +91,18 @@ impl Blockchain {
         if self.chain.is_empty() {
             return Err("Chain is empty".to_string());
         }
-        
+
         for i in 1..self.chain.len() {
             let current_block = &self.chain[i];
             let previous_block = &self.chain[i - 1];
-            
+
             if current_block.previous_hash != previous_block.hash {
                 return Err(format!(
                     "Invalid chain at block {}: previous_hash mismatch",
                     current_block.index
                 ));
             }
-            
+
             let recalculated_hash = Block::calculate_hash_with_nonce(
                 current_block.index,
                 current_block.timestamp,
@@ -112,14 +110,14 @@ impl Blockchain {
                 &current_block.previous_hash,
                 current_block.nonce,
             );
-            
+
             if current_block.hash != recalculated_hash {
                 return Err(format!(
                     "Invalid chain at block {}: hash mismatch",
                     current_block.index
                 ));
             }
-            
+
             if self.consensus.mining_enabled {
                 if !self.consensus.validate_proof(current_block) {
                     return Err(format!(
@@ -129,12 +127,19 @@ impl Blockchain {
                 }
             }
         }
-        
+
         Ok(true)
     }
 
     pub fn get_results(&self) -> std::collections::HashMap<String, u32> {
         VoteValidator::count_votes(&self.chain)
+    }
+
+    pub fn get_results_for_election(
+        &self,
+        election_id: &str,
+    ) -> std::collections::HashMap<String, u32> {
+        VoteValidator::get_results_for_election(&self.chain, election_id)
     }
 
     pub fn get_block_count(&self) -> usize {
@@ -160,14 +165,14 @@ mod tests {
     #[test]
     fn test_add_block() {
         let mut blockchain = Blockchain::new(2, false);
-        
+
         let vote = Vote {
             voter_public_key: "test_pk".to_string(),
             candidate_id: "candidate_1".to_string(),
             signature: "test_sig".to_string(),
             timestamp: Utc::now(),
         };
-        
+
         let result = blockchain.add_block(vote);
         assert!(result.is_ok());
         assert_eq!(blockchain.chain.len(), 2);
@@ -176,31 +181,31 @@ mod tests {
     #[test]
     fn test_double_vote_prevention() {
         let mut blockchain = Blockchain::new(2, false);
-        
+
         let vote = Vote {
             voter_public_key: "test_pk".to_string(),
             candidate_id: "candidate_1".to_string(),
             signature: "test_sig".to_string(),
             timestamp: Utc::now(),
         };
-        
+
         let _ = blockchain.add_block(vote.clone());
         let result = blockchain.add_block(vote);
-        
+
         assert!(result.is_err());
     }
 
     #[test]
     fn test_chain_validation() {
         let mut blockchain = Blockchain::new(2, false);
-        
+
         let vote = Vote {
             voter_public_key: "test_pk".to_string(),
             candidate_id: "candidate_1".to_string(),
             signature: "test_sig".to_string(),
             timestamp: Utc::now(),
         };
-        
+
         let _ = blockchain.add_block(vote);
         assert!(blockchain.validate_chain().is_ok());
     }

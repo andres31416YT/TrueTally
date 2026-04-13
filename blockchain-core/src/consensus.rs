@@ -21,7 +21,7 @@ impl Consensus {
         }
 
         let target = "0".repeat(self.difficulty as usize);
-        
+
         loop {
             if block.hash.starts_with(&target) {
                 return true;
@@ -34,7 +34,7 @@ impl Consensus {
                 &block.previous_hash,
                 block.nonce,
             );
-            
+
             if block.nonce > 1_000_000 {
                 return false;
             }
@@ -53,6 +53,13 @@ impl Consensus {
 
 pub struct VoteValidator;
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct ElectionResults {
+    pub election_id: String,
+    pub candidate_id: String,
+    pub vote_count: u32,
+}
+
 impl VoteValidator {
     pub fn has_voted(voted_keys: &[String], public_key: &str) -> bool {
         voted_keys.contains(&public_key.to_string())
@@ -65,6 +72,9 @@ impl VoteValidator {
         if vote.candidate_id.is_empty() {
             return Err("Candidate ID is empty".to_string());
         }
+        if vote.election_id.is_empty() {
+            return Err("Election ID is empty".to_string());
+        }
         if vote.signature.is_empty() {
             return Err("Signature is empty".to_string());
         }
@@ -73,12 +83,28 @@ impl VoteValidator {
 
     pub fn count_votes(chain: &[Block]) -> std::collections::HashMap<String, u32> {
         let mut counts = std::collections::HashMap::new();
-        
+
         for block in chain.iter().skip(1) {
-            let candidate_id = block.data.candidate_id.clone();
-            *counts.entry(candidate_id).or_insert(0) += 1;
+            let key = format!("{}:{}", block.data.election_id, block.data.candidate_id);
+            *counts.entry(key).or_insert(0) += 1;
         }
-        
+
+        counts
+    }
+
+    pub fn get_results_for_election(
+        chain: &[Block],
+        election_id: &str,
+    ) -> std::collections::HashMap<String, u32> {
+        let mut counts = std::collections::HashMap::new();
+
+        for block in chain.iter().skip(1) {
+            if block.data.election_id == election_id {
+                let candidate_id = block.data.candidate_id.clone();
+                *counts.entry(candidate_id).or_insert(0) += 1;
+            }
+        }
+
         counts
     }
 }
@@ -119,7 +145,7 @@ mod tests {
             signature: "signature".to_string(),
             timestamp: Utc::now(),
         };
-        
+
         assert!(VoteValidator::validate_vote(&vote).is_ok());
     }
 
@@ -131,14 +157,14 @@ mod tests {
             signature: "signature".to_string(),
             timestamp: Utc::now(),
         };
-        
+
         assert!(VoteValidator::validate_vote(&vote).is_err());
     }
 
     #[test]
     fn test_double_vote_check() {
         let voted_keys = vec!["pk1".to_string(), "pk2".to_string()];
-        
+
         assert!(VoteValidator::has_voted(&voted_keys, "pk1"));
         assert!(!VoteValidator::has_voted(&voted_keys, "pk3"));
     }

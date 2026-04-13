@@ -57,6 +57,7 @@ impl<T> ApiResponse<T> {
 pub struct VoteRequest {
     pub voter_public_key: String,
     pub candidate_id: String,
+    pub election_id: String,
     pub signature: String,
 }
 
@@ -97,6 +98,7 @@ async fn add_vote(
     let vote = Vote {
         voter_public_key: payload.voter_public_key.clone(),
         candidate_id: payload.candidate_id,
+        election_id: payload.election_id,
         signature: payload.signature,
         timestamp: Utc::now(),
     };
@@ -157,18 +159,19 @@ async fn get_block(
 }
 
 async fn get_results(
-    State(blockchain): State<Arc<Mutex<Blockchain>>>,
+    State(state): State<Arc<Mutex<Blockchain>>>,
+    Path(election_id): Path<String>,
 ) -> Response {
-    let chain = blockchain.lock().await;
-    let results = chain.get_results();
+    let chain = state.lock().await;
+    let results = chain.get_results_for_election(&election_id);
     
     (StatusCode::OK, Json(ApiResponse::success(results))).into_response()
 }
 
 async fn validate_chain(
-    State(blockchain): State<Arc<Mutex<Blockchain>>>,
+    State(state): State<Arc<Mutex<Blockchain>>>,
 ) -> Response {
-    let chain = blockchain.lock().await;
+    let chain = state.lock().await;
     
     match chain.validate_chain() {
         Ok(_) => (
@@ -197,7 +200,7 @@ async fn main() {
         .route("/vote", post(add_vote))
         .route("/blocks", get(get_blocks))
         .route("/blocks/{index}", get(get_block))
-        .route("/results", get(get_results))
+        .route("/results/:election_id", get(get_results))
         .route("/validate", get(validate_chain))
         .with_state(blockchain);
     
