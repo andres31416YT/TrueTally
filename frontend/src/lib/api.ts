@@ -72,28 +72,19 @@ export interface Election {
   id: string;
   name: string;
   description?: string;
-  is_active: boolean;
+  status: 'Borrador' | 'Publicado' | 'Terminado';
   visibility: 'public' | 'private';
-  election_type: string;
-  election_category: string;
   password?: string;
   is_official?: boolean;
   created_by?: string;
-  is_published?: boolean;
-  start_date?: string;
-  end_date?: string;
 }
 
 export interface NewElection {
   name: string;
   description?: string;
   visibility?: 'public' | 'private';
-  is_published?: boolean;
-  election_type?: string;
-  election_category?: string;
+  status?: 'Borrador' | 'Publicado' | 'Terminado';
   password?: string;
-  start_date?: string;
-  end_date?: string;
 }
 
 export interface Party {
@@ -146,25 +137,21 @@ export interface VoteRequest {
 export interface Candidate {
   id: number;
   election_id: number;
-  party_id?: number;
-  candidate_external_id?: string;
+  code: string;
   name: string;
-  last_name?: string;
-  position?: string;
-  category: string;
-  bio?: string;
-  photo_url?: string;
 }
 
 export interface NewCandidate {
   election_id: string;
-  candidate_external_id?: string;
-  party_id?: string;
+  code: string;
   name: string;
-  party: string;
-  category?: string;
-  photo_url: string;
-  bio?: string;
+}
+
+export interface DeleteCandidateRequest {
+  election_id: string;
+  candidate_id: number;
+  admin_dni: string;
+  admin_dni_verifier: string;
 }
 
 export interface VoteResponse {
@@ -197,7 +184,10 @@ export const api = {
     }),
 
   listElections: () =>
-    fetchApi<Election[]>('/elections', { method: 'GET' }),
+    fetchApi<Election[]>('/elections/all', { method: 'GET' }),
+
+  listAllElections: () =>
+    fetchApi<Election[]>('/elections/all', { method: 'GET' }),
 
   getElection: (electionId: string) =>
     fetchApi<Election>('/election', {
@@ -209,6 +199,12 @@ export const api = {
     fetchApi<number>('/candidates', {
       method: 'POST',
       body: JSON.stringify(candidate),
+    }),
+
+  deleteCandidate: (request: DeleteCandidateRequest) =>
+    fetchApi<string>('/candidates/delete', {
+      method: 'POST',
+      body: JSON.stringify(request),
     }),
 
   getCandidates: (electionId: string) =>
@@ -250,7 +246,7 @@ export const api = {
       body: JSON.stringify({ admin_dni, admin_dni_verifier }),
     }),
 
-  updateElection: (data: { election_id: string; name?: string; description?: string; visibility?: 'public' | 'private'; is_published?: boolean; password?: string; start_date?: string; end_date?: string; user_dni: string }) =>
+  updateElection: (data: { election_id: string; name?: string; description?: string; visibility?: 'public' | 'private'; status?: 'Borrador' | 'Publicado' | 'Terminado'; password?: string; user_dni: string }) =>
     fetchApi<string>('/update-election', {
       method: 'POST',
       body: JSON.stringify(data),

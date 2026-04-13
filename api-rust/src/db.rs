@@ -17,20 +17,13 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
             election_category VARCHAR(50) DEFAULT 'general',
             password VARCHAR(255),
             is_official BOOLEAN DEFAULT FALSE,
-            created_by VARCHAR(255)
+            created_by VARCHAR(255),
+            status VARCHAR(20) DEFAULT 'Borrador'
         )
         "#,
-    )
+)
     .execute(&pool)
     .await?;
-
-    sqlx::query("ALTER TABLE elections ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT FALSE")
-        .execute(&pool)
-        .await?;
-    
-    sqlx::query("ALTER TABLE elections ADD COLUMN IF NOT EXISTS visibility VARCHAR(20) DEFAULT 'public'")
-        .execute(&pool)
-        .await?;
 
     sqlx::query(
         r#"
@@ -43,7 +36,8 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
             party VARCHAR(255) NOT NULL,
             category VARCHAR(50) DEFAULT 'general',
             bio TEXT,
-            photo_url TEXT
+            photo_url TEXT,
+            code VARCHAR(10)
         )
         "#,
     )
@@ -181,9 +175,7 @@ pub async fn create_election(
     name: &str,
     description: Option<&str>,
     visibility: &str,
-    is_published: bool,
-    election_type: &str,
-    election_category: &str,
+    status: &str,
     password: Option<&str>,
     created_by: Option<&str>,
 ) -> Result<(), sqlx::Error> {
@@ -191,22 +183,40 @@ pub async fn create_election(
     
     sqlx::query(
         r#"
-        INSERT INTO elections (id, name, description, visibility, is_published, election_type, election_category, password, is_official, created_by)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        INSERT INTO elections (id, name, description, visibility, status, password, is_official, created_by, is_active, is_published, election_type, election_category)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#,
     )
     .bind(id)
     .bind(name)
     .bind(description)
     .bind(visibility)
-    .bind(is_published)
-    .bind(election_type)
-    .bind(election_category)
+    .bind(status)
     .bind(password)
     .bind(is_official)
     .bind(created_by)
+    .bind(true)
+    .bind(false)
+    .bind("general")
+    .bind("general")
     .execute(pool)
     .await?;
+
+    for i in 1..=10 {
+        let code = format!("{:02}", i);
+        sqlx::query(
+            r#"
+            INSERT INTO candidates (election_id, code, name, party)
+            VALUES ($1, $2, $3, $4)
+            "#,
+        )
+        .bind(id)
+        .bind(code)
+        .bind(format!("Candidato {}", i))
+        .bind(format!("Partido {}", i))
+        .execute(pool)
+        .await?;
+    }
 
     Ok(())
 }
@@ -229,10 +239,10 @@ pub async fn get_election(pool: &PgPool, id: &str) -> Result<Option<(String, Str
     )))
 }
 
-pub async fn list_elections(pool: &PgPool) -> Result<Vec<(String, String, Option<String>, bool)>, sqlx::Error> {
+pub async fn list_elections(pool: &PgPool) -> Result<Vec<(String, String, Option<String>, String, Option<String>)>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
-        SELECT id, name, description, is_active FROM elections ORDER BY created_at DESC
+        SELECT id, name, description, status, created_by FROM elections WHERE status IN ('Borrador', 'Publicado', 'Terminado') ORDER BY created_at DESC
         "#,
     )
     .fetch_all(pool)
@@ -242,7 +252,8 @@ pub async fn list_elections(pool: &PgPool) -> Result<Vec<(String, String, Option
         r.get::<String, _>("id"),
         r.get::<String, _>("name"),
         r.get::<Option<String>, _>("description"),
-        r.get::<bool, _>("is_active"),
+        r.get::<String, _>("status"),
+        r.get::<Option<String>, _>("created_by"),
     )).collect())
 }
 
@@ -340,10 +351,10 @@ pub async fn mark_voter_voted(pool: &PgPool, election_id: &str, public_key: &str
     Ok(())
 }
 
-pub async fn list_candidates(pool: &PgPool, election_id: &str) -> Result<Vec<(i64, String, String, Option<String>, Option<String>, String, Option<String>, Option<String>)>, sqlx::Error> {
+pub async fn list_candidates(pool: &PgPool, election_id: &str) -> Result<Vec<(i64, String, String)>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
-        SELECT id, candidate_external_id, party_id, name, party, category, bio, photo_url FROM candidates WHERE election_id = $1 ORDER BY id
+        SELECT id, code, name FROM candidates WHERE election_id = $1 ORDER BY id
         "#,
     )
     .bind(election_id)
@@ -352,46 +363,49 @@ pub async fn list_candidates(pool: &PgPool, election_id: &str) -> Result<Vec<(i6
 
     Ok(rows.into_iter().map(|r| (
         r.get::<i64, _>("id"),
-        r.get::<Option<String>, _>("candidate_external_id").unwrap_or_default(),
-        r.get::<Option<String>, _>("party_id").unwrap_or_default(),
-        r.get("name"),
-        r.get("party"),
-        r.get("category"),
-        r.get("bio"),
-        r.get("photo_url")
+        r.get::<String, _>("code"),
+        r.get::<String, _>("name"),
     )).collect())
 }
 
 pub async fn add_candidate(
     pool: &PgPool,
     election_id: &str,
-    candidate_external_id: Option<&str>,
-    party_id: Option<&str>,
+    code: &str,
     name: &str,
-    party: &str,
-    category: &str,
-    bio: Option<&str>,
-    photo_url: Option<&str>,
 ) -> Result<i64, sqlx::Error> {
     let row = sqlx::query(
         r#"
-        INSERT INTO candidates (election_id, candidate_external_id, party_id, name, party, category, bio, photo_url)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO candidates (election_id, code, name, party)
+        VALUES ($1, $2, $3, $4)
         RETURNING id
         "#,
     )
     .bind(election_id)
-    .bind(candidate_external_id)
-    .bind(party_id)
+    .bind(code)
     .bind(name)
-    .bind(party)
-    .bind(category)
-    .bind(bio)
-    .bind(photo_url)
+    .bind("Independiente")
     .fetch_one(pool)
     .await?;
 
     Ok(row.get("id"))
+}
+
+pub async fn delete_candidate(pool: &PgPool, candidate_id: i64) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM candidates WHERE id = $1")
+        .bind(candidate_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn get_election_status(pool: &PgPool, election_id: &str) -> Result<Option<String>, sqlx::Error> {
+    let row = sqlx::query("SELECT status FROM elections WHERE id = $1")
+        .bind(election_id)
+        .fetch_optional(pool)
+        .await?;
+    
+    Ok(row.map(|r| r.get::<String, _>("status")))
 }
 
 pub async fn log_audit(pool: &PgPool, action: &str, details: &str) -> Result<(), sqlx::Error> {
@@ -533,13 +547,26 @@ pub async fn get_election_creator(pool: &PgPool, election_id: &str) -> Result<Op
     Ok(row.map(|r| r.get::<Option<String>, _>("created_by")).flatten())
 }
 
+pub async fn get_election_by_status(pool: &PgPool, election_id: &str) -> Result<Option<String>, sqlx::Error> {
+    let row = sqlx::query(
+        r#"
+        SELECT status FROM elections WHERE id = $1
+        "#,
+    )
+    .bind(election_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.map(|r| r.get::<String, _>("status")))
+}
+
 pub async fn update_election(
     pool: &PgPool,
     election_id: &str,
     name: Option<&str>,
     description: Option<&str>,
     visibility: Option<&str>,
-    is_published: Option<bool>,
+    status: Option<&str>,
     password: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     let mut query = String::from("UPDATE elections SET ");
@@ -558,8 +585,8 @@ pub async fn update_election(
         updates.push(format!("visibility = ${}", param_count));
         param_count += 1;
     }
-    if let Some(p) = is_published {
-        updates.push(format!("is_published = ${}", param_count));
+    if let Some(s) = status {
+        updates.push(format!("status = ${}", param_count));
         param_count += 1;
     }
     if let Some(pw) = password {
@@ -585,8 +612,8 @@ pub async fn update_election(
     if let Some(v) = visibility {
         builder = builder.bind(v);
     }
-    if let Some(p) = is_published {
-        builder = builder.bind(p);
+    if let Some(s) = status {
+        builder = builder.bind(s);
     }
     if let Some(pw) = password {
         builder = builder.bind(pw);
@@ -595,6 +622,24 @@ pub async fn update_election(
 
     builder.execute(pool).await?;
     Ok(())
+}
+
+pub async fn list_all_elections(pool: &PgPool) -> Result<Vec<(String, String, Option<String>, String, String)>, sqlx::Error> {
+    let rows = sqlx::query(
+        r#"
+        SELECT id, name, description, status, visibility FROM elections WHERE status IN ('Borrador', 'Publicado', 'Terminado') ORDER BY created_at DESC
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(|r| (
+        r.get::<String, _>("id"),
+        r.get::<String, _>("name"),
+        r.get::<Option<String>, _>("description"),
+        r.get::<String, _>("status"),
+        r.get::<String, _>("visibility"),
+    )).collect())
 }
 
 pub async fn delete_election(pool: &PgPool, election_id: &str) -> Result<(), sqlx::Error> {
@@ -611,10 +656,10 @@ pub async fn delete_election(pool: &PgPool, election_id: &str) -> Result<(), sql
     Ok(())
 }
 
-pub async fn list_elections_by_creator(pool: &PgPool, created_by: &str) -> Result<Vec<(String, String, Option<String>, bool, String, bool)>, sqlx::Error> {
+pub async fn list_elections_by_creator(pool: &PgPool, created_by: &str) -> Result<Vec<(String, String, Option<String>, String, String)>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
-        SELECT id, name, description, is_active, visibility, is_published FROM elections WHERE created_by = $1 ORDER BY created_at DESC
+        SELECT id, name, description, status, visibility FROM elections WHERE created_by = $1 ORDER BY created_at DESC
         "#,
     )
     .bind(created_by)
@@ -625,8 +670,7 @@ pub async fn list_elections_by_creator(pool: &PgPool, created_by: &str) -> Resul
         r.get::<String, _>("id"),
         r.get::<String, _>("name"),
         r.get::<Option<String>, _>("description"),
-        r.get::<bool, _>("is_active"),
+        r.get::<String, _>("status"),
         r.get::<String, _>("visibility"),
-        r.get::<bool, _>("is_published"),
     )).collect())
 }

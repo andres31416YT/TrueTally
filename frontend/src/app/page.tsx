@@ -49,13 +49,12 @@ export default function VotingPage() {
     name: '',
     description: '',
     visibility: 'public',
-    election_type: 'general',
-    election_category: 'general',
-    start_date: '',
-    end_date: '',
+    status: 'Borrador',
   });
 
   const [selectedElectionForEdit, setSelectedElectionForEdit] = useState<Election | null>(null);
+  const [showCandidateForm, setShowCandidateForm] = useState(false);
+  const [selectedElectionForCandidates, setSelectedElectionForCandidates] = useState<Election | null>(null);
   const [electionResults, setElectionResults] = useState<Record<string, number>>({});
   const [loadingResults, setLoadingResults] = useState(false);
 
@@ -66,10 +65,8 @@ export default function VotingPage() {
     name: string;
     description: string;
     visibility: 'public' | 'private';
-    is_published: boolean;
+    status: 'Borrador' | 'Publicado' | 'Terminado';
     password: string;
-    start_date: string;
-    end_date: string;
   } | null>(null);
 
   const [roleData, setRoleData] = useState({
@@ -77,6 +74,14 @@ export default function VotingPage() {
     target_dni_verifier: '',
     new_role: 'user',
   });
+
+  const [candidateFormData, setCandidateFormData] = useState({
+    code: '',
+    name: '',
+  });
+  const [candidateError, setCandidateError] = useState<string | null>(null);
+  const [candidateLoading, setCandidateLoading] = useState(false);
+  const [electionCandidates, setElectionCandidates] = useState<Candidate[]>([]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -166,6 +171,62 @@ export default function VotingPage() {
     setLoadingResults(false);
   };
 
+  const loadElectionCandidates = async (electionId: string) => {
+    const res = await api.getCandidates(electionId);
+    if (res.success && res.data) {
+      setElectionCandidates(res.data);
+    }
+  };
+
+  const handleAddCandidate = async (electionId: string) => {
+    if (!candidateFormData.code.trim() || !candidateFormData.name.trim()) {
+      setCandidateError('Código y nombre son requeridos');
+      return;
+    }
+    setCandidateLoading(true);
+    setCandidateError(null);
+
+    const res = await api.addCandidate({
+      election_id: electionId,
+      code: candidateFormData.code.trim(),
+      name: candidateFormData.name.trim(),
+    });
+
+    if (res.success) {
+      setCandidateFormData({ code: '', name: '' });
+      await loadElectionCandidates(electionId);
+    } else {
+      setCandidateError(res.error || 'Error al agregar candidato');
+    }
+    setCandidateLoading(false);
+  };
+
+  const handleDeleteCandidate = async (candidateId: number, electionId: string) => {
+    if (!session || session.role !== 'sudo_admin') {
+      setCandidateError('Solo sudo_admin puede eliminar candidatos');
+      return;
+    }
+    
+    if (!confirm('¿Estás seguro de eliminar este candidato?')) return;
+    
+    setCandidateLoading(true);
+    setCandidateError(null);
+
+    const res = await api.deleteCandidate({
+      election_id: electionId,
+      candidate_id: candidateId,
+      admin_dni: session.dni,
+      admin_dni_verifier: session.dni_verifier,
+    });
+
+    if (res.success) {
+      await loadElectionCandidates(electionId);
+    } else {
+      setCandidateError(res.error || 'Error al eliminar candidato');
+    }
+    setCandidateLoading(false);
+  };
+
   const handleUpdateElection = async (electionId: string) => {
     if (!session || !editElectionData) return;
     setLoading(true);
@@ -176,10 +237,8 @@ export default function VotingPage() {
       name: editElectionData.name || undefined,
       description: editElectionData.description || undefined,
       visibility: editElectionData.visibility,
-      is_published: editElectionData.is_published,
+      status: editElectionData.status,
       password: editElectionData.password || undefined,
-      start_date: editElectionData.start_date || undefined,
-      end_date: editElectionData.end_date || undefined,
       user_dni: session.dni,
     });
 
@@ -202,28 +261,10 @@ export default function VotingPage() {
 
     const res = await api.deleteElection(electionId, session.dni);
     if (res.success) {
+      await loadElections();
       await loadMyElections();
     } else {
       setError(res.error || 'Error al eliminar elección');
-    }
-    setLoading(false);
-  };
-
-  const handleTogglePublish = async (election: Election) => {
-    if (!session) return;
-    setLoading(true);
-    setError(null);
-
-    const res = await api.updateElection({
-      election_id: election.id,
-      is_published: !election.is_published,
-      user_dni: session.dni,
-    });
-
-    if (res.success) {
-      await loadMyElections();
-    } else {
-      setError(res.error || 'Error al actualizar publicación');
     }
     setLoading(false);
   };
@@ -359,17 +400,24 @@ setStep('home');
     const electionId = selectedElection.id;
 
     try {
-      const candidateId = blankVote ? "blank" : String(selectedCandidate ?? "");
+      let candidateCode: string;
+      if (blankVote) {
+        candidateCode = "blank";
+      } else {
+        const candidate = candidates.find(c => c.id === selectedCandidate);
+        candidateCode = candidate?.code || String(selectedCandidate ?? "");
+      }
+      
       const payload = createVotePayload(
         keyPair.publicKey,
-        candidateId,
+        candidateCode,
         electionId
       );
       const signature = signMessage(payload, keyPair.secretKey);
 
       const res = await api.submitVote({
         voter_public_key: keyPair.publicKey,
-        candidate_id: candidateId,
+        candidate_id: candidateCode,
         election_id: electionId,
         signature,
         is_blank_vote: blankVote,
@@ -494,11 +542,13 @@ setStep('home');
                         <h3 className="font-bold text-lg">{election.name}</h3>
                         <p className="text-gray-600 text-sm">{election.description}</p>
                         <div className="mt-2 flex gap-2">
-                          <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                            Tipo: {election.election_type}
-                          </span>
-                          <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                            Categoría: {election.election_category}
+                          <span className={`text-xs px-2 py-1 rounded ${
+                            election.status === 'Publicado' ? 'bg-blue-100 text-blue-700' :
+                            election.status === 'Terminado' ? 'bg-gray-100 text-gray-600' :
+                            'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {election.status === 'Publicado' ? 'Publicado' : 
+                             election.status === 'Terminado' ? 'Terminado' : 'Borrador'}
                           </span>
                           {election.is_official && (
                             <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
@@ -507,22 +557,43 @@ setStep('home');
                           )}
                         </div>
                       </div>
-                      <div className="text-right">
-                        {session && canVote && !electionVoted ? (
-                          <button
-                            onClick={() => handleSelectElection(election)}
-                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                          >
-                            Votar
-                          </button>
-                        ) : session && electionVoted ? (
-                          <span className="text-gray-400 text-sm">✓ Ya has votado</span>
-                        ) : session ? (
-                          <span className="text-gray-400 text-sm">No puedes votar</span>
-                        ) : (
-                          <span className="text-gray-400 text-sm">Inicia sesión para votar</span>
-                        )}
-                      </div>
+                        <div className="flex items-center gap-3">
+                          {session?.role === 'sudo_admin' && election.status === 'Borrador' && (
+                            <button
+                              onClick={() => handleDeleteElection(election.id)}
+                              disabled={loading}
+                              className="text-red-600 hover:text-red-800 p-2"
+                              title="Eliminar votación"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                          {session && canVote && !electionVoted && election.status === 'Publicado' ? (
+                            <button
+                              onClick={() => handleSelectElection(election)}
+                              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                            >
+                              Votar
+                            </button>
+                          ) : election.status === 'Publicado' && session && electionVoted ? (
+                            <p className="text-gray-500 text-sm">Ya has votado en esta elección</p>
+                          ) : election.status === 'Publicado' && session ? (
+                            <button
+                              onClick={() => handleSelectElection(election)}
+                              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                            >
+                              Votar
+                            </button>
+                          ) : election.status === 'Borrador' ? (
+                            <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">Borrador</span>
+                          ) : election.status === 'Terminado' ? (
+                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">Terminado</span>
+                          ) : (
+                            <span className="text-gray-400 text-sm">Inicia sesión para votar</span>
+                          )}
+                        </div>
                     </div>
                   </div>
                 ))}
@@ -696,13 +767,10 @@ setStep('home');
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
                           selectedCandidate === candidate.id ? 'bg-blue-600' : 'bg-gray-400'
                         }`}>
-                          {candidate.id}
+                          {candidate.code}
                         </div>
                         <div>
-                          <h3 className="font-semibold">{candidate.name} {candidate.last_name}</h3>
-                          <p className="text-blue-600 text-sm">{candidate.category}</p>
-                          {candidate.party_id && <p className="text-xs text-gray-500">Partido ID: {candidate.party_id}</p>}
-                          <p className="text-xs text-gray-500">ID: {candidate.candidate_external_id}</p>
+                          <h3 className="font-semibold">{candidate.name}</h3>
                         </div>
                       </div>
                     </div>
@@ -761,12 +829,6 @@ setStep('home');
               >
                 Mis Votaciones
               </button>
-              <button
-                onClick={() => { setActiveTab('results'); setCurrentPage(1); setSearchTerm(''); }}
-                className={`px-4 py-2 ${activeTab === 'results' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
-              >
-                Resultados
-              </button>
               {session?.role === 'sudo_admin' && (
                 <button
                   onClick={() => { setActiveTab('users'); setCurrentPage(1); setSearchTerm(''); }}
@@ -800,7 +862,7 @@ setStep('home');
 
             <div className="bg-white rounded-lg shadow-md p-6">
               
-              <div className="space-y-4">
+                <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Nombre</label>
                   <input
@@ -822,78 +884,6 @@ setStep('home');
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Tipo de Votación</label>
-                    <select
-                      value={newElection.election_type || 'general'}
-                      onChange={(e) => setNewElection({ ...newElection, election_type: e.target.value })}
-                      className="w-full p-2 border rounded"
-                    >
-                      <option value="general">General</option>
-                      <option value="presidential_unicameral">Presidencial Unicameral</option>
-                      <option value="presidential_bicameral">Presidencial Bicameral</option>
-                      <option value="mesa_directivo">Mesa Directivo</option>
-                    </select>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {newElection.election_type === 'presidential_unicameral' && 'Presidente elegido por el pueblo (1 cámara)'}
-                      {newElection.election_type === 'presidential_bicameral' && 'Presidente + 2 Vicepresidentes (2 cámaras: Senado + Diputados)'}
-                      {newElection.election_type === 'mesa_directivo' && 'Elección de mesa directiva del congreso'}
-                      {newElection.election_type === 'general' && 'Votación genérica personalizable'}
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Categoría</label>
-                    <select
-                      value={newElection.election_category || 'general'}
-                      onChange={(e) => setNewElection({ ...newElection, election_category: e.target.value })}
-                      className="w-full p-2 border rounded"
-                    >
-                      <option value="general">General</option>
-                      <option value="president">Presidente</option>
-                      <option value="vice">Vicepresidente(s)</option>
-                      <option value="senadores">Senadores</option>
-                      <option value="diputados">Diputados</option>
-                      <option value="mesa_presidente">Presidente de Mesa</option>
-                      <option value="mesa_vice">Vicepresidente de Mesa</option>
-                      <option value="mesa_secretario">Secretario de Mesa</option>
-                    </select>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {newElection.election_type === 'presidential_unicameral' && newElection.election_category === 'president' && '1 candidato a Presidente'}
-                      {newElection.election_type === 'presidential_unicameral' && newElection.election_category === 'vice' && 'Candidatos a Vicepresidente'}
-                      {newElection.election_type === 'presidential_bicameral' && newElection.election_category === 'president' && '1 candidato a Presidente'}
-                      {newElection.election_type === 'presidential_bicameral' && newElection.election_category === 'vice' && '2 candidatos a Vicepresidente'}
-                      {newElection.election_type === 'presidential_bicameral' && newElection.election_category === 'senadores' && 'Candidatos al Senado (5 por lista)'}
-                      {newElection.election_type === 'presidential_bicameral' && newElection.election_category === 'diputados' && 'Candidatos a Cámara de Diputados'}
-                      {newElection.election_type === 'mesa_directivo' && newElection.election_category === 'mesa_presidente' && 'Candidato a Presidente de Mesa'}
-                      {newElection.election_type === 'mesa_directivo' && newElection.election_category === 'mesa_vice' && 'Candidato a Vicepresidente de Mesa'}
-                      {newElection.election_type === 'mesa_directivo' && newElection.election_category === 'mesa_secretario' && 'Candidato a Secretario de Mesa'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Fecha de Inicio</label>
-                    <input
-                      type="datetime-local"
-                      value={newElection.start_date || ''}
-                      onChange={(e) => setNewElection({ ...newElection, start_date: e.target.value })}
-                      className="w-full p-2 border rounded"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Fecha de Fin</label>
-                    <input
-                      type="datetime-local"
-                      value={newElection.end_date || ''}
-                      onChange={(e) => setNewElection({ ...newElection, end_date: e.target.value })}
-                      className="w-full p-2 border rounded"
-                    />
-                  </div>
-                </div>
-
                 <div>
                   <label className="block text-sm font-medium mb-1">Visibilidad</label>
                   <select
@@ -906,6 +896,19 @@ setStep('home');
                   </select>
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium mb-1">Estado</label>
+                  <select
+                    value={newElection.status || 'Borrador'}
+                    onChange={(e) => setNewElection({ ...newElection, status: e.target.value as 'Borrador' | 'Publicado' | 'Terminado' })}
+                    className="w-full p-2 border rounded"
+                  >
+                    <option value="Borrador">Borrador</option>
+                    <option value="Publicado">Publicado</option>
+                    <option value="Terminado">Terminado</option>
+                  </select>
+                </div>
+
                 {newElection.visibility === 'private' && (
                   <div>
                     <label className="block text-sm font-medium mb-1">Contraseña del evento</label>
@@ -914,9 +917,9 @@ setStep('home');
                       value={newElection.password || ''}
                       onChange={(e) => setNewElection({ ...newElection, password: e.target.value })}
                       className="w-full p-2 border rounded"
-                    placeholder="Contraseña para acceder al evento"
-                  />
-                </div>
+                      placeholder="Contraseña para acceder al evento"
+                    />
+                  </div>
                 )}
 
                 {error && (
@@ -986,35 +989,20 @@ setStep('home');
                               />
                             </div>
                           )}
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={editElectionData?.is_published || false}
-                              onChange={(e) => setEditElectionData({ ...editElectionData!, is_published: e.target.checked })}
-                              className="w-5 h-5"
-                            />
-                            <span className="font-medium">Publicada</span>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Estado</label>
+                            <select
+                              value={editElectionData?.status || 'Borrador'}
+                              onChange={(e) => setEditElectionData({ ...editElectionData!, status: e.target.value as 'Borrador' | 'Publicado' | 'Terminado' })}
+                              className="w-full p-2 border rounded"
+                              disabled={election.status === 'Publicado' || election.status === 'Terminado'}
+                            >
+                              <option value="Borrador">Borrador</option>
+                              <option value="Publicado">Publicado</option>
+                              <option value="Terminado">Terminado</option>
+                            </select>
                           </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-sm font-medium mb-1">Fecha de Inicio</label>
-                              <input
-                                type="datetime-local"
-                                value={editElectionData?.start_date || ''}
-                                onChange={(e) => setEditElectionData({ ...editElectionData!, start_date: e.target.value })}
-                                className="w-full p-2 border rounded"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium mb-1">Fecha de Fin</label>
-                              <input
-                                type="datetime-local"
-                                value={editElectionData?.end_date || ''}
-                                onChange={(e) => setEditElectionData({ ...editElectionData!, end_date: e.target.value })}
-                                className="w-full p-2 border rounded"
-                              />
-                            </div>
-                          </div>
+                          {election.status !== 'Publicado' && election.status !== 'Terminado' && (
                           <div className="flex gap-2">
                             <button
                               onClick={() => handleUpdateElection(election.id)}
@@ -1030,6 +1018,7 @@ setStep('home');
                               Cancelar
                             </button>
                           </div>
+                          )}
                         </div>
                       ) : (
                         <div className="flex justify-between items-start">
@@ -1040,35 +1029,26 @@ setStep('home');
                               <span className={`text-xs px-2 py-1 rounded ${election.visibility === 'public' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
                                 {election.visibility === 'public' ? 'Público' : 'Privado'}
                               </span>
-                              <span className={`text-xs px-2 py-1 rounded ${election.is_published ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                                {election.is_published ? 'Publicado' : 'Borrador'}
+                              <span className={`text-xs px-2 py-1 rounded ${
+                                election.status === 'Publicado' ? 'bg-blue-100 text-blue-700' :
+                                election.status === 'Terminado' ? 'bg-gray-100 text-gray-600' :
+                                'bg-yellow-100 text-yellow-700'
+                              }`}>
+                                {election.status === 'Publicado' ? 'Publicado' : 
+                                 election.status === 'Terminado' ? 'Terminado' : 'Borrador'}
                               </span>
                             </div>
                           </div>
                           <div className="flex gap-2 ml-4">
                             <button
                               onClick={() => {
-                                setSelectedElectionForEdit(election);
-                                setEditElectionData({
-                                  name: election.name || '',
-                                  description: election.description || '',
-                                  visibility: election.visibility || 'public',
-                                  is_published: election.is_published || false,
-                                  password: '',
-                                  start_date: election.start_date || '',
-                                  end_date: election.end_date || '',
-                                });
+                                setSelectedElectionForCandidates(election);
+                                setShowCandidateForm(true);
+                                loadElectionCandidates(election.id);
                               }}
                               className="text-blue-600 hover:underline text-sm"
                             >
-                              Editar
-                            </button>
-                            <button
-                              onClick={() => handleTogglePublish(election)}
-                              disabled={loading}
-                              className={`text-sm px-2 py-1 rounded ${election.is_published ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
-                            >
-                              {election.is_published ? 'Despublicar' : 'Publicar'}
+                              Modificar Candidatos
                             </button>
                             <button
                               onClick={() => handleDeleteElection(election.id)}
@@ -1083,52 +1063,6 @@ setStep('home');
                     </div>
                   ))
 )}
-              </div>
-            )}
-
-            {activeTab === 'results' && (
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="font-semibold mb-4">Resultados de Votaciones</h3>
-                
-                <div className="mb-4">
-                  <label className="block text-sm font-medium mb-1">Seleccionar Votación</label>
-                  <select
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        loadResults(e.target.value);
-                      }
-                    }}
-                    className="w-full p-2 border rounded"
-                    defaultValue=""
-                  >
-                    <option value="" disabled>Selecciona una votación...</option>
-                    {elections.filter(e => e.is_published).map((election) => (
-                      <option key={election.id} value={election.id}>
-                        {election.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {loadingResults ? (
-                  <div className="text-center py-8">Cargando resultados...</div>
-                ) : Object.keys(electionResults).length > 0 ? (
-                  <div className="mt-4">
-                    <h4 className="text-sm font-medium mb-2">Votos por Candidato</h4>
-                    <div className="space-y-2">
-                      {Object.entries(electionResults).map(([candidate, votes]) => (
-                        <div key={candidate} className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                          <span className="font-medium">{candidate}</span>
-                          <span className="text-lg font-bold text-blue-600">{votes}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    Selecciona una votación para ver los resultados
-                  </div>
-                )}
               </div>
             )}
 
@@ -1250,6 +1184,96 @@ setStep('home');
             >
               Ver Votaciones
             </button>
+          </div>
+        )}
+
+        {showCandidateForm && selectedElectionForCandidates && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-semibold">Candidatos - {selectedElectionForCandidates.name}</h2>
+                  <button
+                    onClick={() => { setShowCandidateForm(false); setSelectedElectionForCandidates(null); }}
+                    className="text-gray-500 hover:text-gray-700 text-2xl"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="mb-6">
+                  <h3 className="font-medium mb-3">Agregar Nuevo Candidato</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Código</label>
+                      <input
+                        type="text"
+                        value={candidateFormData.code}
+                        onChange={(e) => setCandidateFormData({ ...candidateFormData, code: e.target.value })}
+                        className="w-full p-2 border rounded"
+                        placeholder="01"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Nombre del Candidato</label>
+                      <input
+                        type="text"
+                        value={candidateFormData.name}
+                        onChange={(e) => setCandidateFormData({ ...candidateFormData, name: e.target.value })}
+                        className="w-full p-2 border rounded"
+                        placeholder="Nombre completo"
+                      />
+                    </div>
+                  </div>
+                  {candidateError && (
+                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-4">
+                      {candidateError}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => handleAddCandidate(selectedElectionForCandidates.id)}
+                    disabled={candidateLoading || !candidateFormData.code.trim() || !candidateFormData.name.trim()}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                  >
+                    {candidateLoading ? 'Agregando...' : 'Agregar Candidato'}
+                  </button>
+                </div>
+
+                <div>
+                  <h3 className="font-medium mb-3">Candidatos Existentes ({electionCandidates.length})</h3>
+                  {electionCandidates.length === 0 ? (
+                    <p className="text-gray-500 text-center py-4">No hay candidatos aún</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {electionCandidates.map((candidate) => (
+                        <div key={candidate.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">
+                              {candidate.code}
+                            </div>
+                            <div>
+                              <p className="font-medium">{candidate.name}</p>
+                            </div>
+                          </div>
+                          {session?.role === 'sudo_admin' && selectedElectionForCandidates && selectedElectionForCandidates.status !== 'Publicado' && selectedElectionForCandidates.status !== 'Terminado' && (
+                            <button
+                              onClick={() => handleDeleteCandidate(candidate.id, selectedElectionForCandidates!.id)}
+                              disabled={candidateLoading}
+                              className="text-red-600 hover:text-red-800 p-2"
+                              title="Eliminar candidato"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </main>

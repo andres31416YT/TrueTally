@@ -1,8 +1,9 @@
-use crate::models::{AuthRequest, AuthResponse, NewElection, NewCandidate, NewVoter, VoteRequest, VoteResponse, UpdateRoleRequest, ListUsersRequest, UpdateElectionRequest, DeleteElectionRequest, ListMyElectionsRequest};
+use crate::models::{AuthRequest, AuthResponse, NewElection, NewCandidate, NewVoter, VoteRequest, VoteResponse, UpdateRoleRequest, ListUsersRequest, UpdateElectionRequest, DeleteElectionRequest, ListMyElectionsRequest, DeleteCandidateRequest};
 use crate::db;
 use axum::{
     extract::State,
     http::StatusCode,
+    http::HeaderMap,
     response::IntoResponse,
     Json,
 };
@@ -50,12 +51,10 @@ pub async fn create_election(
     let state = state.lock().await;
     
     let election_id = uuid::Uuid::new_v4().to_string()[..8].to_string();
-    let election_type = payload.election_type.unwrap_or_else(|| "general".to_string());
-    let election_category = payload.election_category.unwrap_or_else(|| "general".to_string());
     let visibility = payload.visibility.unwrap_or_else(|| "public".to_string());
-    let is_published = payload.is_published.unwrap_or(false);
+    let status = payload.status.unwrap_or_else(|| "Borrador".to_string());
     
-    match db::create_election(&state.db_pool, &election_id, &payload.name, payload.description.as_deref(), &visibility, is_published, &election_type, &election_category, payload.password.as_deref(), None).await {
+    match db::create_election(&state.db_pool, &election_id, &payload.name, payload.description.as_deref(), &visibility, &status, payload.password.as_deref(), None).await {
         Ok(_) => {
             let _ = db::log_audit(&state.db_pool, "election_created", &format!("election: {}", election_id)).await;
             Ok((StatusCode::CREATED, Json(ApiResponse::ok(election_id))))
@@ -66,19 +65,20 @@ pub async fn create_election(
 
 pub async fn list_elections(
     State(state): State<Arc<Mutex<AppState>>>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>>)> {
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>)> {
     let state = state.lock().await;
     
     match db::list_elections(&state.db_pool).await {
         Ok(elections) => {
             let result: Vec<serde_json::Value> = elections
                 .into_iter()
-                .map(|(id, name, description, is_active)| {
+                .map(|(id, name, description, status, created_by)| {
                     serde_json::json!({
                         "id": id,
                         "name": name,
                         "description": description,
-                        "is_active": is_active
+                        "status": status,
+                        "created_by": created_by
                     })
                 })
                 .collect();
@@ -118,26 +118,55 @@ pub async fn add_candidate(
     if payload.name.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Name cannot be empty".to_string()))));
     }
-    if payload.party.trim().is_empty() {
-        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Party cannot be empty".to_string()))));
-    }
-    if payload.photo_url.trim().is_empty() {
-        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Photo URL cannot be empty".to_string()))));
-    }
 
     let exists = db::candidate_exists(&state.db_pool, &payload.election_id, &payload.name).await;
     if let Ok(true) = exists {
         return Err((StatusCode::CONFLICT, Json(ApiResponse::err("A candidate with this name already exists in this election".to_string()))));
     }
     
-    let category = payload.category.unwrap_or_else(|| "general".to_string());
-    let candidate_external_id = payload.candidate_external_id.as_deref();
-    let party_id = payload.party_id.as_deref();
+    let code = payload.code.trim().to_string();
+    if code.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Code cannot be empty".to_string()))));
+    }
     
-    match db::add_candidate(&state.db_pool, &payload.election_id, candidate_external_id, party_id, &payload.name, &payload.party, &category, payload.bio.as_deref(), Some(&payload.photo_url)).await {
+    match db::add_candidate(&state.db_pool, &payload.election_id, &code, &payload.name).await {
         Ok(id) => {
             let _ = db::log_audit(&state.db_pool, "candidate_added", &format!("election: {}", payload.election_id)).await;
             Ok((StatusCode::CREATED, Json(ApiResponse::ok(id))))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
+    }
+}
+
+pub async fn delete_candidate(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Json(payload): Json<DeleteCandidateRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<String>>)> {
+    let state = state.lock().await;
+    
+    let is_sudo = payload.admin_dni == "00000000" && payload.admin_dni_verifier == "0";
+    
+    if !is_sudo {
+        let admin_check = db::authenticate_user(&state.db_pool, &payload.admin_dni, &payload.admin_dni_verifier, None).await;
+        if let Ok(Some((role, _, _))) = admin_check {
+            if role != "sudo_admin" {
+                return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("Solo sudo_admin puede eliminar candidatos".to_string()))));
+            }
+        } else {
+            return Err((StatusCode::UNAUTHORIZED, Json(ApiResponse::err("Usuario no autorizado".to_string()))));
+        }
+    }
+
+    if let Ok(Some(status)) = db::get_election_status(&state.db_pool, &payload.election_id).await {
+        if status == "Publicado" || status == "Terminado" {
+            return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("No se puede modificar candidatos de una elección publicada o terminada".to_string()))));
+        }
+    }
+
+    match db::delete_candidate(&state.db_pool, payload.candidate_id).await {
+        Ok(_) => {
+            let _ = db::log_audit(&state.db_pool, "candidate_deleted", &format!("candidate: {}", payload.candidate_id)).await;
+            Ok((StatusCode::OK, Json(ApiResponse::ok("Candidato eliminado".to_string()))))
         }
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
     }
@@ -154,16 +183,11 @@ match db::list_candidates(&state.db_pool, election_id).await {
         Ok(candidates) => {
             let result: Vec<serde_json::Value> = candidates
                 .into_iter()
-                .map(|(id, candidate_external_id, party_id, name, party, category, bio, photo_url)| {
+                .map(|(id, code, name)| {
                     serde_json::json!({
                         "id": id,
-                        "candidate_external_id": candidate_external_id,
-                        "party_id": party_id,
-                        "name": name,
-                        "party": party,
-                        "category": category,
-                        "bio": bio,
-                        "photo_url": photo_url
+                        "code": code,
+                        "name": name
                     })
                 })
                 .collect();
@@ -475,7 +499,13 @@ pub async fn update_election(
         Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Error: {}", e))))),
     }
 
-    match db::update_election(&state.db_pool, &payload.election_id, payload.name.as_deref(), payload.description.as_deref(), payload.visibility.as_deref(), payload.is_published, payload.password.as_deref()).await {
+    if let Some(new_status) = &payload.status {
+        if new_status == "Publicado" || new_status == "Terminado" {
+            return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("No se puede editar una elección publicada o terminada".to_string()))));
+        }
+    }
+
+    match db::update_election(&state.db_pool, &payload.election_id, payload.name.as_deref(), payload.description.as_deref(), payload.visibility.as_deref(), payload.status.as_deref(), payload.password.as_deref()).await {
         Ok(_) => {
             let _ = db::log_audit(&state.db_pool, "election_updated", &format!("election: {}", payload.election_id)).await;
             Ok((StatusCode::OK, Json(ApiResponse::ok("Elección actualizada".to_string()))))
@@ -490,10 +520,10 @@ pub async fn delete_election(
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<String>>)> {
     let state = state.lock().await;
 
-    match db::get_election_creator(&state.db_pool, &payload.election_id).await {
-        Ok(Some(created_by)) => {
-            if created_by != payload.user_dni {
-                return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("Solo el creator puede eliminar".to_string()))));
+    match db::get_election_by_status(&state.db_pool, &payload.election_id).await {
+        Ok(Some(status)) => {
+            if status == "Publicado" || status == "Terminado" {
+                return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("No se puede eliminar una elección publicada o terminada".to_string()))));
             }
         }
         Ok(None) => return Err((StatusCode::NOT_FOUND, Json(ApiResponse::err("Elección no encontrada".to_string())))),
@@ -519,14 +549,38 @@ pub async fn list_my_elections(
         Ok(elections) => {
             let result: Vec<serde_json::Value> = elections
                 .into_iter()
-                .map(|(id, name, description, is_active, visibility, is_published)| {
+                .map(|(id, name, description, status, visibility)| {
                     serde_json::json!({
                         "id": id,
                         "name": name,
                         "description": description,
-                        "is_active": is_active,
-                        "visibility": visibility,
-                        "is_published": is_published
+                        "status": status,
+                        "visibility": visibility
+                    })
+                })
+                .collect();
+            Ok((StatusCode::OK, Json(ApiResponse::ok(result))))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
+    }
+}
+
+pub async fn list_all_elections(
+    State(state): State<Arc<Mutex<AppState>>>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>>)> {
+    let state = state.lock().await;
+    
+    match db::list_all_elections(&state.db_pool).await {
+        Ok(elections) => {
+            let result: Vec<serde_json::Value> = elections
+                .into_iter()
+                .map(|(id, name, description, status, visibility)| {
+                    serde_json::json!({
+                        "id": id,
+                        "name": name,
+                        "description": description,
+                        "status": status,
+                        "visibility": visibility
                     })
                 })
                 .collect();

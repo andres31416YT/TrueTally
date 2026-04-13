@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { api, Election } from '@/lib/api';
+import { api, Election, Candidate } from '@/lib/api';
 import { useSearchParams } from 'next/navigation';
 
 function ResultsContent() {
@@ -11,9 +11,10 @@ function ResultsContent() {
   const [results, setResults] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [candidates, setCandidates] = useState<any[]>([]);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [elections, setElections] = useState<Election[]>([]);
   const [selectedElection, setSelectedElection] = useState<string>(electionId || '');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     loadElections();
@@ -28,7 +29,7 @@ function ResultsContent() {
   }, [selectedElection]);
 
   const loadElections = async () => {
-    const res = await api.listElections();
+    const res = await api.listAllElections();
     if (res.success && res.data) {
       setElections(res.data);
       if (res.data.length > 0 && !selectedElection) {
@@ -58,22 +59,25 @@ function ResultsContent() {
     setLoading(false);
   };
 
+  const filteredElections = elections.filter(e => 
+    searchTerm === '' || 
+    e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (e.description && e.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
   const blankVotes = results['blank'] || 0;
   const totalVotes = Object.values(results).reduce((a, b) => a + b, 0) - blankVotes;
 
-  const chartData = Object.entries(results).map(([candidateId, votes]) => {
-    const candidate = candidates.find(c => c.id.toString() === candidateId);
-    const category = candidate?.category || 'general';
-    return {
-      id: candidateId,
-      externalId: candidate?.candidate_external_id || '',
-      partyId: candidate?.party_id || '',
-      name: candidate?.name || `Candidato ${candidateId}`,
-      party: candidate?.party || 'Independiente',
-      category: category,
-      votes,
-    };
-  });
+  const chartData = Object.entries(results)
+    .filter(([key]) => key !== 'blank')
+    .map(([candidateId, votes]) => {
+      const candidate = candidates.find(c => c.code === candidateId);
+      return {
+        code: candidateId,
+        name: candidate?.name || `Candidato ${candidateId}`,
+        votes,
+      };
+    });
 
   if (loading) {
     return (
@@ -93,17 +97,43 @@ function ResultsContent() {
 
       <main className="max-w-4xl mx-auto p-6">
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">Seleccionar Elección</label>
-          <select
-            value={selectedElection}
-            onChange={(e) => setSelectedElection(e.target.value)}
-            className="w-full p-2 border rounded bg-white"
-          >
-            <option value="">Selecciona una elección</option>
-            {elections.map((e) => (
-              <option key={e.id} value={e.id}>{e.name}</option>
+          <div className="flex gap-2 mb-4">
+            <input
+              type="text"
+              placeholder="Buscar elecciones..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flex-1 p-2 border rounded"
+            />
+            <button
+              onClick={() => {}}
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            >
+              Buscar
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+            {filteredElections.map((election) => (
+              <div
+                key={election.id}
+                onClick={() => setSelectedElection(election.id)}
+                className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                  selectedElection === election.id
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                <h3 className="font-semibold">{election.name}</h3>
+                <p className="text-xs text-gray-500">{election.description}</p>
+                <span className={`text-xs px-2 py-0.5 rounded ${
+                  election.status === 'Publicado' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {election.status === 'Publicado' ? 'Publicado' : 'Terminado'}
+                </span>
+              </div>
             ))}
-          </select>
+          </div>
         </div>
 
         {error && (
@@ -141,10 +171,8 @@ function ResultsContent() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b">
-                      <th className="text-left py-2">ID</th>
+                      <th className="text-left py-2">Código</th>
                       <th className="text-left py-2">Candidato</th>
-                      <th className="text-left py-2">Partido</th>
-                      <th className="text-left py-2">Categoría</th>
                       <th className="text-right py-2">Votos</th>
                       <th className="text-right py-2">%</th>
                     </tr>
@@ -152,10 +180,8 @@ function ResultsContent() {
                   <tbody>
                     {chartData.map((item, index) => (
                       <tr key={index} className="border-b">
-                        <td className="py-2 font-mono text-xs">{item.externalId || item.id}</td>
+                        <td className="py-2 font-mono text-xs">{item.code}</td>
                         <td className="py-2">{item.name}</td>
-                        <td className="py-2">{item.party}</td>
-                        <td className="py-2">{item.category}</td>
                         <td className="text-right py-2 font-mono">{item.votes}</td>
                         <td className="text-right py-2">
                           {totalVotes > 0 ? ((item.votes / totalVotes) * 100).toFixed(1) : 0}%
@@ -167,8 +193,6 @@ function ResultsContent() {
                     <tr className="font-bold">
                       <td></td>
                       <td className="py-2">Total</td>
-                      <td></td>
-                      <td></td>
                       <td className="text-right py-2">{totalVotes}</td>
                       <td className="text-right py-2">100%</td>
                     </tr>

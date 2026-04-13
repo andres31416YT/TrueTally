@@ -31,8 +31,8 @@ pub struct Election {
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub is_active: bool,
     pub admin_code: String,
-    pub election_type: String,
-    pub election_category: String,
+    pub status: String,
+    pub visibility: String,
     pub password: Option<String>,
     pub is_official: bool,
     pub created_by: Option<String>,
@@ -43,9 +43,7 @@ pub struct NewElection {
     pub name: String,
     pub description: Option<String>,
     pub visibility: Option<String>,
-    pub is_published: Option<bool>,
-    pub election_type: Option<String>,
-    pub election_category: Option<String>,
+    pub status: Option<String>,
     pub password: Option<String>,
 }
 
@@ -53,25 +51,23 @@ pub struct NewElection {
 pub struct Candidate {
     pub id: i64,
     pub election_id: String,
-    pub candidate_external_id: Option<String>,
-    pub party_id: Option<String>,
+    pub code: String,
     pub name: String,
-    pub party: String,
-    pub category: String,
-    pub bio: Option<String>,
-    pub photo_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewCandidate {
     pub election_id: String,
-    pub candidate_external_id: Option<String>,
-    pub party_id: Option<String>,
+    pub code: String,
     pub name: String,
-    pub party: String,
-    pub category: Option<String>,
-    pub photo_url: String,
-    pub bio: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteCandidateRequest {
+    pub election_id: String,
+    pub candidate_id: i64,
+    pub admin_dni: String,
+    pub admin_dni_verifier: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,7 +124,7 @@ pub struct UpdateElectionRequest {
     pub name: Option<String>,
     pub description: Option<String>,
     pub visibility: Option<String>,
-    pub is_published: Option<bool>,
+    pub status: Option<String>,
     pub password: Option<String>,
     pub user_dni: String,
 }
