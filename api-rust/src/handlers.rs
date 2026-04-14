@@ -310,8 +310,14 @@ pub async fn submit_vote(
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<VoteResponse>>)> {
     let state = state.lock().await;
     
-    if let Ok(Some((_, _, true))) = db::get_voter_by_public_key(&state.db_pool, &payload.election_id, &payload.voter_public_key).await {
+    let check_voter = db::get_voter_by_public_key(&state.db_pool, &payload.election_id, &payload.voter_public_key).await;
+    
+    if let Ok(Some((_, _, true))) = check_voter {
         return Err((StatusCode::FORBIDDEN, Json(ApiResponse::err("This voter has already voted in this election".to_string()))));
+    }
+    
+    if check_voter.is_err() || check_voter.ok().map_or(true, |v| v.is_none()) {
+        let _ = db::register_voter(&state.db_pool, &payload.election_id, "creator", "creator_verifier", &payload.voter_public_key, Some("creator")).await;
     }
 
     let rpc_url = format!("{}/vote", state.node_rpc_url);

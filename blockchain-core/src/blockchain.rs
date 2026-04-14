@@ -1,13 +1,13 @@
 use crate::block::{create_genesis_block, Block, Vote};
 use crate::consensus::{Consensus, VoteValidator};
 use chrono::Utc;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 
 pub struct Blockchain {
     pub chain: Vec<Block>,
-    pub voted_keys: HashSet<String>,
+    pub voted_keys: HashMap<String, HashSet<String>>, // election_id -> set of public_keys
     consensus: Consensus,
 }
 
@@ -18,7 +18,7 @@ impl Blockchain {
 
         Blockchain {
             chain,
-            voted_keys: HashSet::new(),
+            voted_keys: HashMap::new(),
             consensus,
         }
     }
@@ -27,11 +27,15 @@ impl Blockchain {
         if let Ok(content) = fs::read_to_string(path) {
             if let Ok(chain) = serde_json::from_str::<Vec<Block>>(&content) {
                 if !chain.is_empty() {
-                    let voted_keys = chain
-                        .iter()
-                        .filter(|b| b.data.voter_public_key != "genesis")
-                        .map(|b| b.data.voter_public_key.clone())
-                        .collect();
+                    let mut voted_keys: HashMap<String, HashSet<String>> = HashMap::new();
+                    for block in chain.iter() {
+                        if block.data.voter_public_key != "genesis" {
+                            voted_keys
+                                .entry(block.data.election_id.clone())
+                                .or_insert_with(HashSet::new)
+                                .insert(block.data.voter_public_key.clone());
+                        }
+                    }
 
                     return Blockchain {
                         chain,
@@ -55,8 +59,10 @@ impl Blockchain {
     pub fn add_block(&mut self, vote: Vote) -> Result<Block, String> {
         VoteValidator::validate_vote(&vote)?;
 
-        if self.voted_keys.contains(&vote.voter_public_key) {
-            return Err("Double vote detected".to_string());
+        if let Some(keys) = self.voted_keys.get(&vote.election_id) {
+            if keys.contains(&vote.voter_public_key) {
+                return Err("Double vote detected".to_string());
+            }
         }
 
         let previous_block = self.chain.last().ok_or("Chain is empty")?;
@@ -82,7 +88,10 @@ impl Blockchain {
             self.chain.push(new_block);
         }
 
-        self.voted_keys.insert(vote.voter_public_key);
+        self.voted_keys
+            .entry(vote.election_id.clone())
+            .or_insert_with(HashSet::new)
+            .insert(vote.voter_public_key);
 
         Ok(self.chain.last().unwrap().clone())
     }

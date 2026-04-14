@@ -103,15 +103,8 @@ async fn add_vote(
         timestamp: Utc::now(),
     };
 
-    let mut chain = blockchain.lock().await;
+let mut chain = blockchain.lock().await;
     
-    if chain.voted_keys.contains(&vote.voter_public_key) {
-        return (
-            StatusCode::CONFLICT,
-            Json(ApiResponse::<VoteResult>::error("Double vote detected".to_string())),
-        ).into_response();
-    }
-
     match chain.add_block(vote) {
         Ok(block) => {
             let _ = chain.save_to_file(CHAIN_DATA_PATH);
