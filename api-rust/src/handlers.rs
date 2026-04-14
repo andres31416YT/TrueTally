@@ -317,7 +317,9 @@ pub async fn submit_vote(
     }
     
     if check_voter.is_err() || check_voter.ok().map_or(true, |v| v.is_none()) {
-        let _ = db::register_voter(&state.db_pool, &payload.election_id, "creator", "creator_verifier", &payload.voter_public_key, Some("creator")).await;
+        let voter_dni = &payload.voter_public_key[..8.min(payload.voter_public_key.len())];
+        let voter_dni_verifier = &payload.voter_public_key[8..16.min(payload.voter_public_key.len())];
+        let _ = db::register_voter(&state.db_pool, &payload.election_id, voter_dni, voter_dni_verifier, &payload.voter_public_key, None).await;
     }
 
     let rpc_url = format!("{}/vote", state.node_rpc_url);

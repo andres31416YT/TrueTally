@@ -228,16 +228,23 @@ export default function VotingPage() {
   useEffect(() => {
     loadElections();
     const savedSession = localStorage.getItem('user_session');
+    const savedSecretKey = localStorage.getItem('user_secret_key');
     if (savedSession) {
       try {
         const parsed = JSON.parse(savedSession);
         setSession(parsed);
         if (parsed.public_key) {
-          const keys = generateKeyPair();
-          setKeyPair({ publicKey: parsed.public_key, secretKey: keys.secretKey });
+          if (savedSecretKey) {
+            setKeyPair({ publicKey: parsed.public_key, secretKey: savedSecretKey });
+          } else {
+            const keys = generateKeyPair();
+            localStorage.setItem('user_secret_key', keys.secretKey);
+            setKeyPair({ publicKey: parsed.public_key, secretKey: keys.secretKey });
+          }
         }
       } catch (e) {
         localStorage.removeItem('user_session');
+        localStorage.removeItem('user_secret_key');
       }
     }
   }, []);
@@ -536,7 +543,12 @@ export default function VotingPage() {
             
             if (authDataResponse.public_key) {
               const keys = generateKeyPair();
+              localStorage.setItem('user_secret_key', keys.secretKey);
               setKeyPair({ publicKey: authDataResponse.public_key, secretKey: keys.secretKey });
+            } else {
+              const keys = generateKeyPair();
+              localStorage.setItem('user_secret_key', keys.secretKey);
+              setKeyPair({ publicKey: keys.publicKey, secretKey: keys.secretKey });
             }
             
 setStep('home');
@@ -580,9 +592,13 @@ setStep('home');
   };
 
   const handleSubmitVote = async () => {
-    if (!keyPair || !selectedElection) return;
+    console.log('handleSubmitVote called', { keyPair: !!keyPair, selectedElection: !!selectedElection, selectedCandidate, blankVote });
+    if (!keyPair || !selectedElection) {
+      console.log('Missing keyPair or selectedElection');
+      return;
+    }
     if (!blankVote && !selectedCandidate) {
-      setError('Selecciona un candidato');
+      setError('Selecciona un candidato o marca voto en blanco');
       return;
     }
 
@@ -590,6 +606,7 @@ setStep('home');
     setError(null);
 
     const electionId = selectedElection.id;
+    console.log('Submitting vote for election:', electionId);
 
     try {
       let candidateCode: string;
@@ -599,6 +616,7 @@ setStep('home');
         const candidate = candidates.find(c => c.id === selectedCandidate);
         candidateCode = candidate?.code || String(selectedCandidate ?? "");
       }
+      console.log('Candidate code:', candidateCode);
       
       const payload = createVotePayload(
         keyPair.publicKey,
@@ -606,6 +624,7 @@ setStep('home');
         electionId
       );
       const signature = signMessage(payload, keyPair.secretKey);
+      console.log('Signature created');
 
       const res = await api.submitVote({
         voter_public_key: keyPair.publicKey,
@@ -614,6 +633,7 @@ setStep('home');
         signature,
         is_blank_vote: blankVote,
       });
+      console.log('Vote response:', res);
 
       if (res.success) {
         if (session) {
@@ -655,6 +675,7 @@ setStep('home');
 
   const handleLogout = () => {
     localStorage.removeItem('user_session');
+    localStorage.removeItem('user_secret_key');
     setSession(null);
     setKeyPair(null);
     setStep('home');
@@ -987,9 +1008,9 @@ setStep('home');
                 <button
                   onClick={handleSubmitVote}
                   disabled={loading || (!selectedCandidate && !blankVote)}
-                  className="w-full bg-green-600 text-white px-6 py-4 rounded-lg text-lg font-semibold hover:bg-green-700 disabled:bg-gray-400"
+                  className="w-full bg-green-600 text-white px-6 py-4 rounded-lg text-lg font-semibold hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  {loading ? 'Enviando...' : 'CONFIRMAR VOTO'}
+                  {loading ? 'Enviando...' : (!selectedCandidate && !blankVote ? 'Selecciona un candidato o marca voto en blanco' : 'CONFIRMAR VOTO')}
                 </button>
               </>
             )}
