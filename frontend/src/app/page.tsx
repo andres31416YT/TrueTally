@@ -229,18 +229,28 @@ export default function VotingPage() {
     loadElections();
     const savedSession = localStorage.getItem('user_session');
     const savedSecretKey = localStorage.getItem('user_secret_key');
+    console.log('Initial load - savedSession exists:', !!savedSession);
+    console.log('Initial load - savedSecretKey exists:', !!savedSecretKey);
     if (savedSession) {
       try {
         const parsed = JSON.parse(savedSession);
         setSession(parsed);
+        console.log('Session loaded:', parsed.role, 'public_key:', parsed.public_key);
         if (parsed.public_key) {
           if (savedSecretKey) {
+            console.log('Restoring keyPair from saved secret key');
             setKeyPair({ publicKey: parsed.public_key, secretKey: savedSecretKey });
           } else {
+            console.log('No saved secret key, generating new...');
             const keys = generateKeyPair();
             localStorage.setItem('user_secret_key', keys.secretKey);
             setKeyPair({ publicKey: parsed.public_key, secretKey: keys.secretKey });
           }
+        } else {
+          console.log('No public_key in session, generating new keypair...');
+          const keys = generateKeyPair();
+          localStorage.setItem('user_secret_key', keys.secretKey);
+          setKeyPair({ publicKey: keys.publicKey, secretKey: keys.secretKey });
         }
       } catch (e) {
         localStorage.removeItem('user_session');
@@ -541,12 +551,15 @@ export default function VotingPage() {
             setSession(newSession);
             localStorage.setItem('user_session', JSON.stringify(newSession));
             
+            console.log('authDataResponse:', authDataResponse);
             if (authDataResponse.public_key) {
               const keys = generateKeyPair();
               localStorage.setItem('user_secret_key', keys.secretKey);
               setKeyPair({ publicKey: authDataResponse.public_key, secretKey: keys.secretKey });
             } else {
+              console.log('No public_key, generating new keypair...');
               const keys = generateKeyPair();
+              console.log('New publicKey:', keys.publicKey);
               localStorage.setItem('user_secret_key', keys.secretKey);
               setKeyPair({ publicKey: keys.publicKey, secretKey: keys.secretKey });
             }
@@ -592,9 +605,19 @@ setStep('home');
   };
 
   const handleSubmitVote = async () => {
-    console.log('handleSubmitVote called', { keyPair: !!keyPair, selectedElection: !!selectedElection, selectedCandidate, blankVote });
+    console.log('handleSubmitVote called', { keyPair, selectedElection, selectedCandidate, blankVote });
+    console.log('keyPair value:', keyPair);
     if (!keyPair || !selectedElection) {
       console.log('Missing keyPair or selectedElection');
+      console.log('keyPair check:', !!keyPair, 'selectedElection check:', !!selectedElection);
+      if (!keyPair) {
+        console.log('CRITICAL: keyPair is missing! Generating new keypair...');
+        const keys = generateKeyPair();
+        localStorage.setItem('user_secret_key', keys.secretKey);
+        setKeyPair({ publicKey: keys.publicKey, secretKey: keys.secretKey });
+        console.log('New keyPair generated:', keys.publicKey);
+        return;
+      }
       return;
     }
     if (!blankVote && !selectedCandidate) {
