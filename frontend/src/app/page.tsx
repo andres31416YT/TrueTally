@@ -229,25 +229,19 @@ export default function VotingPage() {
     loadElections();
     const savedSession = localStorage.getItem('user_session');
     const savedSecretKey = localStorage.getItem('user_secret_key');
-    console.log('Initial load - savedSession exists:', !!savedSession);
-    console.log('Initial load - savedSecretKey exists:', !!savedSecretKey);
     if (savedSession) {
       try {
         const parsed = JSON.parse(savedSession);
         setSession(parsed);
-        console.log('Session loaded:', parsed.role, 'public_key:', parsed.public_key);
         if (parsed.public_key) {
           if (savedSecretKey) {
-            console.log('Restoring keyPair from saved secret key');
             setKeyPair({ publicKey: parsed.public_key, secretKey: savedSecretKey });
           } else {
-            console.log('No saved secret key, generating new...');
             const keys = generateKeyPair();
             localStorage.setItem('user_secret_key', keys.secretKey);
             setKeyPair({ publicKey: parsed.public_key, secretKey: keys.secretKey });
           }
         } else {
-          console.log('No public_key in session, generating new keypair...');
           const keys = generateKeyPair();
           localStorage.setItem('user_secret_key', keys.secretKey);
           setKeyPair({ publicKey: keys.publicKey, secretKey: keys.secretKey });
@@ -551,15 +545,12 @@ export default function VotingPage() {
             setSession(newSession);
             localStorage.setItem('user_session', JSON.stringify(newSession));
             
-            console.log('authDataResponse:', authDataResponse);
             if (authDataResponse.public_key) {
               const keys = generateKeyPair();
               localStorage.setItem('user_secret_key', keys.secretKey);
               setKeyPair({ publicKey: authDataResponse.public_key, secretKey: keys.secretKey });
             } else {
-              console.log('No public_key, generating new keypair...');
               const keys = generateKeyPair();
-              console.log('New publicKey:', keys.publicKey);
               localStorage.setItem('user_secret_key', keys.secretKey);
               setKeyPair({ publicKey: keys.publicKey, secretKey: keys.secretKey });
             }
@@ -604,18 +595,12 @@ setStep('home');
     }
   };
 
-  const handleSubmitVote = async () => {
-    console.log('handleSubmitVote called', { keyPair, selectedElection, selectedCandidate, blankVote });
-    console.log('keyPair value:', keyPair);
+const handleSubmitVote = async () => {
     if (!keyPair || !selectedElection) {
-      console.log('Missing keyPair or selectedElection');
-      console.log('keyPair check:', !!keyPair, 'selectedElection check:', !!selectedElection);
       if (!keyPair) {
-        console.log('CRITICAL: keyPair is missing! Generating new keypair...');
         const keys = generateKeyPair();
         localStorage.setItem('user_secret_key', keys.secretKey);
         setKeyPair({ publicKey: keys.publicKey, secretKey: keys.secretKey });
-        console.log('New keyPair generated:', keys.publicKey);
         return;
       }
       return;
@@ -629,7 +614,6 @@ setStep('home');
     setError(null);
 
     const electionId = selectedElection.id;
-    console.log('Submitting vote for election:', electionId);
 
     try {
       let candidateCode: string;
@@ -639,7 +623,6 @@ setStep('home');
         const candidate = candidates.find(c => c.id === selectedCandidate);
         candidateCode = candidate?.code || String(selectedCandidate ?? "");
       }
-      console.log('Candidate code:', candidateCode);
       
       const payload = createVotePayload(
         keyPair.publicKey,
@@ -647,7 +630,6 @@ setStep('home');
         electionId
       );
       const signature = signMessage(payload, keyPair.secretKey);
-      console.log('Signature created');
 
       const res = await api.submitVote({
         voter_public_key: keyPair.publicKey,
@@ -656,7 +638,6 @@ setStep('home');
         signature,
         is_blank_vote: blankVote,
       });
-      console.log('Vote response:', res);
 
       if (res.success) {
         if (session) {

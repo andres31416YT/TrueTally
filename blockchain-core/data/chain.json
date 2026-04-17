@@ -138,5 +138,19 @@
     "previous_hash": "18f14b6f958541d6eb395e9c8051d32894903e3ad20d2899d6ef0ed4b70ce79b",
     "nonce": 0,
     "hash": "75e04bb0f7f4f4990bfec431cbd95c048b4747fc50f1a4ae00ca5d6474b810fa"
+  },
+  {
+    "index": 10,
+    "timestamp": "2026-04-17T19:03:05.231164720Z",
+    "data": {
+      "voter_public_key": "4b93b4560266bfae29cdd556d05ea44c6db106f57a4cf4842221ec6010a5617f",
+      "candidate_id": "CD76A45F",
+      "election_id": "d76afdab",
+      "signature": "edf9f46e071ed69969a669bae8ac4f3bbae7d206a399d227f9859791fa503be93ee95f2e6ade3b660f8588368436e50a515ba8b1a14c62649343e4ac675acb01",
+      "timestamp": "2026-04-17T19:03:05.231162674Z"
+    },
+    "previous_hash": "75e04bb0f7f4f4990bfec431cbd95c048b4747fc50f1a4ae00ca5d6474b810fa",
+    "nonce": 0,
+    "hash": "2d9e3dbf8802ddf8d0cb91bedfe0253551709ba2a958f7e79b038fab1b9592df"
   }
 ]
