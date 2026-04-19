@@ -89,8 +89,8 @@ export default function CandidateForm({ electionId, onSuccess }: CandidateFormPr
         <div
           className={`p-4 mb-4 rounded ${
             alert.type === 'success'
-              ? 'bg-green-100 border border-green-400 text-green-700'
-              : 'bg-red-100 border border-red-400 text-red-700'
+              ? 'bg-gray-100 border border-gray-400 text-black'
+              : 'bg-gray-100 border border-gray-400 text-black'
           }`}
         >
           {alert.message}
@@ -108,13 +108,13 @@ export default function CandidateForm({ electionId, onSuccess }: CandidateFormPr
             name="code"
             value={formData.code}
             onChange={handleInputChange}
-            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-              errors.code ? 'border-red-500' : 'border-gray-300'
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-black focus:border-transparent ${
+              errors.code ? 'border-black' : 'border-gray-300'
             }`}
             placeholder="01"
             disabled={loading}
           />
-          {errors.code && <p className="text-red-500 text-sm mt-1">{errors.code}</p>}
+          {errors.code && <p className="text-black text-sm mt-1">{errors.code}</p>}
         </div>
 
         <div>
@@ -127,19 +127,19 @@ export default function CandidateForm({ electionId, onSuccess }: CandidateFormPr
             name="name"
             value={formData.name}
             onChange={handleInputChange}
-            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-              errors.name ? 'border-red-500' : 'border-gray-300'
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-black focus:border-transparent ${
+              errors.name ? 'border-black' : 'border-gray-300'
             }`}
             placeholder="Ingrese el nombre completo"
             disabled={loading}
           />
-          {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
+          {errors.name && <p className="text-black text-sm mt-1">{errors.name}</p>}
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="w-full bg-black text-white py-2 px-4 rounded-xl hover:bg-gray-800 focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? 'Guardando...' : 'Guardar Candidato'}
         </button>
@@ -151,7 +151,7 @@ export default function CandidateForm({ electionId, onSuccess }: CandidateFormPr
           <div className="space-y-3">
             {candidates.map((candidate) => (
               <div key={candidate.id} className="flex items-center p-3 bg-gray-50 rounded-lg">
-                <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold mr-3">
+                <div className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center font-bold mr-3">
                   {candidate.code}
                 </div>
                 <div>

@@ -25,12 +25,12 @@ function ConnectionStatus() {
   }, []);
 
   if (status === 'checking') {
-    return <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />;
+    return <Loader2 className="w-4 h-4 animate-spin text-gray-400" />;
   }
 
   if (status === 'connected') {
     return (
-      <div className="flex items-center gap-1.5 text-green-400 text-xs">
+      <div className="flex items-center gap-1.5 text-gray-400 text-xs">
         <Wifi className="w-3.5 h-3.5" />
         <span>{latency}ms</span>
       </div>
@@ -38,7 +38,7 @@ function ConnectionStatus() {
   }
 
   return (
-    <div className="flex items-center gap-1.5 text-red-400 text-xs">
+    <div className="flex items-center gap-1.5 text-gray-400 text-xs">
       <WifiOff className="w-3.5 h-3.5" />
       <span>Offline</span>
     </div>
@@ -54,7 +54,7 @@ export default function Navbar() {
   ];
 
   return (
-    <nav className="bg-primary-800 text-white shadow-lg">
+    <nav className="bg-black text-white shadow-sm">
       <div className="max-w-6xl mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="text-xl font-bold flex items-center gap-3">
@@ -69,8 +69,8 @@ export default function Navbar() {
                 className={clsx(
                   'px-3 py-2 rounded-md text-sm font-medium transition-colors',
                   pathname === item.href
-                    ? 'bg-primary-900 text-white'
-                    : 'text-primary-100 hover:bg-primary-700'
+                    ? 'bg-gray-800 text-white'
+                    : 'text-gray-300 hover:bg-gray-800'
                 )}
               >
                 {item.label}

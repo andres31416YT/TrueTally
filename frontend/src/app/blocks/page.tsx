@@ -34,7 +34,7 @@ export default function BlocksPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-primary-700 text-white p-4 shadow-lg">
+      <header className="bg-black text-white p-4 shadow-sm">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-2xl font-bold">TrueTally - Explorador de Bloques</h1>
         </div>
@@ -49,7 +49,7 @@ export default function BlocksPage() {
         </div>
 
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <div className="bg-gray-100 border border-gray-400 text-black px-4 py-3 rounded mb-4">
             {error}
           </div>
         )}
@@ -58,13 +58,13 @@ export default function BlocksPage() {
           {blocks.map((block, index) => (
             <div
               key={block.index}
-              className="bg-white rounded-lg shadow-md p-4 border-l-4 border-primary-500"
+              className="bg-white rounded-lg shadow-md p-4 border-l-4 border-black"
             >
               <div className="flex justify-between items-start mb-2">
                 <div>
                   <span className="text-lg font-bold">Bloque #{block.index}</span>
                   {index === 0 && (
-                    <span className="ml-2 text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded">
+                    <span className="ml-2 text-xs bg-gray-200 text-black px-2 py-1 rounded">
                       Genesis
                     </span>
                   )}

@@ -79,27 +79,27 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
           ← Volver
         </button>
         <h2 className="text-2xl font-bold">{election.name}</h2>
-        <span className={`text-xs px-2 py-1 rounded ${election.status === 'Terminado' ? 'bg-gray-100 text-gray-600' : 'bg-blue-100 text-blue-700'}`}>
+        <span className={`text-xs px-2 py-1 rounded ${election.status === 'Terminado' ? 'bg-gray-100 text-gray-600' : 'bg-gray-100 text-black'}`}>
           {election.status}
         </span>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg shadow p-4 text-center">
+        <div className="bg-white rounded-xl shadow p-4 text-center">
           <p className="text-sm text-gray-500">Total de Votos</p>
-          <p className="text-3xl font-bold text-blue-600">{totalVotes + blankVotes}</p>
+          <p className="text-3xl font-bold text-black">{totalVotes + blankVotes}</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-4 text-center">
+        <div className="bg-white rounded-xl shadow p-4 text-center">
           <p className="text-sm text-gray-500">Votos en Blanco</p>
           <p className="text-3xl font-bold text-gray-600">{blankVotes}</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-4 text-center">
+        <div className="bg-white rounded-xl shadow p-4 text-center">
           <p className="text-sm text-gray-500">Candidatos</p>
-          <p className="text-3xl font-bold text-green-600">{candidates.length}</p>
+          <p className="text-3xl font-bold text-black">{candidates.length}</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="bg-white rounded-xl shadow-md p-6">
         <h3 className="text-lg font-semibold mb-4">Resultados por Candidato</h3>
         {candidates.length === 0 && blankVotes === 0 ? (
           <p className="text-gray-500 text-center py-8">No hay candidatos agregados</p>
@@ -116,13 +116,13 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
                       <span className="text-xs text-gray-400">{candidate.code}</span>
                     </div>
                     <div className="text-right">
-                      <span className="text-xl font-bold text-blue-600">{candVotes}</span>
+                      <span className="text-xl font-bold text-black">{candVotes}</span>
                       <span className="text-sm text-gray-500 ml-2">({pct.toFixed(1)}%)</span>
                     </div>
                   </div>
                   <div className="h-6 bg-gray-100 rounded-full overflow-hidden">
                       <div 
-                        className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
+                        className="h-full bg-gradient-to-r from-black to-gray-800 rounded-full transition-all duration-500"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -691,8 +691,8 @@ const handleSubmitVote = async () => {
   const electionVoted = selectedElection ? session?.has_voted_election === selectedElection.id : false;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-blue-800 text-white p-4 shadow-lg">
+    <div className="min-h-screen bg-white">
+      <header className="bg-black text-white p-4 shadow-sm">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold">TRUE TALLY</h1>
@@ -710,13 +710,13 @@ const handleSubmitVote = async () => {
             <div className="flex gap-2">
               <button
                 onClick={() => { setAuthMode('login'); setStep('auth'); }}
-                className="bg-green-600 px-4 py-2 rounded-lg hover:bg-green-700 text-sm font-medium"
+                className="bg-black px-4 py-2 rounded-xl hover:bg-gray-800 text-sm font-medium"
               >
                 Iniciar Sesión
               </button>
               <button
                 onClick={() => { setAuthMode('register'); setStep('auth'); }}
-                className="bg-white text-blue-800 px-4 py-2 rounded-lg hover:bg-gray-100 text-sm font-medium"
+                className="bg-white text-black px-4 py-2 rounded-xl hover:bg-gray-100 text-sm font-medium"
               >
                 Registrarse
               </button>
@@ -733,7 +733,7 @@ const handleSubmitVote = async () => {
               {isAdmin && (
                 <button
                   onClick={() => setStep('admin')}
-                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+                  className="bg-black text-white px-4 py-2 rounded-xl hover:bg-gray-800"
                 >
                   Panel Admin
                 </button>
@@ -741,8 +741,8 @@ const handleSubmitVote = async () => {
             </div>
 
             {!session && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center mb-4">
-                <p className="text-blue-700">
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center mb-4">
+                <p className="text-black">
                   <button onClick={() => { setAuthMode('login'); setStep('auth'); }} className="underline font-medium">
                     Inicia sesión
                   </button> o 
@@ -758,28 +758,28 @@ const handleSubmitVote = async () => {
             ) : (
               <div className="grid gap-4">
                 {paginatedElections.map((election) => (
-                  <div key={election.id} className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
+                  <div key={election.id} className="bg-white rounded-xl shadow-md p-4 border-l-4 border-black">
                     <div className="flex justify-between items-start">
                       <div>
                         <h3 className="font-bold text-lg">{election.name}</h3>
                         <p className="text-gray-600 text-sm">{election.description}</p>
                         <div className="mt-2 flex gap-2">
                           <span className={`text-xs px-2 py-1 rounded ${
-                            election.status === 'Publicado' ? 'bg-blue-100 text-blue-700' :
+                            election.status === 'Publicado' ? 'bg-gray-100 text-black' :
                             election.status === 'Terminado' ? 'bg-gray-100 text-gray-600' :
-                            'bg-yellow-100 text-yellow-700'
+                            'bg-gray-100 text-black'
                           }`}>
                             {election.status === 'Publicado' ? 'Publicado' : 
                              election.status === 'Terminado' ? 'Terminado' : 'Borrador'}
                           </span>
                           <span className={`text-xs px-2 py-1 rounded ${
-                            election.visibility === 'public' ? 'bg-green-100 text-green-700' :
-                            'bg-orange-100 text-orange-700'
+                            election.visibility === 'public' ? 'bg-gray-100 text-black' :
+                            'bg-gray-100 text-black'
                           }`}>
                             {election.visibility === 'public' ? 'Público' : 'Privado'}
                           </span>
                           {election.is_official && (
-                            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                            <span className="text-xs bg-gray-100 text-black px-2 py-1 rounded">
                               Oficial
                             </span>
                           )}
@@ -789,7 +789,7 @@ const handleSubmitVote = async () => {
                           {election.status === 'Terminado' ? (
                             <button
                               onClick={() => { setSelectedElectionForResults(election); setStep('results'); }}
-                              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                              className="bg-black text-white px-4 py-2 rounded-xl hover:bg-gray-800"
                             >
                               Ver
                             </button>
@@ -797,19 +797,19 @@ const handleSubmitVote = async () => {
                             <div className="flex gap-2">
                               <button
                                 onClick={() => handleSelectElection(election)}
-                                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                                className="bg-black text-white px-4 py-2 rounded-xl hover:bg-gray-800"
                               >
                                 Votar
                               </button>
                               <button
                                 onClick={() => { setSelectedElectionForResults(election); setStep('results'); }}
-                                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                                className="bg-black text-white px-4 py-2 rounded-xl hover:bg-gray-800"
                               >
                                 Ver
                               </button>
                             </div>
                           ) : election.status === 'Borrador' ? (
-                            <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">Borrador</span>
+                            <span className="text-xs bg-gray-100 text-black px-2 py-1 rounded">Borrador</span>
                           ) : (
                             <span className="text-gray-400 text-sm">Espere...</span>
                           )}
@@ -823,7 +823,7 @@ const handleSubmitVote = async () => {
         )}
 
         {step === 'auth' && (
-          <div className="bg-white rounded-lg shadow-md p-6 max-w-md mx-auto">
+          <div className="bg-white rounded-xl shadow-md p-6 max-w-md mx-auto">
             <h2 className="text-xl font-semibold mb-4 text-center">
               {authMode === 'login' ? 'Iniciar Sesión' : 'Registrarse'}
             </h2>
@@ -917,7 +917,7 @@ const handleSubmitVote = async () => {
               )}
 
               {error && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                <div className="bg-gray-100 border border-gray-400 text-black px-4 py-3 rounded">
                   {error}
                 </div>
               )}
@@ -925,7 +925,7 @@ const handleSubmitVote = async () => {
               <button
                 onClick={handleAuth}
                 disabled={loading || !authData.dni || !authData.dni_verifier || (authMode === 'register' && (authData.password !== authData.confirmPassword || !authData.password))}
-                className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                className="w-full bg-black text-white px-6 py-3 rounded-xl hover:bg-gray-800 disabled:bg-gray-400"
               >
                 {loading ? 'Procesando...' : authMode === 'login' ? 'Iniciar Sesión' : 'Registrarse'}
               </button>
@@ -934,14 +934,14 @@ const handleSubmitVote = async () => {
                 {authMode === 'login' ? (
                   <>
                     ¿No tienes cuenta?{' '}
-                    <button onClick={() => setAuthMode('register')} className="underline text-blue-600">
+                    <button onClick={() => setAuthMode('register')} className="underline text-black">
                       Regístrate
                     </button>
                   </>
                 ) : (
                   <>
                     ¿Ya tienes cuenta?{' '}
-                    <button onClick={() => setAuthMode('login')} className="underline text-blue-600">
+                    <button onClick={() => setAuthMode('login')} className="underline text-black">
                       Inicia sesión
                     </button>
                   </>
@@ -967,8 +967,8 @@ const handleSubmitVote = async () => {
             <h2 className="text-xl font-semibold">{selectedElection.name}</h2>
             
             {electionVoted ? (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-                <p className="text-yellow-700 font-medium">Ya has votado en esta elección</p>
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+                <p className="text-black font-medium">Ya has votado en esta elección</p>
               </div>
             ) : (
               <>
@@ -977,10 +977,10 @@ const handleSubmitVote = async () => {
                     <div
                       key={candidate.id}
                       onClick={() => { setSelectedCandidate(candidate.id); setBlankVote(false); }}
-                      className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                      className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
                         selectedCandidate === candidate.id
-                          ? 'border-blue-500 bg-blue-50 shadow-lg'
-                          : 'border-gray-200 hover:border-blue-300'
+                          ? 'border-black bg-gray-50 shadow-sm'
+                          : 'border-gray-200 hover:border-black'
                       }`}
                     >
                       <div className="flex-1">
@@ -991,20 +991,20 @@ const handleSubmitVote = async () => {
                   ))}
                 </div>
 
-                <div className="p-4 border-2 border-gray-300 rounded-lg">
+                <div className="p-4 border-2 border-gray-300 rounded-xl">
                   <label className="flex items-center cursor-pointer">
                     <input
                       type="checkbox"
                       checked={blankVote}
                       onChange={() => { setBlankVote(!blankVote); setSelectedCandidate(null); }}
-                      className="w-5 h-5 text-blue-600"
+                      className="w-5 h-5 text-black"
                     />
                     <span className="ml-2 font-medium">Voto en blanco</span>
                   </label>
                 </div>
 
                 {error && (
-                  <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                  <div className="bg-gray-100 border border-gray-400 text-black px-4 py-3 rounded">
                     {error}
                   </div>
                 )}
@@ -1012,7 +1012,7 @@ const handleSubmitVote = async () => {
                 <button
                   onClick={handleSubmitVote}
                   disabled={loading || (!selectedCandidate && !blankVote)}
-                  className="w-full bg-green-600 text-white px-6 py-4 rounded-lg text-lg font-semibold hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  className="w-full bg-black text-white px-6 py-4 rounded-xl text-lg font-semibold hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
                   {loading ? 'Enviando...' : (!selectedCandidate && !blankVote ? 'Selecciona un candidato o marca voto en blanco' : 'CONFIRMAR VOTO')}
                 </button>
@@ -1033,20 +1033,20 @@ const handleSubmitVote = async () => {
             <div className="flex gap-2 border-b overflow-x-auto">
               <button
                 onClick={() => { setActiveTab('elections'); setCurrentPage(1); setSearchTerm(''); }}
-                className={`px-4 py-2 ${activeTab === 'elections' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+                className={`px-4 py-2 ${activeTab === 'elections' ? 'border-b-2 border-black text-black' : 'text-gray-600'}`}
               >
                 Crear Votación
               </button>
               <button
                 onClick={() => { setActiveTab('my_elections'); setCurrentPage(1); setSearchTerm(''); }}
-                className={`px-4 py-2 ${activeTab === 'my_elections' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+                className={`px-4 py-2 ${activeTab === 'my_elections' ? 'border-b-2 border-black text-black' : 'text-gray-600'}`}
               >
                 Mis Votaciones
               </button>
               {session?.role === 'sudo_admin' && (
                 <button
                   onClick={() => { setActiveTab('users'); setCurrentPage(1); setSearchTerm(''); }}
-                  className={`px-4 py-2 ${activeTab === 'users' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}`}
+                  className={`px-4 py-2 ${activeTab === 'users' ? 'border-b-2 border-black text-black' : 'text-gray-600'}`}
                 >
                   Gestión Usuarios
                 </button>
@@ -1066,7 +1066,7 @@ const handleSubmitVote = async () => {
                 />
                 <button
                   onClick={() => { setCurrentPage(1); if (activeTab === 'my_elections') { loadMyElections(); } }}
-                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                  className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800"
                 >
                   Buscar
                 </button>
@@ -1082,7 +1082,7 @@ const handleSubmitVote = async () => {
 
             {activeTab === 'elections' && (
 
-            <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="bg-white rounded-xl shadow-md p-6">
               
                 <div className="space-y-4">
                 <div>
@@ -1134,7 +1134,7 @@ const handleSubmitVote = async () => {
                 )}
 
                 {error && (
-                  <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                  <div className="bg-gray-100 border border-gray-400 text-black px-4 py-3 rounded">
                     {error}
                   </div>
                 )}
@@ -1142,7 +1142,7 @@ const handleSubmitVote = async () => {
                 <button
                   onClick={handleCreateElection}
                   disabled={loading}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                  className="bg-black text-white px-6 py-2 rounded-xl hover:bg-gray-800 disabled:bg-gray-400"
                 >
                   {loading ? 'Creando...' : 'Crear Votación'}
                 </button>
@@ -1153,12 +1153,12 @@ const handleSubmitVote = async () => {
             {activeTab === 'my_elections' && (
               <div className="space-y-4">
                 {myElections.length === 0 ? (
-                  <div className="bg-white rounded-lg shadow-md p-6 text-center text-gray-500">
+                  <div className="bg-white rounded-xl shadow-md p-6 text-center text-gray-500">
                     No has creado ninguna votación todavía.
                   </div>
                 ) : (
                   myElections.map((election) => (
-                    <div key={election.id} className="bg-white rounded-lg shadow-md p-4 border-l-4 border-purple-500">
+                    <div key={election.id} className="bg-white rounded-xl shadow-md p-4 border-l-4 border-black">
                       {selectedElectionForEdit?.id === election.id ? (
                         <div className="space-y-4">
                           <div>
@@ -1218,7 +1218,7 @@ const handleSubmitVote = async () => {
                             <button
                               onClick={() => handleUpdateElection(election.id)}
                               disabled={loading}
-                              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                              className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800"
                             >
                               Guardar
                             </button>
@@ -1237,13 +1237,13 @@ const handleSubmitVote = async () => {
                             <h3 className="font-bold text-lg">{election.name}</h3>
                             <p className="text-gray-600 text-sm">{election.description}</p>
                             <div className="mt-2 flex gap-2 flex-wrap">
-                              <span className={`text-xs px-2 py-1 rounded ${election.visibility === 'public' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                              <span className={`text-xs px-2 py-1 rounded ${election.visibility === 'public' ? 'bg-gray-100 text-black' : 'bg-gray-100 text-black'}`}>
                                 {election.visibility === 'public' ? 'Público' : 'Privado'}
                               </span>
                               <span className={`text-xs px-2 py-1 rounded ${
-                                election.status === 'Publicado' ? 'bg-blue-100 text-blue-700' :
+                                election.status === 'Publicado' ? 'bg-gray-100 text-black' :
                                 election.status === 'Terminado' ? 'bg-gray-100 text-gray-600' :
-                                'bg-yellow-100 text-yellow-700'
+                                'bg-gray-100 text-black'
                               }`}>
                                 {election.status === 'Publicado' ? 'Publicado' : 
                                  election.status === 'Terminado' ? 'Terminado' : 'Borrador'}
@@ -1265,7 +1265,7 @@ const handleSubmitVote = async () => {
                                   setShowCandidateForm(true);
                                   loadElectionCandidates(election.id);
                                 }}
-                                className="text-blue-600 hover:underline text-sm"
+                                className="text-black hover:underline text-sm"
                               >
                                 Modificar
                               </button>
@@ -1274,7 +1274,7 @@ const handleSubmitVote = async () => {
                               <button
                                 onClick={() => handleDeleteElection(election.id)}
                                 disabled={loading}
-                                className="text-red-600 hover:underline text-sm"
+                                className="text-black hover:underline text-sm"
                               >
                                 Eliminar
                               </button>
@@ -1289,12 +1289,12 @@ const handleSubmitVote = async () => {
             )}
 
             {activeTab === 'users' && (
-              <div className="bg-white rounded-lg shadow-md p-6">
+              <div className="bg-white rounded-xl shadow-md p-6">
                 <h3 className="font-semibold mb-4">Gestionar Usuarios</h3>
                 
                 <div className="mb-6">
                   <h4 className="text-sm font-medium mb-2">Lista de Usuarios ({users.length})</h4>
-                  <div className="border rounded-lg overflow-hidden">
+                  <div className="border rounded-xl overflow-hidden">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50">
                         <tr>
@@ -1310,8 +1310,8 @@ const handleSubmitVote = async () => {
                             <td className="px-4 py-2">{user.dni_verifier}</td>
                             <td className="px-4 py-2">
                               <span className={`px-2 py-1 rounded text-xs ${
-                                user.role === 'sudo_admin' ? 'bg-red-100 text-red-700' :
-                                user.role === 'admin' ? 'bg-purple-100 text-purple-700' :
+                                user.role === 'sudo_admin' ? 'bg-gray-100 text-black' :
+                                user.role === 'admin' ? 'bg-gray-100 text-black' :
                                 'bg-gray-100 text-gray-700'
                               }`}>
                                 {user.role}
@@ -1385,7 +1385,7 @@ const handleSubmitVote = async () => {
                     <button
                       onClick={handleUpdateRole}
                       disabled={loading || !roleData.target_dni || !roleData.target_dni_verifier}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                      className="bg-black text-white px-4 py-2 rounded-xl hover:bg-gray-800 disabled:bg-gray-400"
                     >
                       {loading ? 'Actualizando...' : 'Actualizar Rol'}
                     </button>
@@ -1397,12 +1397,12 @@ const handleSubmitVote = async () => {
         )}
 
         {step === 'confirm' && (
-          <div className="bg-white rounded-lg shadow-md p-6 text-center">
-            <h2 className="text-2xl font-bold text-green-600 mb-4">✓ Voto Confirmado</h2>
+          <div className="bg-white rounded-xl shadow-md p-6 text-center">
+            <h2 className="text-2xl font-bold text-black mb-4">✓ Voto Confirmado</h2>
             <p className="text-gray-600 mb-6">Tu voto ha sido registrado en la blockchain.</p>
             <button
               onClick={() => { setStep('home'); setBlankVote(false); setSelectedCandidate(null); }}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+              className="bg-black text-white px-6 py-2 rounded-xl hover:bg-gray-800"
             >
               Ver Votaciones
             </button>
@@ -1418,7 +1418,7 @@ const handleSubmitVote = async () => {
 
         {showCandidateForm && selectedElectionForCandidates && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-xl font-semibold">Modificar - {selectedElectionForCandidates.name}</h2>
@@ -1430,7 +1430,7 @@ const handleSubmitVote = async () => {
                   </button>
                 </div>
 
-                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <div className="mb-6 p-4 bg-gray-50 rounded-xl">
                   <h3 className="font-medium mb-3">Configuración de la Votación</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -1493,7 +1493,7 @@ const handleSubmitVote = async () => {
                     <button
                       onClick={() => handleUpdateElection(selectedElectionForCandidates!.id)}
                       disabled={loading}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                      className="bg-black text-white px-4 py-2 rounded-xl hover:bg-gray-800 disabled:bg-gray-400"
                     >
                       {loading ? 'Guardando...' : 'Guardar Cambios'}
                     </button>
@@ -1513,14 +1513,14 @@ const handleSubmitVote = async () => {
                     />
                   </div>
                   {candidateError && (
-                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-4">
+                    <div className="bg-gray-100 border border-gray-400 text-black px-4 py-2 rounded mb-4">
                       {candidateError}
                     </div>
                   )}
                   <button
                     onClick={() => handleAddCandidate(selectedElectionForCandidates.id)}
                     disabled={candidateLoading || !candidateFormData.name.trim() || selectedElectionForCandidates.status === 'Publicado' || selectedElectionForCandidates.status === 'Terminado'}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                    className="bg-black text-white px-4 py-2 rounded-xl hover:bg-gray-800 disabled:bg-gray-400"
                   >
                     {candidateLoading ? 'Agregando...' : 'Agregar Candidato'}
                   </button>
@@ -1533,7 +1533,7 @@ const handleSubmitVote = async () => {
                   ) : (
                     <div className="space-y-2">
                       {electionCandidates.map((candidate) => (
-                        <div key={candidate.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div key={candidate.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                           {editingCandidate?.id === candidate.id ? (
                             <div className="flex-1 flex gap-2">
                               <input
@@ -1545,7 +1545,7 @@ const handleSubmitVote = async () => {
                               <button
                                 onClick={() => handleUpdateCandidate(candidate.id)}
                                 disabled={candidateLoading}
-                                className="bg-blue-600 text-white px-3 py-1 rounded"
+                                className="bg-black text-white px-3 py-1 rounded"
                               >
                                 Guardar
                               </button>
@@ -1566,7 +1566,7 @@ const handleSubmitVote = async () => {
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => setEditingCandidate({ id: candidate.id, name: candidate.name })}
-                                    className="text-blue-600 hover:text-blue-800 p-2"
+                                    className="text-black hover:text-black p-2"
                                     title="Modificar candidato"
                                   >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1576,7 +1576,7 @@ const handleSubmitVote = async () => {
                                   <button
                                     onClick={() => handleDeleteCandidate(candidate.id, selectedElectionForCandidates!.id)}
                                     disabled={candidateLoading}
-                                    className="text-red-600 hover:text-red-800 p-2"
+                                    className="text-black hover:text-black p-2"
                                     title="Eliminar candidato"
                                   >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1599,7 +1599,7 @@ const handleSubmitVote = async () => {
 
         {showPasswordModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
               <h2 className="text-xl font-semibold mb-4">Elección Privada</h2>
               <p className="text-gray-600 mb-4">Ingresa la contraseña para acceder a esta votación:</p>
               <input
@@ -1612,7 +1612,7 @@ const handleSubmitVote = async () => {
                 autoFocus
               />
               {error && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-4">
+                <div className="bg-gray-100 border border-gray-400 text-black px-4 py-2 rounded mb-4">
                   {error}
                 </div>
               )}
@@ -1620,13 +1620,13 @@ const handleSubmitVote = async () => {
                 <button
                   onClick={handleVerifyPassword}
                   disabled={!electionPassword}
-                  className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400"
+                  className="flex-1 bg-black text-white px-4 py-2 rounded-xl hover:bg-gray-800 disabled:bg-gray-400"
                 >
                   Acceder
                 </button>
                 <button
                   onClick={() => { setShowPasswordModal(false); setPendingElection(null); setElectionPassword(''); setError(null); }}
-                  className="flex-1 bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600"
+                  className="flex-1 bg-gray-500 text-white px-4 py-2 rounded-xl hover:bg-gray-600"
                 >
                   Cancelar
                 </button>
