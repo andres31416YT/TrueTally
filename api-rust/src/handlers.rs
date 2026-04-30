@@ -412,39 +412,6 @@ pub async fn authenticate(
         return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Email is required".to_string()))));
     }
 
-    let sudo_email = std::env::var("SUDOADMIN_EMAIL").unwrap_or_else(|_| "sudoadmin@sudoadmin.com".to_string());
-    let sudo_pass = std::env::var("SUDOADMIN_PASSWORD").unwrap_or_else(|_| "00000000".to_string());
-    let env_admin_email = std::env::var("ADMIN_EMAIL").unwrap_or_else(|_| "admin@admin.com".to_string());
-    let env_admin_pass = std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "11111111".to_string());
-
-    // 1. Verificación de Sudo Admin desde ENV
-    if payload.email == sudo_email {
-        if payload.password.as_ref().map(|p| p == &sudo_pass).unwrap_or(false) {
-            return Ok((StatusCode::OK, Json(ApiResponse::ok(AuthResponse {
-                role: "sudo_admin".to_string(),
-                public_key: None,
-                has_password: true,
-                has_voted_election: None,
-            }))));
-        } else {
-            return Err((StatusCode::UNAUTHORIZED, Json(ApiResponse::err("Contraseña incorrecta para Sudo Admin".to_string()))));
-        }
-    }
-
-    // 2. Verificación de Admin desde ENV
-    if payload.email == env_admin_email {
-        if payload.password.as_ref().map(|p| p == &env_admin_pass).unwrap_or(false) {
-            return Ok((StatusCode::OK, Json(ApiResponse::ok(AuthResponse {
-                role: "admin".to_string(),
-                public_key: None,
-                has_password: true,
-                has_voted_election: None,
-            }))));
-        } else {
-            return Err((StatusCode::UNAUTHORIZED, Json(ApiResponse::err("Contraseña incorrecta para Administrador".to_string()))));
-        }
-    }
-
     match db::authenticate_user(&state.db_pool, &payload.email, payload.password.as_deref()).await {
         Ok(Some((role, public_key, has_password))) => {
             let has_voted = db::check_user_voted(&state.db_pool, &payload.email).await.ok().flatten();
@@ -456,6 +423,7 @@ pub async fn authenticate(
             }))))
         }
         Ok(None) => {
+            // Si no se encuentra en la base de datos, intentamos registrar como usuario estándar
             if payload.password.is_some() && payload.password.as_ref().map(|p| p.len()).unwrap_or(0) >= 6 {
                 let keys = generate_key_pair();
                 match db::create_user(&state.db_pool, &payload.email, Some(&keys.0), Some(&payload.password.unwrap()), "user").await {
@@ -468,7 +436,7 @@ pub async fn authenticate(
                     Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
                 }
             } else {
-                Err((StatusCode::NOT_FOUND, Json(ApiResponse::err("Usuario no encontrado. Regístrate creando una contraseña.".to_string()))))
+                Err((StatusCode::UNAUTHORIZED, Json(ApiResponse::err("Credenciales incorrectas o usuario no encontrado.".to_string()))))
             }
         }
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),

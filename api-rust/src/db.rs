@@ -79,49 +79,58 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
     .execute(&pool)
     .await?;
 
+    seed_admins(&pool).await?;
+
+    Ok(pool)
+}
+
+async fn seed_admins(pool: &PgPool) -> Result<(), sqlx::Error> {
     let sudo_email = std::env::var("SUDOADMIN_EMAIL").unwrap_or_else(|_| "sudoadmin@sudoadmin.com".to_string());
     let sudo_pass = std::env::var("SUDOADMIN_PASSWORD").unwrap_or_else(|_| "00000000".to_string());
     let admin_email = std::env::var("ADMIN_EMAIL").unwrap_or_else(|_| "admin@admin.com".to_string());
     let admin_pass = std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "11111111".to_string());
 
-    sqlx::query(
-        r#"
-        INSERT INTO users (email, password_hash, role) 
-        VALUES ($1, $2, 'sudo_admin')
-        ON CONFLICT (email) DO UPDATE SET password_hash = $2, role = 'sudo_admin'
-        "#,
-    )
-    .bind(&sudo_email)
-    .bind(&sudo_pass)
-    .execute(&pool)
-    .await?;
+    // Solo insertar si no existe ningún sudo_admin
+    let sudo_exists = sqlx::query("SELECT 1 FROM users WHERE role = 'sudo_admin'")
+        .fetch_optional(pool)
+        .await?;
 
-    sqlx::query(
-        r#"
-        INSERT INTO users (email, password_hash, role) 
-        VALUES ($1, $2, 'admin')
-        ON CONFLICT (email) DO UPDATE SET password_hash = $2, role = 'admin'
-        "#,
-    )
-    .bind(&admin_email)
-    .bind(&admin_pass)
-    .execute(&pool)
-    .await?;
-
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS audit_log (
-            id SERIAL PRIMARY KEY,
-            action VARCHAR(255) NOT NULL,
-            details TEXT,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    if sudo_exists.is_none() {
+        sqlx::query(
+            r#"
+            INSERT INTO users (email, password_hash, role) 
+            VALUES ($1, $2, 'sudo_admin')
+            ON CONFLICT (email) DO NOTHING
+            "#,
         )
-        "#,
-    )
-    .execute(&pool)
-    .await?;
+        .bind(&sudo_email)
+        .bind(&sudo_pass)
+        .execute(pool)
+        .await?;
+        println!("Sudo Admin seeded: {}", sudo_email);
+    }
 
-    Ok(pool)
+    // Solo insertar si no existe ningún admin
+    let admin_exists = sqlx::query("SELECT 1 FROM users WHERE role = 'admin'")
+        .fetch_optional(pool)
+        .await?;
+
+    if admin_exists.is_none() {
+        sqlx::query(
+            r#"
+            INSERT INTO users (email, password_hash, role) 
+            VALUES ($1, $2, 'admin')
+            ON CONFLICT (email) DO NOTHING
+            "#,
+        )
+        .bind(&admin_email)
+        .bind(&admin_pass)
+        .execute(pool)
+        .await?;
+        println!("Admin seeded: {}", admin_email);
+    }
+
+    Ok(())
 }
 
 pub async fn create_election(
