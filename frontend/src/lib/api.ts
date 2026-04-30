@@ -9,12 +9,11 @@ interface ApiResponse<T> {
 function getAuthHeaders(): Record<string, string> {
   const sessionData = typeof window !== 'undefined' ? localStorage.getItem('user_session') : null;
   if (!sessionData) return {};
-  
+
   try {
     const session = JSON.parse(sessionData);
     return {
-      'X-User-DNI': session.dni || '',
-      'X-User-Verifier': session.dni_verifier || '',
+      'X-User-Email': session.email || '',
       'X-User-Role': session.role || '',
     };
   } catch {
@@ -35,7 +34,7 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<Api
     });
 
     const responseText = await response.text();
-    
+
     if (!response.ok) {
       let errorMessage = 'Request failed';
       try {
@@ -98,8 +97,7 @@ export interface Party {
 }
 
 export interface User {
-  dni: string;
-  dni_verifier: string;
+  email: string;
   public_key?: string;
   role: string;
   has_password: boolean;
@@ -107,8 +105,7 @@ export interface User {
 }
 
 export interface AuthRequest {
-  dni: string;
-  dni_verifier: string;
+  email: string;
   password?: string;
 }
 
@@ -120,12 +117,9 @@ export interface AuthResponse {
 }
 
 export interface NewVoter {
-  dni: string;
-  dni_verifier: string;
-  public_key?: string;
-  email?: string;
-  election_id?: string;
-  password: string;
+  email: string;
+  public_key: string;
+  election_id: string;
 }
 
 export interface VoteRequest {
@@ -152,8 +146,7 @@ export interface NewCandidate {
 export interface DeleteCandidateRequest {
   election_id: string;
   candidate_id: number;
-  admin_dni: string;
-  admin_dni_verifier: string;
+  admin_email: string;
 }
 
 export interface VoteResponse {
@@ -241,34 +234,34 @@ export const api = {
   getBlocks: () =>
     fetchApi<Block[]>('/blocks', { method: 'GET' }),
 
-  updateRole: (data: { target_dni: string; target_dni_verifier: string; new_role: string; admin_dni: string; admin_dni_verifier: string }) =>
+  updateRole: (data: { target_email: string; new_role: string; admin_email: string }) =>
     fetchApi<string>('/update-role', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
-  listUsers: (admin_dni: string, admin_dni_verifier: string) =>
-    fetchApi<{ dni: string; dni_verifier: string; role: string }[]>('/users', {
+  listUsers: (admin_email: string, _dummy?: string) =>
+    fetchApi<{ email: string; role: string }[]>('/users', {
       method: 'POST',
-      body: JSON.stringify({ admin_dni, admin_dni_verifier }),
+      body: JSON.stringify({ admin_email }),
     }),
 
-  updateElection: (data: { election_id: string; name?: string; description?: string; visibility?: 'public' | 'private'; status?: string; password?: string; user_dni: string }) =>
+  updateElection: (data: { election_id: string; name?: string; description?: string; visibility?: 'public' | 'private'; status?: string; password?: string; user_email: string }) =>
     fetchApi<string>('/update-election', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
-  deleteElection: (election_id: string, user_dni: string) =>
+  deleteElection: (election_id: string, user_email: string) =>
     fetchApi<string>('/delete-election', {
       method: 'POST',
-      body: JSON.stringify({ election_id, user_dni }),
+      body: JSON.stringify({ election_id, user_email }),
     }),
 
-  listMyElections: (user_dni: string, search?: string) =>
+  listMyElections: (user_email: string, search?: string) =>
     fetchApi<Election[]>('/my-elections', {
       method: 'POST',
-      body: JSON.stringify({ user_dni, search }),
+      body: JSON.stringify({ user_email, search }),
     }),
 
   health: () => fetchApi<{ status: string }>('/health', { method: 'GET' }),

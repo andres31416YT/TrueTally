@@ -49,74 +49,16 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
         CREATE TABLE IF NOT EXISTS voters (
             id BIGSERIAL PRIMARY KEY,
             election_id VARCHAR(50) NOT NULL REFERENCES elections(id),
-            dni VARCHAR(20) NOT NULL,
-            dni_verifier VARCHAR(1) NOT NULL,
+            email VARCHAR(255) NOT NULL,
             public_key VARCHAR(255) NOT NULL,
-            email VARCHAR(255),
             password_hash VARCHAR(255),
             role VARCHAR(20) DEFAULT 'user',
             registered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             has_voted BOOLEAN DEFAULT FALSE,
             has_created_password BOOLEAN DEFAULT FALSE,
-            UNIQUE(election_id, dni),
+            UNIQUE(election_id, email),
             UNIQUE(election_id, public_key)
         )
-        "#,
-    )
-    .execute(&pool)
-    .await?;
-
-    sqlx::query("ALTER TABLE voters ALTER COLUMN dni DROP NOT NULL")
-        .execute(&pool)
-        .await?;
-
-    sqlx::query("ALTER TABLE voters ALTER COLUMN election_id DROP NOT NULL")
-        .execute(&pool)
-        .await?;
-
-    sqlx::query(
-        r#"
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name = 'voters' AND column_name = 'dni'
-            ) THEN
-                ALTER TABLE voters ADD COLUMN dni VARCHAR(20);
-            END IF;
-        END $$;
-        "#,
-    )
-    .execute(&pool)
-    .await?;
-
-    sqlx::query(
-        r#"
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name = 'voters' AND column_name = 'election_id'
-            ) THEN
-                ALTER TABLE voters ADD COLUMN election_id VARCHAR(50);
-            END IF;
-        END $$;
-        "#,
-    )
-    .execute(&pool)
-    .await?;
-
-    sqlx::query(
-        r#"
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.table_constraints 
-                WHERE constraint_name = 'voters_election_id_dni_key'
-            ) THEN
-                ALTER TABLE voters ADD UNIQUE(election_id, dni);
-            END IF;
-        END $$;
         "#,
     )
     .execute(&pool)
@@ -126,8 +68,7 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
         r#"
         CREATE TABLE IF NOT EXISTS users (
             id BIGSERIAL PRIMARY KEY,
-            dni VARCHAR(20) UNIQUE NOT NULL,
-            dni_verifier VARCHAR(1) NOT NULL,
+            email VARCHAR(255) UNIQUE NOT NULL,
             public_key VARCHAR(255),
             password_hash VARCHAR(255),
             role VARCHAR(20) DEFAULT 'user',
@@ -143,9 +84,9 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
         DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM users WHERE dni = '00000000'
+                SELECT 1 FROM users WHERE email = 'admin@truetally.com'
             ) THEN
-                INSERT INTO users (dni, dni_verifier, password_hash, role) VALUES ('00000000', '0', '00000000', 'sudo_admin');
+                INSERT INTO users (email, password_hash, role) VALUES ('admin@truetally.com', 'admin123', 'sudo_admin');
             END IF;
         END $$;
         "#,
@@ -245,23 +186,19 @@ pub async fn list_elections(pool: &PgPool) -> Result<Vec<(String, String, Option
 pub async fn register_voter(
     pool: &PgPool,
     election_id: &str,
-    dni: &str,
-    dni_verifier: &str,
+    email: &str,
     public_key: &str,
-    email: Option<&str>,
 ) -> Result<i64, sqlx::Error> {
     let row = sqlx::query(
         r#"
-        INSERT INTO voters (election_id, dni, dni_verifier, public_key, email)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO voters (election_id, email, public_key)
+        VALUES ($1, $2, $3)
         RETURNING id
         "#,
     )
     .bind(election_id)
-    .bind(dni)
-    .bind(dni_verifier)
-    .bind(public_key)
     .bind(email)
+    .bind(public_key)
     .fetch_one(pool)
     .await?;
 
@@ -272,10 +209,10 @@ pub async fn get_voter_by_public_key(
     pool: &PgPool,
     election_id: &str,
     public_key: &str,
-) -> Result<Option<(String, String, bool)>, sqlx::Error> {
+) -> Result<Option<(String, bool)>, sqlx::Error> {
     let row = sqlx::query(
         r#"
-        SELECT name, email, has_voted FROM voters WHERE election_id = $1 AND public_key = $2
+        SELECT email, has_voted FROM voters WHERE election_id = $1 AND public_key = $2
         "#,
     )
     .bind(election_id)
@@ -283,25 +220,25 @@ pub async fn get_voter_by_public_key(
     .fetch_optional(pool)
     .await?;
 
-    Ok(row.map(|r| (r.get("name"), r.get("email"), r.get("has_voted"))))
+    Ok(row.map(|r| (r.get("email"), r.get("has_voted"))))
 }
 
-pub async fn check_voter_by_dni(
+pub async fn check_voter_by_email(
     pool: &PgPool,
     election_id: &str,
-    dni: &str,
+    email: &str,
 ) -> Result<Option<(String, bool)>, sqlx::Error> {
     let row = sqlx::query(
         r#"
-        SELECT name, has_voted FROM voters WHERE election_id = $1 AND dni = $2
+        SELECT email, has_voted FROM voters WHERE election_id = $1 AND email = $2
         "#,
     )
     .bind(election_id)
-    .bind(dni)
+    .bind(email)
     .fetch_optional(pool)
     .await?;
 
-    Ok(row.map(|r| (r.get("name"), r.get("has_voted"))))
+    Ok(row.map(|r| (r.get("email"), r.get("has_voted"))))
 }
 
 pub async fn candidate_exists(
@@ -418,17 +355,15 @@ pub async fn log_audit(pool: &PgPool, action: &str, details: &str) -> Result<(),
 
 pub async fn authenticate_user(
     pool: &PgPool,
-    dni: &str,
-    dni_verifier: &str,
+    email: &str,
     password: Option<&str>,
 ) -> Result<Option<(String, Option<String>, bool)>, sqlx::Error> {
     let row = sqlx::query(
         r#"
-        SELECT role, public_key, password_hash FROM users WHERE dni = $1 AND dni_verifier = $2
+        SELECT role, public_key, password_hash FROM users WHERE email = $1
         "#,
     )
-    .bind(dni)
-    .bind(dni_verifier)
+    .bind(email)
     .fetch_optional(pool)
     .await?;
 
@@ -452,13 +387,13 @@ pub async fn authenticate_user(
     }
 }
 
-pub async fn check_user_voted(pool: &PgPool, dni: &str) -> Result<Option<String>, sqlx::Error> {
+pub async fn check_user_voted(pool: &PgPool, email: &str) -> Result<Option<String>, sqlx::Error> {
     let row = sqlx::query(
         r#"
-        SELECT election_id FROM voters WHERE dni = $1 AND has_voted = TRUE ORDER BY registered_at DESC LIMIT 1
+        SELECT election_id FROM voters WHERE email = $1 AND has_voted = TRUE ORDER BY registered_at DESC LIMIT 1
         "#,
     )
-    .bind(dni)
+    .bind(email)
     .fetch_optional(pool)
     .await?;
 
@@ -467,20 +402,18 @@ pub async fn check_user_voted(pool: &PgPool, dni: &str) -> Result<Option<String>
 
 pub async fn create_user(
     pool: &PgPool,
-    dni: &str,
-    dni_verifier: &str,
+    email: &str,
     public_key: Option<&str>,
     password: Option<&str>,
     role: &str,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
-        INSERT INTO users (dni, dni_verifier, public_key, password_hash, role)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO users (email, public_key, password_hash, role)
+        VALUES ($1, $2, $3, $4)
         "#,
     )
-    .bind(dni)
-    .bind(dni_verifier)
+    .bind(email)
     .bind(public_key)
     .bind(password)
     .bind(role)
@@ -492,18 +425,16 @@ pub async fn create_user(
 
 pub async fn update_user_role(
     pool: &PgPool,
-    dni: &str,
-    dni_verifier: &str,
+    email: &str,
     new_role: &str,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
-        UPDATE users SET role = $1 WHERE dni = $2 AND dni_verifier = $3
+        UPDATE users SET role = $1 WHERE email = $2
         "#,
     )
     .bind(new_role)
-    .bind(dni)
-    .bind(dni_verifier)
+    .bind(email)
     .execute(pool)
     .await?;
 
@@ -512,18 +443,17 @@ pub async fn update_user_role(
 
 pub async fn list_users(
     pool: &PgPool,
-) -> Result<Vec<(String, String, String)>, sqlx::Error> {
+) -> Result<Vec<(String, String)>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
-        SELECT dni, dni_verifier, role FROM users ORDER BY created_at DESC
+        SELECT email, role FROM users ORDER BY created_at DESC
         "#,
     )
     .fetch_all(pool)
     .await?;
 
     Ok(rows.into_iter().map(|r| (
-        r.get::<String, _>("dni"),
-        r.get::<String, _>("dni_verifier"),
+        r.get::<String, _>("email"),
         r.get::<String, _>("role"),
     )).collect())
 }
@@ -567,23 +497,23 @@ pub async fn update_election(
     let mut updates = Vec::new();
     let mut param_count = 1;
 
-    if let Some(n) = name {
+    if let Some(_n) = name {
         updates.push(format!("name = ${}", param_count));
         param_count += 1;
     }
-    if let Some(d) = description {
+    if let Some(_d) = description {
         updates.push(format!("description = ${}", param_count));
         param_count += 1;
     }
-    if let Some(v) = visibility {
+    if let Some(_v) = visibility {
         updates.push(format!("visibility = ${}", param_count));
         param_count += 1;
     }
-    if let Some(s) = status {
+    if let Some(_s) = status {
         updates.push(format!("status = ${}", param_count));
         param_count += 1;
     }
-    if let Some(pw) = password {
+    if let Some(_pw) = password {
         updates.push(format!("password = ${}", param_count));
         param_count += 1;
     }

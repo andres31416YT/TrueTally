@@ -13,8 +13,8 @@ interface KeyPair {
 type Step = 'home' | 'auth' | 'vote' | 'admin' | 'cast' | 'confirm' | 'results';
 
 interface UserSession {
-  dni: string;
-  dni_verifier: string;
+  email: string;
+
   role: string;
   public_key: string | undefined;
   has_password: boolean;
@@ -121,11 +121,11 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
                     </div>
                   </div>
                   <div className="h-6 bg-gray-100 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
+                    <div
+                      className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -140,7 +140,7 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
                 </div>
               </div>
               <div className="h-6 bg-gray-100 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-gradient-to-r from-gray-400 to-gray-500 rounded-full transition-all duration-500"
                   style={{ width: `${totalVotes + blankVotes > 0 ? (blankVotes / (totalVotes + blankVotes)) * 100 : 0}%` }}
                 />
@@ -157,20 +157,20 @@ export default function VotingPage() {
   const [step, setStep] = useState<Step>('home');
   const [session, setSession] = useState<UserSession | null>(null);
   const [keyPair, setKeyPair] = useState<KeyPair | null>(null);
-  
+
   const [elections, setElections] = useState<Election[]>([]);
   const [selectedElection, setSelectedElection] = useState<Election | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<number | null>(null);
   const [blankVote, setBlankVote] = useState(false);
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authData, setAuthData] = useState({
-    dni: '',
-    dni_verifier: '',
+    email: '',
+
     password: '',
     confirmPassword: '',
   });
@@ -194,7 +194,7 @@ export default function VotingPage() {
   const [electionResults, setElectionResults] = useState<Record<string, number>>({});
   const [loadingResults, setLoadingResults] = useState(false);
 
-  const [users, setUsers] = useState<{dni: string, dni_verifier: string, role: string}[]>([]);
+  const [users, setUsers] = useState<{ email: string, role: string }[]>([]);
   const [activeTab, setActiveTab] = useState<'elections' | 'my_elections' | 'users' | 'results'>('elections');
   const [myElections, setMyElections] = useState<Election[]>([]);
   const [editElectionData, setEditElectionData] = useState<{
@@ -206,8 +206,7 @@ export default function VotingPage() {
   } | null>(null);
 
   const [roleData, setRoleData] = useState({
-    target_dni: '',
-    target_dni_verifier: '',
+    target_email: '',
     new_role: 'user',
   });
 
@@ -217,7 +216,7 @@ export default function VotingPage() {
   });
   const [candidateError, setCandidateError] = useState<string | null>(null);
   const [candidateLoading, setCandidateLoading] = useState(false);
-  const [editingCandidate, setEditingCandidate] = useState<{id: number, name: string} | null>(null);
+  const [editingCandidate, setEditingCandidate] = useState<{ id: number, name: string } | null>(null);
   const [editPasswordVisible, setEditPasswordVisible] = useState(false);
   const [electionCandidates, setElectionCandidates] = useState<Candidate[]>([]);
 
@@ -264,11 +263,11 @@ export default function VotingPage() {
     }
   };
 
-  const filteredElections = elections.filter(e => 
+  const filteredElections = elections.filter(e =>
     (e.status === 'Publicado' || e.status === 'Terminado') &&
-    (searchTerm === '' || 
-    e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (e.description && e.description.toLowerCase().includes(searchTerm.toLowerCase())))
+    (searchTerm === '' ||
+      e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (e.description && e.description.toLowerCase().includes(searchTerm.toLowerCase())))
   );
 
   const paginatedElections = filteredElections.slice(
@@ -276,9 +275,9 @@ export default function VotingPage() {
     currentPage * ITEMS_PER_PAGE
   );
 
-  const filteredUsers = users.filter(u => 
-    searchTerm === '' || 
-    u.dni.includes(searchTerm) ||
+  const filteredUsers = users.filter(u =>
+    searchTerm === '' ||
+    u.email.includes(searchTerm) ||
     u.role.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -296,7 +295,7 @@ export default function VotingPage() {
 
   const loadUsers = async () => {
     if (!session) return;
-    const res = await api.listUsers(session.dni, session.dni_verifier);
+    const res = await api.listUsers(session.email, '');
     if (res.success && res.data) {
       setUsers(res.data);
     }
@@ -304,7 +303,7 @@ export default function VotingPage() {
 
   const loadMyElections = async () => {
     if (!session) return;
-    const res = await api.listMyElections(session.dni, searchTerm || undefined);
+    const res = await api.listMyElections(session.email, searchTerm || undefined);
     if (res.success && res.data) {
       setMyElections(res.data);
     }
@@ -358,17 +357,16 @@ export default function VotingPage() {
       setCandidateError('Solo sudo_admin puede eliminar candidatos');
       return;
     }
-    
+
     if (!confirm('¿Estás seguro de eliminar este candidato?')) return;
-    
+
     setCandidateLoading(true);
     setCandidateError(null);
 
     const res = await api.deleteCandidate({
       election_id: electionId,
       candidate_id: candidateId,
-      admin_dni: session.dni,
-      admin_dni_verifier: session.dni_verifier,
+      admin_email: session.email,
     });
 
     if (res.success) {
@@ -404,7 +402,7 @@ export default function VotingPage() {
 
     const originalElection = myElections.find(e => e.id === electionId);
     const originalStatus = originalElection?.status || 'Borrador';
-    
+
     if (editElectionData.status !== originalStatus) {
       const confirmMessage = `¿Seguro que quieres cambiar a "${editElectionData.status}"? Esta acción no tiene marcha atrás.`;
       if (!confirm(confirmMessage)) {
@@ -422,7 +420,7 @@ export default function VotingPage() {
       visibility: editElectionData.visibility,
       status: editElectionData.status,
       password: editElectionData.password || undefined,
-      user_dni: session.dni,
+      user_email: session.email,
     });
 
     if (res.success) {
@@ -439,11 +437,11 @@ export default function VotingPage() {
   const handleDeleteElection = async (electionId: string) => {
     if (!session) return;
     if (!confirm('¿Estás seguro de eliminar esta elección?')) return;
-    
+
     setLoading(true);
     setError(null);
 
-    const res = await api.deleteElection(electionId, session.dni);
+    const res = await api.deleteElection(electionId, session.email);
     if (res.success) {
       await loadElections();
       await loadMyElections();
@@ -454,12 +452,8 @@ export default function VotingPage() {
   };
 
   const handleUpdateRole = async () => {
-    if (!roleData.target_dni || roleData.target_dni.length !== 8) {
-      setError('El DNI debe tener exactamente 8 dígitos');
-      return;
-    }
-    if (!roleData.target_dni_verifier) {
-      setError('El dígito verificador es requerido');
+    if (!roleData.target_email) {
+      setError('El email es requerido');
       return;
     }
 
@@ -467,16 +461,14 @@ export default function VotingPage() {
     setError(null);
 
     const res = await api.updateRole({
-      target_dni: roleData.target_dni,
-      target_dni_verifier: roleData.target_dni_verifier,
+      target_email: roleData.target_email,
       new_role: roleData.new_role,
-      admin_dni: session!.dni,
-      admin_dni_verifier: session!.dni_verifier,
+      admin_email: session!.email,
     });
 
     if (res.success) {
       await loadUsers();
-      setRoleData({ target_dni: '', target_dni_verifier: '', new_role: 'user' });
+      setRoleData({ target_email: '', new_role: 'user' });
     } else {
       setError(res.error || 'Error al actualizar rol');
     }
@@ -491,12 +483,8 @@ export default function VotingPage() {
   }, [step]);
 
   const handleAuth = async () => {
-    if (!authData.dni || authData.dni.length !== 8) {
-      setError('El DNI debe tener exactamente 8 dígitos');
-      return;
-    }
-    if (!authData.dni_verifier) {
-      setError('El dígito verificador es requerido');
+    if (!authData.email) {
+      setError('El email es requerido');
       return;
     }
     if (authMode === 'register') {
@@ -515,54 +503,52 @@ export default function VotingPage() {
 
     try {
       const res = await api.authenticate({
-        dni: authData.dni,
-        dni_verifier: authData.dni_verifier,
+        email: authData.email,
         password: authData.password || undefined,
       });
 
       if (authMode === 'register') {
-          if (res.success && res.data && 'role' in res.data) {
-            setAuthMode('login');
-            setAuthData({ ...authData, password: '', confirmPassword: '' });
-            setShowPassword(false);
-            setShowConfirmPassword(false);
-            setError(null);
-            alert('Usuario registrado correctamente. Ahora puedes iniciar sesión.');
-          } else {
-            setError(res.error || 'Error en registro');
-          }
+        if (res.success && res.data && 'role' in res.data) {
+          setAuthMode('login');
+          setAuthData({ ...authData, password: '', confirmPassword: '' });
+          setShowPassword(false);
+          setShowConfirmPassword(false);
+          setError(null);
+          alert('Usuario registrado correctamente. Ahora puedes iniciar sesión.');
         } else {
-          if (res.success && res.data && typeof res.data === 'object' && 'role' in res.data) {
-            const authDataResponse = res.data as AuthResponse;
-            const newSession: UserSession = {
-              dni: authData.dni,
-              dni_verifier: authData.dni_verifier,
-              role: authDataResponse.role,
-              public_key: authDataResponse.public_key,
-              has_password: authDataResponse.has_password,
-              has_voted_election: authDataResponse.has_voted_election,
-            };
-            setSession(newSession);
-            localStorage.setItem('user_session', JSON.stringify(newSession));
-            
-            if (authDataResponse.public_key) {
-              const keys = generateKeyPair();
-              localStorage.setItem('user_secret_key', keys.secretKey);
-              setKeyPair({ publicKey: authDataResponse.public_key, secretKey: keys.secretKey });
-            } else {
-              const keys = generateKeyPair();
-              localStorage.setItem('user_secret_key', keys.secretKey);
-              setKeyPair({ publicKey: keys.publicKey, secretKey: keys.secretKey });
-            }
-            
-setStep('home');
-          } else {
-            setError('DNI o contraseña incorrectos. Por favor, verifica tus datos.');
-          }
+          setError(res.error || 'Error en registro');
         }
-      } catch (err: any) {
+      } else {
+        if (res.success && res.data && typeof res.data === 'object' && 'role' in res.data) {
+          const authDataResponse = res.data as AuthResponse;
+          const newSession: UserSession = {
+            email: authData.email,
+            role: authDataResponse.role,
+            public_key: authDataResponse.public_key,
+            has_password: authDataResponse.has_password,
+            has_voted_election: authDataResponse.has_voted_election,
+          };
+          setSession(newSession);
+          localStorage.setItem('user_session', JSON.stringify(newSession));
+
+          if (authDataResponse.public_key) {
+            const keys = generateKeyPair();
+            localStorage.setItem('user_secret_key', keys.secretKey);
+            setKeyPair({ publicKey: authDataResponse.public_key, secretKey: keys.secretKey });
+          } else {
+            const keys = generateKeyPair();
+            localStorage.setItem('user_secret_key', keys.secretKey);
+            setKeyPair({ publicKey: keys.publicKey, secretKey: keys.secretKey });
+          }
+
+          setStep('home');
+        } else {
+          setError('Correo o contraseña incorrectos. Por favor, verifica tus datos.');
+        }
+      }
+    } catch (err: any) {
       if (authMode === 'login') {
-        setError('DNI o contraseña incorrectos. Por favor, verifica tus datos.');
+        setError('Correo o contraseña incorrectos. Por favor, verifica tus datos.');
       } else {
         setError(err.message || 'Error en registro');
       }
@@ -595,7 +581,7 @@ setStep('home');
     }
   };
 
-const handleSubmitVote = async () => {
+  const handleSubmitVote = async () => {
     if (!keyPair || !selectedElection) {
       if (!keyPair) {
         const keys = generateKeyPair();
@@ -623,7 +609,7 @@ const handleSubmitVote = async () => {
         const candidate = candidates.find(c => c.id === selectedCandidate);
         candidateCode = candidate?.code || String(selectedCandidate ?? "");
       }
-      
+
       const payload = createVotePayload(
         keyPair.publicKey,
         candidateCode,
@@ -664,7 +650,7 @@ const handleSubmitVote = async () => {
 
     const electionWithCreator = {
       ...newElection,
-      created_by: session?.dni,
+      created_by: session?.email,
     };
 
     const res = await api.createElection(electionWithCreator);
@@ -700,7 +686,7 @@ const handleSubmitVote = async () => {
           </div>
           {session ? (
             <div className="text-right">
-              <p className="text-sm">DNI: {session.dni}</p>
+              <p className="text-sm">Correo: {session.email}</p>
               <p className="text-xs">Rol: {session.role}</p>
               <button onClick={handleLogout} className="text-xs underline hover:text-gray-300">
                 Cerrar sesión
@@ -745,7 +731,7 @@ const handleSubmitVote = async () => {
                 <p className="text-blue-700">
                   <button onClick={() => { setAuthMode('login'); setStep('auth'); }} className="underline font-medium">
                     Inicia sesión
-                  </button> o 
+                  </button> o
                   <button onClick={() => { setAuthMode('register'); setStep('auth'); }} className="underline font-medium">
                     regístrate
                   </button> para poder votar
@@ -764,18 +750,16 @@ const handleSubmitVote = async () => {
                         <h3 className="font-bold text-lg">{election.name}</h3>
                         <p className="text-gray-600 text-sm">{election.description}</p>
                         <div className="mt-2 flex gap-2">
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            election.status === 'Publicado' ? 'bg-blue-100 text-blue-700' :
+                          <span className={`text-xs px-2 py-1 rounded ${election.status === 'Publicado' ? 'bg-blue-100 text-blue-700' :
                             election.status === 'Terminado' ? 'bg-gray-100 text-gray-600' :
-                            'bg-yellow-100 text-yellow-700'
-                          }`}>
-                            {election.status === 'Publicado' ? 'Publicado' : 
-                             election.status === 'Terminado' ? 'Terminado' : 'Borrador'}
+                              'bg-yellow-100 text-yellow-700'
+                            }`}>
+                            {election.status === 'Publicado' ? 'Publicado' :
+                              election.status === 'Terminado' ? 'Terminado' : 'Borrador'}
                           </span>
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            election.visibility === 'public' ? 'bg-green-100 text-green-700' :
+                          <span className={`text-xs px-2 py-1 rounded ${election.visibility === 'public' ? 'bg-green-100 text-green-700' :
                             'bg-orange-100 text-orange-700'
-                          }`}>
+                            }`}>
                             {election.visibility === 'public' ? 'Público' : 'Privado'}
                           </span>
                           {election.is_official && (
@@ -785,35 +769,35 @@ const handleSubmitVote = async () => {
                           )}
                         </div>
                       </div>
-                        <div className="flex items-center gap-3">
-                          {election.status === 'Terminado' ? (
+                      <div className="flex items-center gap-3">
+                        {election.status === 'Terminado' ? (
+                          <button
+                            onClick={() => { setSelectedElectionForResults(election); setStep('results'); }}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                          >
+                            Ver
+                          </button>
+                        ) : election.status === 'Publicado' ? (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleSelectElection(election)}
+                              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                            >
+                              Votar
+                            </button>
                             <button
                               onClick={() => { setSelectedElectionForResults(election); setStep('results'); }}
                               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                             >
                               Ver
                             </button>
-                          ) : election.status === 'Publicado' ? (
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => handleSelectElection(election)}
-                                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                              >
-                                Votar
-                              </button>
-                              <button
-                                onClick={() => { setSelectedElectionForResults(election); setStep('results'); }}
-                                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                              >
-                                Ver
-                              </button>
-                            </div>
-                          ) : election.status === 'Borrador' ? (
-                            <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">Borrador</span>
-                          ) : (
-                            <span className="text-gray-400 text-sm">Espere...</span>
-                          )}
-                        </div>
+                          </div>
+                        ) : election.status === 'Borrador' ? (
+                          <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">Borrador</span>
+                        ) : (
+                          <span className="text-gray-400 text-sm">Espere...</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -827,29 +811,16 @@ const handleSubmitVote = async () => {
             <h2 className="text-xl font-semibold mb-4 text-center">
               {authMode === 'login' ? 'Iniciar Sesión' : 'Registrarse'}
             </h2>
-            
+
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">DNI (8 dígitos)</label>
+                <label className="block text-sm font-medium mb-1">Correo Electrónico</label>
                 <input
-                  type="text"
-                  value={authData.dni}
-                  onChange={(e) => setAuthData({ ...authData, dni: e.target.value.replace(/\D/g, '').slice(0, 8) })}
+                  type="email"
+                  value={authData.email}
+                  onChange={(e) => setAuthData({ ...authData, email: e.target.value })}
                   className="w-full p-2 border rounded"
-                  placeholder="12345678"
-                  maxLength={8}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Dígito Verificador</label>
-                <input
-                  type="text"
-                  value={authData.dni_verifier}
-                  onChange={(e) => setAuthData({ ...authData, dni_verifier: e.target.value.replace(/\D/g, '').slice(0, 1) })}
-                  className="w-full p-2 border rounded"
-                  placeholder="0"
-                  maxLength={1}
+                  placeholder="ejemplo@correo.com"
                 />
               </div>
 
@@ -924,7 +895,7 @@ const handleSubmitVote = async () => {
 
               <button
                 onClick={handleAuth}
-                disabled={loading || !authData.dni || !authData.dni_verifier || (authMode === 'register' && (authData.password !== authData.confirmPassword || !authData.password))}
+                disabled={loading || !authData.email || (authMode === 'register' && (authData.password !== authData.confirmPassword || !authData.password))}
                 className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
               >
                 {loading ? 'Procesando...' : authMode === 'login' ? 'Iniciar Sesión' : 'Registrarse'}
@@ -965,7 +936,7 @@ const handleSubmitVote = async () => {
             </button>
 
             <h2 className="text-xl font-semibold">{selectedElection.name}</h2>
-            
+
             {electionVoted ? (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
                 <p className="text-yellow-700 font-medium">Ya has votado en esta elección</p>
@@ -977,16 +948,15 @@ const handleSubmitVote = async () => {
                     <div
                       key={candidate.id}
                       onClick={() => { setSelectedCandidate(candidate.id); setBlankVote(false); }}
-                      className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                        selectedCandidate === candidate.id
-                          ? 'border-blue-500 bg-blue-50 shadow-lg'
-                          : 'border-gray-200 hover:border-blue-300'
-                      }`}
+                      className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${selectedCandidate === candidate.id
+                        ? 'border-blue-500 bg-blue-50 shadow-lg'
+                        : 'border-gray-200 hover:border-blue-300'
+                        }`}
                     >
                       <div className="flex-1">
-                          <h3 className="font-semibold text-lg">{candidate.name}</h3>
-                          <p className="text-sm text-gray-500">Código: {candidate.code}</p>
-                        </div>
+                        <h3 className="font-semibold text-lg">{candidate.name}</h3>
+                        <p className="text-sm text-gray-500">Código: {candidate.code}</p>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1054,100 +1024,100 @@ const handleSubmitVote = async () => {
             </div>
 
             {(activeTab === 'my_elections' || activeTab === 'users') && (
-            <div className="mb-4">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder={activeTab === 'my_elections' ? "Buscar mis votaciones..." : "Buscar usuarios..."}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { setCurrentPage(1); loadMyElections(); } }}
-                  className="flex-1 p-2 border rounded"
-                />
-                <button
-                  onClick={() => { setCurrentPage(1); if (activeTab === 'my_elections') { loadMyElections(); } }}
-                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                >
-                  Buscar
-                </button>
-                <button
-                  onClick={() => { setSearchTerm(''); setCurrentPage(1); if (activeTab === 'my_elections') { loadMyElections(); } }}
-                  className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-                >
-                  Limpiar
-                </button>
+              <div className="mb-4">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder={activeTab === 'my_elections' ? "Buscar mis votaciones..." : "Buscar usuarios..."}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { setCurrentPage(1); loadMyElections(); } }}
+                    className="flex-1 p-2 border rounded"
+                  />
+                  <button
+                    onClick={() => { setCurrentPage(1); if (activeTab === 'my_elections') { loadMyElections(); } }}
+                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                  >
+                    Buscar
+                  </button>
+                  <button
+                    onClick={() => { setSearchTerm(''); setCurrentPage(1); if (activeTab === 'my_elections') { loadMyElections(); } }}
+                    className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                  >
+                    Limpiar
+                  </button>
+                </div>
               </div>
-            </div>
             )}
 
             {activeTab === 'elections' && (
 
-            <div className="bg-white rounded-lg shadow-md p-6">
-              
+              <div className="bg-white rounded-lg shadow-md p-6">
+
                 <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Nombre</label>
-                  <input
-                    type="text"
-                    value={newElection.name}
-                    onChange={(e) => setNewElection({ ...newElection, name: e.target.value })}
-                    className="w-full p-2 border rounded"
-                    placeholder="Elecciones 2026"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Descripción</label>
-                  <textarea
-                    value={newElection.description || ''}
-                    onChange={(e) => setNewElection({ ...newElection, description: e.target.value })}
-                    className="w-full p-2 border rounded"
-                    placeholder="Descripción de la votación..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Visibilidad</label>
-                  <div className="w-full p-2 border rounded bg-gray-100 text-gray-600">
-                    Público (por defecto)
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Estado</label>
-                  <div className="w-full p-2 border rounded bg-gray-100 text-gray-600">
-                    Borrador (por defecto)
-                  </div>
-                </div>
-
-                {newElection.visibility === 'private' && (
                   <div>
-                    <label className="block text-sm font-medium mb-1">Contraseña del evento</label>
+                    <label className="block text-sm font-medium mb-1">Nombre</label>
                     <input
-                      type="password"
-                      value={newElection.password || ''}
-                      onChange={(e) => setNewElection({ ...newElection, password: e.target.value })}
+                      type="text"
+                      value={newElection.name}
+                      onChange={(e) => setNewElection({ ...newElection, name: e.target.value })}
                       className="w-full p-2 border rounded"
-                      placeholder="Contraseña para acceder al evento"
+                      placeholder="Elecciones 2026"
                     />
                   </div>
-                )}
 
-                {error && (
-                  <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                    {error}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Descripción</label>
+                    <textarea
+                      value={newElection.description || ''}
+                      onChange={(e) => setNewElection({ ...newElection, description: e.target.value })}
+                      className="w-full p-2 border rounded"
+                      placeholder="Descripción de la votación..."
+                    />
                   </div>
-                )}
 
-                <button
-                  onClick={handleCreateElection}
-                  disabled={loading}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-                >
-                  {loading ? 'Creando...' : 'Crear Votación'}
-                </button>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Visibilidad</label>
+                    <div className="w-full p-2 border rounded bg-gray-100 text-gray-600">
+                      Público (por defecto)
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Estado</label>
+                    <div className="w-full p-2 border rounded bg-gray-100 text-gray-600">
+                      Borrador (por defecto)
+                    </div>
+                  </div>
+
+                  {newElection.visibility === 'private' && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Contraseña del evento</label>
+                      <input
+                        type="password"
+                        value={newElection.password || ''}
+                        onChange={(e) => setNewElection({ ...newElection, password: e.target.value })}
+                        className="w-full p-2 border rounded"
+                        placeholder="Contraseña para acceder al evento"
+                      />
+                    </div>
+                  )}
+
+                  {error && (
+                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                      {error}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleCreateElection}
+                    disabled={loading}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                  >
+                    {loading ? 'Creando...' : 'Crear Votación'}
+                  </button>
+                </div>
               </div>
-            </div>
             )}
 
             {activeTab === 'my_elections' && (
@@ -1214,21 +1184,21 @@ const handleSubmitVote = async () => {
                             </select>
                           </div>
                           {election.status !== 'Publicado' && election.status !== 'Terminado' && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleUpdateElection(election.id)}
-                              disabled={loading}
-                              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                            >
-                              Guardar
-                            </button>
-                            <button
-                              onClick={() => { setSelectedElectionForEdit(null); setEditElectionData(null); }}
-                              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleUpdateElection(election.id)}
+                                disabled={loading}
+                                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                              >
+                                Guardar
+                              </button>
+                              <button
+                                onClick={() => { setSelectedElectionForEdit(null); setEditElectionData(null); }}
+                                className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
                           )}
                         </div>
                       ) : (
@@ -1240,13 +1210,12 @@ const handleSubmitVote = async () => {
                               <span className={`text-xs px-2 py-1 rounded ${election.visibility === 'public' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
                                 {election.visibility === 'public' ? 'Público' : 'Privado'}
                               </span>
-                              <span className={`text-xs px-2 py-1 rounded ${
-                                election.status === 'Publicado' ? 'bg-blue-100 text-blue-700' :
+                              <span className={`text-xs px-2 py-1 rounded ${election.status === 'Publicado' ? 'bg-blue-100 text-blue-700' :
                                 election.status === 'Terminado' ? 'bg-gray-100 text-gray-600' :
-                                'bg-yellow-100 text-yellow-700'
-                              }`}>
-                                {election.status === 'Publicado' ? 'Publicado' : 
-                                 election.status === 'Terminado' ? 'Terminado' : 'Borrador'}
+                                  'bg-yellow-100 text-yellow-700'
+                                }`}>
+                                {election.status === 'Publicado' ? 'Publicado' :
+                                  election.status === 'Terminado' ? 'Terminado' : 'Borrador'}
                               </span>
                             </div>
                           </div>
@@ -1284,36 +1253,33 @@ const handleSubmitVote = async () => {
                       )}
                     </div>
                   ))
-)}
+                )}
               </div>
             )}
 
             {activeTab === 'users' && (
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h3 className="font-semibold mb-4">Gestionar Usuarios</h3>
-                
+
                 <div className="mb-6">
                   <h4 className="text-sm font-medium mb-2">Lista de Usuarios ({users.length})</h4>
                   <div className="border rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-4 py-2 text-left">DNI</th>
-                          <th className="px-4 py-2 text-left">Verificador</th>
+                          <th className="px-4 py-2 text-left">Correo</th>
                           <th className="px-4 py-2 text-left">Rol</th>
                         </tr>
                       </thead>
                       <tbody>
                         {paginatedUsers.map((user, i) => (
                           <tr key={i} className="border-t">
-                            <td className="px-4 py-2">{user.dni}</td>
-                            <td className="px-4 py-2">{user.dni_verifier}</td>
+                            <td className="px-4 py-2">{user.email}</td>
                             <td className="px-4 py-2">
-                              <span className={`px-2 py-1 rounded text-xs ${
-                                user.role === 'sudo_admin' ? 'bg-red-100 text-red-700' :
+                              <span className={`px-2 py-1 rounded text-xs ${user.role === 'sudo_admin' ? 'bg-red-100 text-red-700' :
                                 user.role === 'admin' ? 'bg-purple-100 text-purple-700' :
-                                'bg-gray-100 text-gray-700'
-                              }`}>
+                                  'bg-gray-100 text-gray-700'
+                                }`}>
                                 {user.role}
                               </span>
                             </td>
@@ -1348,33 +1314,22 @@ const handleSubmitVote = async () => {
                 {isAdmin && session?.role === 'sudo_admin' && (
                   <div className="border-t pt-4">
                     <h4 className="text-sm font-medium mb-2">Cambiar Rol de Usuario</h4>
-                    <div className="grid grid-cols-3 gap-4 mb-4">
+                    <div className="grid grid-cols-2 gap-4 mb-4">
                       <div>
-                        <label className="block text-xs mb-1">DNI</label>
+                        <label className="block text-xs mb-1">Correo Electrónico</label>
                         <input
-                          type="text"
-                          value={roleData.target_dni}
-                          onChange={(e) => setRoleData({...roleData, target_dni: e.target.value.replace(/\D/g, '').slice(0, 8)})}
+                          type="email"
+                          value={roleData.target_email}
+                          onChange={(e) => setRoleData({ ...roleData, target_email: e.target.value })}
                           className="w-full p-2 border rounded"
-                          placeholder="12345678"
-                          maxLength={8}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs mb-1">Verificador</label>
-                        <input
-                          type="text"
-                          value={roleData.target_dni_verifier}
-                          onChange={(e) => setRoleData({...roleData, target_dni_verifier: e.target.value.replace(/\D/g, '').slice(0, 1)})}
-                          className="w-full p-2 border rounded"
-                          maxLength={1}
+                          placeholder="ejemplo@correo.com"
                         />
                       </div>
                       <div>
                         <label className="block text-xs mb-1">Nuevo Rol</label>
                         <select
                           value={roleData.new_role}
-                          onChange={(e) => setRoleData({...roleData, new_role: e.target.value})}
+                          onChange={(e) => setRoleData({ ...roleData, new_role: e.target.value })}
                           className="w-full p-2 border rounded"
                         >
                           <option value="user">User</option>
@@ -1384,7 +1339,7 @@ const handleSubmitVote = async () => {
                     </div>
                     <button
                       onClick={handleUpdateRole}
-                      disabled={loading || !roleData.target_dni || !roleData.target_dni_verifier}
+                      disabled={loading || !roleData.target_email}
                       className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
                     >
                       {loading ? 'Actualizando...' : 'Actualizar Rol'}
@@ -1410,9 +1365,9 @@ const handleSubmitVote = async () => {
         )}
 
         {step === 'results' && selectedElectionForResults && (
-          <ResultsView 
-            election={selectedElectionForResults} 
-            onBack={() => { setStep('home'); setSelectedElectionForResults(null); }} 
+          <ResultsView
+            election={selectedElectionForResults}
+            onBack={() => { setStep('home'); setSelectedElectionForResults(null); }}
           />
         )}
 
