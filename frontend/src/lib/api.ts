@@ -36,6 +36,16 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<Api
     const responseText = await response.text();
 
     if (!response.ok) {
+      if (response.status === 401) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('user_session');
+          window.location.href = '/?step=auth';
+        }
+        return {
+          success: false,
+          error: 'Sesión expirada o no autorizada. Por favor, inicia sesión nuevamente.',
+        };
+      }
       let errorMessage = 'Request failed';
       try {
         const errorData = JSON.parse(responseText);

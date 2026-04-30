@@ -302,8 +302,17 @@ pub async fn get_voter(
 
 pub async fn submit_vote(
     State(state): State<Arc<Mutex<AppState>>>,
+    headers: axum::http::HeaderMap,
     Json(payload): Json<VoteRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<VoteResponse>>)> {
+    let user_email = headers.get("X-User-Email")
+        .and_then(|h| h.to_str().ok())
+        .filter(|s| !s.is_empty());
+
+    if user_email.is_none() {
+        return Err((StatusCode::UNAUTHORIZED, Json(ApiResponse::err("Debes iniciar sesión para votar".to_string()))));
+    }
+
     let state = state.lock().await;
     
     let check_voter = db::get_voter_by_public_key(&state.db_pool, &payload.election_id, &payload.voter_public_key).await;

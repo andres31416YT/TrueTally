@@ -941,6 +941,16 @@ export default function VotingPage() {
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
                 <p className="text-yellow-700 font-medium">Ya has votado en esta elección</p>
               </div>
+            ) : !session ? (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
+                <p className="text-blue-700 font-medium mb-4">Debes iniciar sesión para emitir tu voto</p>
+                <button
+                  onClick={() => setStep('auth')}
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700"
+                >
+                  Ir a Iniciar Sesión
+                </button>
+              </div>
             ) : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

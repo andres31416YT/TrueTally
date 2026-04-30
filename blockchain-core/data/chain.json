@@ -152,5 +152,19 @@
     "previous_hash": "75e04bb0f7f4f4990bfec431cbd95c048b4747fc50f1a4ae00ca5d6474b810fa",
     "nonce": 0,
     "hash": "2d9e3dbf8802ddf8d0cb91bedfe0253551709ba2a958f7e79b038fab1b9592df"
+  },
+  {
+    "index": 11,
+    "timestamp": "2026-04-30T22:50:14.948263235Z",
+    "data": {
+      "voter_public_key": "pk_1777589165334496464",
+      "candidate_id": "CE81A3B5",
+      "election_id": "e81f46a1",
+      "signature": "be0aa4010c253647afbc6aab6d3097a3246e45c0616c933299d6d778a7ff7404711a4ee74a43ba630e2416fbc780eec0098db813fdfbfd400acb093bdc36140e",
+      "timestamp": "2026-04-30T22:50:14.948260403Z"
+    },
+    "previous_hash": "2d9e3dbf8802ddf8d0cb91bedfe0253551709ba2a958f7e79b038fab1b9592df",
+    "nonce": 0,
+    "hash": "07f52d30dc05c0ef576b7ee429b4101e890fd1c16328ce5ba175cf23896ef1bb"
   }
 ]
