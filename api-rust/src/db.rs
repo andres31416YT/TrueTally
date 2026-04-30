@@ -79,18 +79,32 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
     .execute(&pool)
     .await?;
 
+    let sudo_email = std::env::var("SUDOADMIN_EMAIL").unwrap_or_else(|_| "sudoadmin@sudoadmin.com".to_string());
+    let sudo_pass = std::env::var("SUDOADMIN_PASSWORD").unwrap_or_else(|_| "00000000".to_string());
+    let admin_email = std::env::var("ADMIN_EMAIL").unwrap_or_else(|_| "admin@admin.com".to_string());
+    let admin_pass = std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "11111111".to_string());
+
     sqlx::query(
         r#"
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM users WHERE email = 'admin@truetally.com'
-            ) THEN
-                INSERT INTO users (email, password_hash, role) VALUES ('admin@truetally.com', 'admin123', 'sudo_admin');
-            END IF;
-        END $$;
+        INSERT INTO users (email, password_hash, role) 
+        VALUES ($1, $2, 'sudo_admin')
+        ON CONFLICT (email) DO UPDATE SET password_hash = $2, role = 'sudo_admin'
         "#,
     )
+    .bind(&sudo_email)
+    .bind(&sudo_pass)
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO users (email, password_hash, role) 
+        VALUES ($1, $2, 'admin')
+        ON CONFLICT (email) DO UPDATE SET password_hash = $2, role = 'admin'
+        "#,
+    )
+    .bind(&admin_email)
+    .bind(&admin_pass)
     .execute(&pool)
     .await?;
 

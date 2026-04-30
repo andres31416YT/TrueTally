@@ -412,23 +412,36 @@ pub async fn authenticate(
         return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Email is required".to_string()))));
     }
 
-    if payload.email == "admin@truetally.com" {
-        if payload.password.as_ref().map(|p| p == "admin123").unwrap_or(false) {
+    let sudo_email = std::env::var("SUDOADMIN_EMAIL").unwrap_or_else(|_| "sudoadmin@sudoadmin.com".to_string());
+    let sudo_pass = std::env::var("SUDOADMIN_PASSWORD").unwrap_or_else(|_| "00000000".to_string());
+    let env_admin_email = std::env::var("ADMIN_EMAIL").unwrap_or_else(|_| "admin@admin.com".to_string());
+    let env_admin_pass = std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "11111111".to_string());
+
+    // 1. Verificación de Sudo Admin desde ENV
+    if payload.email == sudo_email {
+        if payload.password.as_ref().map(|p| p == &sudo_pass).unwrap_or(false) {
             return Ok((StatusCode::OK, Json(ApiResponse::ok(AuthResponse {
                 role: "sudo_admin".to_string(),
                 public_key: None,
                 has_password: true,
                 has_voted_election: None,
             }))));
-        } else if payload.password.is_none() {
-             return Ok((StatusCode::OK, Json(ApiResponse::ok(AuthResponse {
-                role: "sudo_admin".to_string(),
+        } else {
+            return Err((StatusCode::UNAUTHORIZED, Json(ApiResponse::err("Contraseña incorrecta para Sudo Admin".to_string()))));
+        }
+    }
+
+    // 2. Verificación de Admin desde ENV
+    if payload.email == env_admin_email {
+        if payload.password.as_ref().map(|p| p == &env_admin_pass).unwrap_or(false) {
+            return Ok((StatusCode::OK, Json(ApiResponse::ok(AuthResponse {
+                role: "admin".to_string(),
                 public_key: None,
                 has_password: true,
                 has_voted_election: None,
             }))));
         } else {
-            return Err((StatusCode::UNAUTHORIZED, Json(ApiResponse::err("Contraseña incorrecta".to_string()))));
+            return Err((StatusCode::UNAUTHORIZED, Json(ApiResponse::err("Contraseña incorrecta para Administrador".to_string()))));
         }
     }
 

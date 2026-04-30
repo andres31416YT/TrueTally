@@ -11,11 +11,13 @@ services:
       - voting-network
     ports:
       - "30333:30333" # P2P para otros nodos
-      - "9944:9944"   # RPC/WebSocket para la API
+      - "9944:9944" # RPC/WebSocket para la API
     restart: unless-stopped
 
   # --- ROL: INTEGRANTE C (API & Conector) ---
   api-gateway:
+    env_file:
+      - .env
     build:
       context: ./api-rust
       dockerfile: Dockerfile
