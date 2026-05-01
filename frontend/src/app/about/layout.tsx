@@ -18,3 +18,11 @@ export const metadata: Metadata = {
     description: 'Sistema revolucionario de votación electrónica basado en blockchain.',
   },
 }
+
+export default function AboutLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return children
+}
