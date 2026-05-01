@@ -172,6 +172,32 @@ export default function VotingPage() {
   const canonicalUrl = `${baseUrl}${pathname}`;
   const ogImageUrl = `${baseUrl}/og-image.jpg`;
 
+  // Meta tags dinámicos según el step actual
+  const getMetaTags = () => {
+    if (step === 'auth') {
+      return {
+        title: 'Iniciar Sesión - TrueTally',
+        description: 'Accede a tu cuenta en TrueTally para votar de forma segura y participar en elecciones democráticas basadas en blockchain.',
+        keywords: 'login, iniciar sesión, autenticación, votación blockchain, TrueTally',
+        ogTitle: 'Iniciar Sesión - TrueTally',
+        ogDescription: 'Accede a tu cuenta para votar de forma segura en TrueTally.',
+        twitterTitle: 'Iniciar Sesión - TrueTally',
+        twitterDescription: 'Accede a tu cuenta para votar de forma segura en TrueTally.',
+      };
+    }
+    return {
+      title: 'TrueTally - Sistema de Votación Blockchain Seguro',
+      description: 'Sistema de votación electrónica inmutable basado en blockchain. Vota de forma segura, transparente y verificable. Tecnología blockchain para elecciones democráticas.',
+      keywords: 'votación blockchain, elecciones seguras, votación electrónica, democracia digital, TrueTally',
+      ogTitle: 'TrueTally - Votación Blockchain Segura',
+      ogDescription: 'Sistema de votación electrónica inmutable basado en blockchain. Tecnología blockchain para elecciones democráticas.',
+      twitterTitle: 'TrueTally - Votación Blockchain Segura',
+      twitterDescription: 'Sistema de votación electrónica inmutable basado en blockchain.',
+    };
+  };
+
+  const meta = getMetaTags();
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -688,25 +714,25 @@ export default function VotingPage() {
   return (
     <>
       <Head>
-        <title>TrueTally - Sistema de Votación Blockchain Seguro</title>
-        <meta name="description" content="Sistema de votación electrónica inmutable basado en blockchain. Vota de forma segura, transparente y verificable. Tecnología blockchain para elecciones democráticas." />
-        <meta name="keywords" content="votación blockchain, elecciones seguras, votación electrónica, democracia digital, TrueTally" />
+        <title>{meta.title}</title>
+        <meta name="description" content={meta.description} />
+        <meta name="keywords" content={meta.keywords} />
         <meta name="author" content="TrueTally Team" />
         <meta name="robots" content="index, follow" />
 
         {/* Open Graph */}
         <meta property="og:type" content="website" />
         <meta property="og:url" content={canonicalUrl} />
-        <meta property="og:title" content="TrueTally - Votación Blockchain Segura" />
-        <meta property="og:description" content="Sistema de votación electrónica inmutable basado en blockchain. Tecnología blockchain para elecciones democráticas." />
+        <meta property="og:title" content={meta.ogTitle} />
+        <meta property="og:description" content={meta.ogDescription} />
         <meta property="og:image" content={ogImageUrl} />
         <meta property="og:site_name" content="TrueTally" />
         <meta property="og:locale" content="es_ES" />
 
         {/* Twitter */}
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="TrueTally - Votación Blockchain Segura" />
-        <meta name="twitter:description" content="Sistema de votación electrónica inmutable basado en blockchain." />
+        <meta name="twitter:title" content={meta.twitterTitle} />
+        <meta name="twitter:description" content={meta.twitterDescription} />
         <meta name="twitter:image" content={ogImageUrl} />
 
         <link rel="canonical" href={canonicalUrl} />
