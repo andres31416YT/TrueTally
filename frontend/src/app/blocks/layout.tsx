@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 
+const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+
 export const metadata: Metadata = {
   title: 'Bloques Blockchain - TrueTally',
   description: 'Explora todos los bloques de la cadena de bloques de TrueTally. Cada bloque contiene votos verificados y transacciones inmutables del sistema de votación.',
@@ -7,7 +9,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Bloques Blockchain - TrueTally',
     description: 'Explora todos los bloques de la cadena de bloques de TrueTally.',
-    url: 'https://truetally.com/blocks',
+    url: `${baseUrl}/blocks`,
     type: 'website',
   },
   twitter: {

@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 
+const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+
 export const metadata: Metadata = {
   title: 'Acerca de TrueTally - Sistema de Votación Blockchain',
   description: 'Conoce TrueTally, el sistema revolucionario de votación electrónica basado en blockchain. Tecnología segura, transparente y verificable para elecciones democráticas.',
@@ -7,7 +9,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Acerca de TrueTally - Votación Blockchain',
     description: 'Sistema revolucionario de votación electrónica basado en blockchain.',
-    url: 'https://truetally.com/about',
+    url: `${baseUrl}/about`,
     type: 'website',
   },
   twitter: {

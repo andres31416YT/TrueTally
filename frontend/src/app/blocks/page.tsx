@@ -2,12 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
+import { usePathname } from 'next/navigation';
 import { api, Block } from '@/lib/api';
 
 export default function BlocksPage() {
+  const pathname = usePathname();
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Construir URLs dinámicas para SEO
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+  const canonicalUrl = `${baseUrl}${pathname}`;
+  const ogImageUrl = `${baseUrl}/og-image.jpg`;
 
   useEffect(() => {
     const fetchBlocks = async () => {
@@ -42,14 +49,14 @@ export default function BlocksPage() {
 
         <meta property="og:title" content="Bloques Blockchain - TrueTally" />
         <meta property="og:description" content="Explora todos los bloques de la cadena de bloques de TrueTally." />
-        <meta property="og:url" content="https://truetally.com/blocks" />
+        <meta property="og:url" content={canonicalUrl} />
         <meta property="og:type" content="website" />
 
         <meta name="twitter:card" content="summary" />
         <meta name="twitter:title" content="Bloques Blockchain - TrueTally" />
         <meta name="twitter:description" content="Explora todos los bloques de la cadena de bloques de TrueTally." />
 
-        <link rel="canonical" href="https://truetally.com/blocks" />
+        <link rel="canonical" href={canonicalUrl} />
       </Head>
       <div className="min-h-screen bg-gray-50">
         <header className="bg-primary-700 text-white p-4 shadow-lg">

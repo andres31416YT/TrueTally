@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
+import { usePathname } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import { generateKeyPair, signMessage, createVotePayload } from '@/lib/crypto';
 import { api, Election, NewElection, Candidate, AuthResponse } from '@/lib/api';
@@ -155,6 +156,7 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
 }
 
 export default function VotingPage() {
+  const pathname = usePathname();
   const [step, setStep] = useState<Step>('home');
   const [session, setSession] = useState<UserSession | null>(null);
   const [keyPair, setKeyPair] = useState<KeyPair | null>(null);
@@ -164,6 +166,11 @@ export default function VotingPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<number | null>(null);
   const [blankVote, setBlankVote] = useState(false);
+
+  // Construir URLs dinámicas para SEO
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+  const canonicalUrl = `${baseUrl}${pathname}`;
+  const ogImageUrl = `${baseUrl}/og-image.jpg`;
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -689,10 +696,10 @@ export default function VotingPage() {
 
         {/* Open Graph */}
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://truetally.com" />
+        <meta property="og:url" content={canonicalUrl} />
         <meta property="og:title" content="TrueTally - Votación Blockchain Segura" />
         <meta property="og:description" content="Sistema de votación electrónica inmutable basado en blockchain. Tecnología blockchain para elecciones democráticas." />
-        <meta property="og:image" content="https://truetally.com/og-image.jpg" />
+        <meta property="og:image" content={ogImageUrl} />
         <meta property="og:site_name" content="TrueTally" />
         <meta property="og:locale" content="es_ES" />
 
@@ -700,9 +707,9 @@ export default function VotingPage() {
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="TrueTally - Votación Blockchain Segura" />
         <meta name="twitter:description" content="Sistema de votación electrónica inmutable basado en blockchain." />
-        <meta name="twitter:image" content="https://truetally.com/og-image.jpg" />
+        <meta name="twitter:image" content={ogImageUrl} />
 
-        <link rel="canonical" href="https://truetally.com" />
+        <link rel="canonical" href={canonicalUrl} />
       </Head>
       <div className="min-h-screen bg-gray-50">
         <header className="bg-blue-800 text-white p-4 shadow-lg">
