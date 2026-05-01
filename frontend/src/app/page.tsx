@@ -158,7 +158,8 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
 export default function VotingPage() {
   const pathname = usePathname();
   const router = useRouter();
-  const [step, setStep] = useState<Step>(pathname === '/login' ? 'auth' : 'home');
+  const isAuthRoute = pathname === '/login' || pathname === '/register';
+  const [step, setStep] = useState<Step>(isAuthRoute ? 'auth' : 'home');
   const [session, setSession] = useState<UserSession | null>(null);
   const [keyPair, setKeyPair] = useState<KeyPair | null>(null);
 
@@ -168,41 +169,10 @@ export default function VotingPage() {
   const [selectedCandidate, setSelectedCandidate] = useState<number | null>(null);
   const [blankVote, setBlankVote] = useState(false);
 
-  // Construir URLs dinámicas para SEO
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-  const canonicalUrl = `${baseUrl}${pathname}`;
-  const ogImageUrl = `${baseUrl}/og-image.jpg`;
-
-  // Meta tags dinámicos según el step actual
-  const getMetaTags = () => {
-    if (step === 'auth') {
-      return {
-        title: 'Iniciar Sesión - TrueTally',
-        description: 'Accede a tu cuenta en TrueTally para votar de forma segura y participar en elecciones democráticas basadas en blockchain.',
-        keywords: 'login, iniciar sesión, autenticación, votación blockchain, TrueTally',
-        ogTitle: 'Iniciar Sesión - TrueTally',
-        ogDescription: 'Accede a tu cuenta para votar de forma segura en TrueTally.',
-        twitterTitle: 'Iniciar Sesión - TrueTally',
-        twitterDescription: 'Accede a tu cuenta para votar de forma segura en TrueTally.',
-      };
-    }
-    return {
-      title: 'TrueTally - Sistema de Votación Blockchain Seguro',
-      description: 'Sistema de votación electrónica inmutable basado en blockchain. Vota de forma segura, transparente y verificable. Tecnología blockchain para elecciones democráticas.',
-      keywords: 'votación blockchain, elecciones seguras, votación electrónica, democracia digital, TrueTally',
-      ogTitle: 'TrueTally - Votación Blockchain Segura',
-      ogDescription: 'Sistema de votación electrónica inmutable basado en blockchain. Tecnología blockchain para elecciones democráticas.',
-      twitterTitle: 'TrueTally - Votación Blockchain Segura',
-      twitterDescription: 'Sistema de votación electrónica inmutable basado en blockchain.',
-    };
-  };
-
-  const meta = getMetaTags();
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>(pathname === '/register' ? 'register' : 'login');
   const [authData, setAuthData] = useState({
     email: '',
 
@@ -291,14 +261,18 @@ export default function VotingPage() {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  // Navegar entre rutas cuando cambie el step
+  // Navegar entre rutas cuando cambie el step o authMode
   useEffect(() => {
-    if (step === 'auth' && pathname !== '/login') {
-      router.push('/login');
+    if (step === 'auth') {
+      if (authMode === 'register' && pathname !== '/register') {
+        router.push('/register');
+      } else if (authMode === 'login' && pathname !== '/login') {
+        router.push('/login');
+      }
     } else if (step === 'home' && pathname !== '/') {
       router.push('/');
     }
-  }, [step, router, pathname]);
+  }, [step, authMode, router, pathname]);
 
   const loadElections = async () => {
     const res = await api.listElections();
@@ -721,6 +695,48 @@ export default function VotingPage() {
 
   const electionVoted = selectedElection ? session?.has_voted_election === selectedElection.id : false;
 
+  // Construir URLs dinámicas para SEO
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+  const canonicalUrl = `${baseUrl}${pathname}`;
+  const ogImageUrl = `${baseUrl}/og-image.jpg`;
+
+  // Meta tags dinámicos según el step actual
+  const getMetaTags = () => {
+    if (step === 'auth') {
+      if (pathname === '/register') {
+        return {
+          title: 'Registrarse - TrueTally',
+          description: 'Crea tu cuenta en TrueTally para votar de forma segura y participar en elecciones democráticas basadas en blockchain.',
+          keywords: 'registro, crear cuenta, votación blockchain, democracia digital, TrueTally',
+          ogTitle: 'Registrarse - TrueTally',
+          ogDescription: 'Crea tu cuenta para votar de forma segura en TrueTally.',
+          twitterTitle: 'Registrarse - TrueTally',
+          twitterDescription: 'Crea tu cuenta para votar de forma segura en TrueTally.',
+        };
+      }
+      return {
+        title: 'Iniciar Sesión - TrueTally',
+        description: 'Accede a tu cuenta en TrueTally para votar de forma segura y participar en elecciones democráticas basadas en blockchain.',
+        keywords: 'login, iniciar sesión, autenticación, votación blockchain, TrueTally',
+        ogTitle: 'Iniciar Sesión - TrueTally',
+        ogDescription: 'Accede a tu cuenta para votar de forma segura en TrueTally.',
+        twitterTitle: 'Iniciar Sesión - TrueTally',
+        twitterDescription: 'Accede a tu cuenta para votar de forma segura en TrueTally.',
+      };
+    }
+    return {
+      title: 'TrueTally - Sistema de Votación Blockchain Seguro',
+      description: 'Sistema de votación electrónica inmutable basado en blockchain. Vota de forma segura, transparente y verificable. Tecnología blockchain para elecciones democráticas.',
+      keywords: 'votación blockchain, elecciones seguras, votación electrónica, democracia digital, TrueTally',
+      ogTitle: 'TrueTally - Votación Blockchain Segura',
+      ogDescription: 'Sistema de votación electrónica inmutable basado en blockchain. Tecnología blockchain para elecciones democráticas.',
+      twitterTitle: 'TrueTally - Votación Blockchain Segura',
+      twitterDescription: 'Sistema de votación electrónica inmutable basado en blockchain.',
+    };
+  };
+
+  const meta = getMetaTags();
+
   return (
     <>
       <Head>
@@ -765,13 +781,13 @@ export default function VotingPage() {
           ) : (
             <div className="flex gap-2">
               <button
-                onClick={() => { setAuthMode('login'); setStep('auth'); }}
+                onClick={() => router.push('/login')}
                 className="bg-green-600 px-4 py-2 rounded-lg hover:bg-green-700 text-sm font-medium"
               >
                 Iniciar Sesión
               </button>
               <button
-                onClick={() => { setAuthMode('register'); setStep('auth'); }}
+                onClick={() => router.push('/register')}
                 className="bg-white text-blue-800 px-4 py-2 rounded-lg hover:bg-gray-100 text-sm font-medium"
               >
                 Registrarse
@@ -802,7 +818,7 @@ export default function VotingPage() {
                   <button onClick={() => { setAuthMode('login'); setStep('auth'); }} className="underline font-medium">
                     Inicia sesión
                   </button> o
-                  <button onClick={() => { setAuthMode('register'); setStep('auth'); }} className="underline font-medium">
+                  <button onClick={() => router.push('/register')} className="underline font-medium">
                     regístrate
                   </button> para poder votar
                 </p>
@@ -975,14 +991,14 @@ export default function VotingPage() {
                 {authMode === 'login' ? (
                   <>
                     ¿No tienes cuenta?{' '}
-                    <button onClick={() => setAuthMode('register')} className="underline text-blue-600">
+                    <button onClick={() => router.push('/register')} className="underline text-blue-600">
                       Regístrate
                     </button>
                   </>
                 ) : (
                   <>
                     ¿Ya tienes cuenta?{' '}
-                    <button onClick={() => setAuthMode('login')} className="underline text-blue-600">
+                    <button onClick={() => router.push('/login')} className="underline text-blue-600">
                       Inicia sesión
                     </button>
                   </>
