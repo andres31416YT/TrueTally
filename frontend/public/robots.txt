@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+# Block access to admin areas
+Disallow: /admin
+Disallow: /api/
+
+# Allow important pages
+Allow: /
+
+# Sitemap
+Sitemap: https://truetally.com/sitemap.xml

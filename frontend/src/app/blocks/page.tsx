@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Head from 'next/head';
 import { api, Block } from '@/lib/api';
 
 export default function BlocksPage() {
@@ -33,8 +34,25 @@ export default function BlocksPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-primary-700 text-white p-4 shadow-lg">
+    <>
+      <Head>
+        <title>Bloques Blockchain - TrueTally</title>
+        <meta name="description" content="Explora todos los bloques de la cadena de bloques de TrueTally. Cada bloque contiene votos verificados y transacciones inmutables del sistema de votación." />
+        <meta name="keywords" content="bloques blockchain, cadena de bloques, votación blockchain, explorador bloques, TrueTally" />
+
+        <meta property="og:title" content="Bloques Blockchain - TrueTally" />
+        <meta property="og:description" content="Explora todos los bloques de la cadena de bloques de TrueTally." />
+        <meta property="og:url" content="https://truetally.com/blocks" />
+        <meta property="og:type" content="website" />
+
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content="Bloques Blockchain - TrueTally" />
+        <meta name="twitter:description" content="Explora todos los bloques de la cadena de bloques de TrueTally." />
+
+        <link rel="canonical" href="https://truetally.com/blocks" />
+      </Head>
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-primary-700 text-white p-4 shadow-lg">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-2xl font-bold">TrueTally - Explorador de Bloques</h1>
         </div>
@@ -129,5 +147,6 @@ export default function BlocksPage() {
         )}
       </main>
     </div>
+    </>
   );
 }

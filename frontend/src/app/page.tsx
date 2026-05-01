@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Head from 'next/head';
 import { Eye, EyeOff } from 'lucide-react';
 import { generateKeyPair, signMessage, createVotePayload } from '@/lib/crypto';
 import { api, Election, NewElection, Candidate, AuthResponse } from '@/lib/api';
@@ -678,8 +679,33 @@ export default function VotingPage() {
   const electionVoted = selectedElection ? session?.has_voted_election === selectedElection.id : false;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-blue-800 text-white p-4 shadow-lg">
+    <>
+      <Head>
+        <title>TrueTally - Sistema de Votación Blockchain Seguro</title>
+        <meta name="description" content="Sistema de votación electrónica inmutable basado en blockchain. Vota de forma segura, transparente y verificable. Tecnología blockchain para elecciones democráticas." />
+        <meta name="keywords" content="votación blockchain, elecciones seguras, votación electrónica, democracia digital, TrueTally" />
+        <meta name="author" content="TrueTally Team" />
+        <meta name="robots" content="index, follow" />
+
+        {/* Open Graph */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://truetally.com" />
+        <meta property="og:title" content="TrueTally - Votación Blockchain Segura" />
+        <meta property="og:description" content="Sistema de votación electrónica inmutable basado en blockchain. Tecnología blockchain para elecciones democráticas." />
+        <meta property="og:image" content="https://truetally.com/og-image.jpg" />
+        <meta property="og:site_name" content="TrueTally" />
+        <meta property="og:locale" content="es_ES" />
+
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="TrueTally - Votación Blockchain Segura" />
+        <meta name="twitter:description" content="Sistema de votación electrónica inmutable basado en blockchain." />
+        <meta name="twitter:image" content="https://truetally.com/og-image.jpg" />
+
+        <link rel="canonical" href="https://truetally.com" />
+      </Head>
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-blue-800 text-white p-4 shadow-lg">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold">TRUE TALLY</h1>
@@ -1602,5 +1628,6 @@ export default function VotingPage() {
         )}
       </main>
     </div>
+    </>
   );
 }
