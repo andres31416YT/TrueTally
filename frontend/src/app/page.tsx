@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import { generateKeyPair, signMessage, createVotePayload } from '@/lib/crypto';
 import { api, Election, NewElection, Candidate, AuthResponse } from '@/lib/api';
@@ -157,7 +157,8 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
 
 export default function VotingPage() {
   const pathname = usePathname();
-  const [step, setStep] = useState<Step>('home');
+  const router = useRouter();
+  const [step, setStep] = useState<Step>(pathname === '/login' ? 'auth' : 'home');
   const [session, setSession] = useState<UserSession | null>(null);
   const [keyPair, setKeyPair] = useState<KeyPair | null>(null);
 
@@ -289,6 +290,15 @@ export default function VotingPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+
+  // Navegar entre rutas cuando cambie el step
+  useEffect(() => {
+    if (step === 'auth' && pathname !== '/login') {
+      router.push('/login');
+    } else if (step === 'home' && pathname !== '/') {
+      router.push('/');
+    }
+  }, [step, router, pathname]);
 
   const loadElections = async () => {
     const res = await api.listElections();
