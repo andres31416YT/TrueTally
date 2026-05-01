@@ -502,25 +502,30 @@ export default function VotingPage() {
     setError(null);
 
     try {
-      const res = await api.authenticate({
-        email: authData.email,
-        password: authData.password || undefined,
-      });
-
       if (authMode === 'register') {
-        if (res.success && res.data && 'role' in res.data) {
+        const res = await api.register({
+          email: authData.email,
+          password: authData.password || undefined,
+        });
+
+        if (res.success) {
           setAuthMode('login');
           setAuthData({ ...authData, password: '', confirmPassword: '' });
           setShowPassword(false);
           setShowConfirmPassword(false);
           setError(null);
-          alert('Usuario registrado correctamente. Ahora puedes iniciar sesión.');
+          alert('¡Registro exitoso! Ahora puedes iniciar sesión con tus credenciales.');
         } else {
-          setError(res.error || 'Error en registro');
+          setError(res.error || 'No se pudo completar el registro. Inténtalo de nuevo.');
         }
       } else {
-        if (res.success && res.data && typeof res.data === 'object' && 'role' in res.data) {
-          const authDataResponse = res.data as AuthResponse;
+        const res = await api.authenticate({
+          email: authData.email,
+          password: authData.password || undefined,
+        });
+
+        if (res.success && res.data) {
+          const authDataResponse = res.data;
           const newSession: UserSession = {
             email: authData.email,
             role: authDataResponse.role,
@@ -532,18 +537,14 @@ export default function VotingPage() {
           localStorage.setItem('user_session', JSON.stringify(newSession));
 
           if (authDataResponse.public_key) {
-            const keys = generateKeyPair();
-            localStorage.setItem('user_secret_key', keys.secretKey);
-            setKeyPair({ publicKey: authDataResponse.public_key, secretKey: keys.secretKey });
-          } else {
-            const keys = generateKeyPair();
-            localStorage.setItem('user_secret_key', keys.secretKey);
-            setKeyPair({ publicKey: keys.publicKey, secretKey: keys.secretKey });
+            localStorage.setItem('user_secret_key', 'sk_session_active');
+            setKeyPair({ publicKey: authDataResponse.public_key, secretKey: 'sk_session_active' });
           }
 
           setStep('home');
+          setError(null);
         } else {
-          setError('Correo o contraseña incorrectos. Por favor, verifica tus datos.');
+          setError(res.error || 'Correo o contraseña incorrectos. Por favor, verifica tus datos.');
         }
       }
     } catch (err: any) {

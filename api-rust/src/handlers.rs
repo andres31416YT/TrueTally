@@ -418,7 +418,7 @@ pub async fn authenticate(
     let state = state.lock().await;
 
     if payload.email.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Email is required".to_string()))));
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("El correo electrónico es requerido".to_string()))));
     }
 
     match db::authenticate_user(&state.db_pool, &payload.email, payload.password.as_deref()).await {
@@ -432,23 +432,43 @@ pub async fn authenticate(
             }))))
         }
         Ok(None) => {
-            // Si no se encuentra en la base de datos, intentamos registrar como usuario estándar
-            if payload.password.is_some() && payload.password.as_ref().map(|p| p.len()).unwrap_or(0) >= 6 {
-                let keys = generate_key_pair();
-                match db::create_user(&state.db_pool, &payload.email, Some(&keys.0), Some(&payload.password.unwrap()), "user").await {
-                    Ok(_) => Ok((StatusCode::OK, Json(ApiResponse::ok(AuthResponse {
-                        role: "user".to_string(),
-                        public_key: Some(keys.0),
-                        has_password: true,
-                        has_voted_election: None,
-                    })))),
-                    Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
-                }
-            } else {
-                Err((StatusCode::UNAUTHORIZED, Json(ApiResponse::err("Credenciales incorrectas o usuario no encontrado.".to_string()))))
-            }
+            // El usuario no existe o la contraseña es incorrecta
+            Err((StatusCode::UNAUTHORIZED, Json(ApiResponse::err("Correo o contraseña incorrectos. Por favor, verifica tus datos.".to_string()))))
         }
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Database error: {}", e))))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Error de base de datos: {}", e))))),
+    }
+}
+
+pub async fn register(
+    State(state): State<Arc<Mutex<AppState>>>,
+    Json(payload): Json<AuthRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiResponse<AuthResponse>>)> {
+    let state = state.lock().await;
+
+    if payload.email.is_empty() || payload.password.is_none() {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("Email y contraseña son requeridos".to_string()))));
+    }
+
+    let password = payload.password.unwrap();
+    if password.len() < 6 {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiResponse::err("La contraseña debe tener al menos 6 caracteres".to_string()))));
+    }
+
+    // Verificar si el usuario ya existe
+    let existing = db::authenticate_user(&state.db_pool, &payload.email, None).await;
+    if let Ok(Some(_)) = existing {
+        return Err((StatusCode::CONFLICT, Json(ApiResponse::err("Este correo ya está registrado".to_string()))));
+    }
+
+    let keys = generate_key_pair();
+    match db::create_user(&state.db_pool, &payload.email, Some(&keys.0), Some(&password), "user").await {
+        Ok(_) => Ok((StatusCode::CREATED, Json(ApiResponse::ok(AuthResponse {
+            role: "user".to_string(),
+            public_key: Some(keys.0),
+            has_password: true,
+            has_voted_election: None,
+        })))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::err(format!("Error al crear usuario: {}", e))))),
     }
 }
 

@@ -182,6 +182,12 @@ export const api = {
       body: JSON.stringify(auth),
     }),
 
+  register: (auth: AuthRequest) =>
+    fetchApi<AuthResponse>('/register-user', {
+      method: 'POST',
+      body: JSON.stringify(auth),
+    }),
+
   createElection: (election: NewElection) =>
     fetchApi<string>('/elections', {
       method: 'POST',
