@@ -141,6 +141,14 @@ API Gateway es un servicio regional público y no puede ser target directo de AL
 - **Cost-effective**: ALB es más barato que múltiples CloudFront distributions
 - **Multi-zone awareness**: Conciencia de zona para latencia óptima
 
+**Ventajas de 2 Lambdas separados:**
+- **Despliegues más rápidos**: Actualizar un Lambda no afecta al otro
+- **Mejor aislamiento**: Fallo en uno no impacta el otro servicio
+- **Escalado independiente**: Cada Lambda escala según su carga específica
+- **Debugging simplificado**: Problemas más fáciles de identificar y resolver
+- **Mantenimiento sin downtime**: Updates graduales del sistema
+- **Separación de responsabilidades**: Validación vs procesamiento blockchain
+
 **Flujo de datos:**
 ```
 Usuario → CloudFront → WAF → ALB (decide zona)
@@ -497,22 +505,31 @@ Usuario → CloudFront → WAF → ALB (decide zona)
 4. Crear S3 buckets (estáticos + uploads)
 5. CloudFront distribution (CDN)
 
-### Fase 2: API Core (Semana 2)
-1. Crear API Gateway (HTTP API)
-2. Implementar Lambda functions (Node.js):
-   - `src/handlers/auth.js` (login, register)
-   - `src/handlers/users.js` (CRUD)
-   - `src/handlers/transactions.js` (core business)
-3. Configurar RDS Proxy
-4. Desplegar Aurora Serverless v2
-5. Conectar Lambda → RDS (TLS + IAM auth)
+### Fase 2: API Core + 2 Lambdas (Semana 2)
+1. Crear API Gateway (HTTP API) con VPC Link
+2. Implementar **Lambda 1 - Vote Validator**:
+   - Validación síncrona de votos
+   - Autenticación de usuarios
+   - Publicación a SNS
+   - Almacenamiento inicial en DynamoDB
+3. Implementar **Lambda 2 - Blockchain Processor**:
+   - Procesamiento asíncrono desde SQS
+   - Envío de votos a nodos blockchain
+   - Actualización de estado en DB
+   - Manejo de errores y reintentos
+4. Configurar SNS Topic y SQS Queue
+5. Configurar RDS Proxy para Lambda 1
+6. Desplegar Aurora Serverless v2
+7. Conectar Lambda 1 → RDS (TLS + IAM auth)
+8. Conectar Lambda 2 → Blockchain Nodes
 
-### Fase 3: Features Avanzadas (Semana 3)
-1. SQS para procesamiento async (reports, emails)
-2. DynamoDB para sesiones / caché
-3. EventBridge para scheduled tasks (limpieza)
-4. Step Functions para workflows complejos
+### Fase 3: Features Avanzadas + Integración Lambda (Semana 3)
+1. Configurar SQS para Lambda 2 (ya implementado)
+2. DynamoDB para almacenamiento de votos (ya implementado)
+3. EventBridge para scheduled tasks (limpieza DB, reports)
+4. Step Functions para workflows complejos (si necesario)
 5. WAF + Shield básico
+6. Testing integración Lambda 1 → SNS → SQS → Lambda 2
 
 ### Fase 4: Observabilidad (Semana 3-4)
 1. CloudWatch dashboards
@@ -650,30 +667,37 @@ Usuario → CloudFront → WAF → ALB (decide zona)
 - **Full Nodes**: ECS Fargate para mantenimiento de chain completa
 - **Archive Nodes**: EC2 Spot para auditoría histórica (activados on-demand)
 
-#### Arquitectura Recomendada para TrueTally - ALB Multi-Zona
+#### Arquitectura Recomendada para TrueTally - ALB Multi-Zona + 2 Lambdas
 ```
 Usuario vota → CloudFront → WAF → ALB (balanceo entre zonas)
                     ↓
         ALB → VPC Link → API Gateway Zona A/B
                     ↓
-            API Gateway → Lambda Principal (validación + lógica negocio)
+            API Gateway → Lambda 1 (validación + envío a cola)
                     ↓
-            Lambda envía mensaje a SNS Topic
+            Lambda 1 → SNS Topic (publicación asíncrona)
                     ↓
-            SNS → SQS Queue (buffering asíncrono)
+            SNS → SQS Queue (buffering + desacoplamiento)
                     ↓
-            SQS trigger → Mismo Lambda (procesamiento blockchain)
+            SQS Trigger → Lambda 2 (procesamiento blockchain)
                     ↓
-            Lambda envía voto a Nodo Blockchain
+            Lambda 2 → Nodo Blockchain (envío del voto)
                     ↓
             Confirmación → DynamoDB/S3 (resultados)
                     ↓
             Notificación usuario vía API Gateway
 ```
 
-#### Configuración ALB + VPC Link + API Gateway
+**Ventajas de 2 Lambdas:**
+- **Despliegue más rápido**: Lambdas independientes se actualizan por separado
+- **Mejor aislamiento**: Un Lambda falla no afecta al otro
+- **Escalado independiente**: Cada Lambda escala según su carga
+- **Mantenimiento**: Updates sin downtime completo del sistema
+- **Debugging**: Problemas más fáciles de identificar
 
-**ALB Configuration:**
+#### Configuración ALB + VPC Link + API Gateway + 2 Lambdas
+
+**ALB Configuration (Mismo que antes):**
 ```json
 {
   "LoadBalancerName": "truetally-main-alb",
@@ -694,6 +718,83 @@ Usuario vota → CloudFront → WAF → ALB (balanceo entre zonas)
       }
     }]
   }]
+}
+```
+
+**API Gateway Private Integration (Lambda 1 - Validator):**
+```json
+{
+  "ApiId": "api-gateway-zone-a",
+  "EndpointType": "PRIVATE",
+  "VpcEndpointIds": ["vpce-api-gateway-zone-a"],
+  "Integration": {
+    "Type": "AWS_PROXY",
+    "HttpMethod": "POST",
+    "Uri": "arn:aws:apigateway:region:lambda:path/2015-03-31/functions/arn:aws:lambda:region:account:function:truetally-lambda-vote-validator/invocations",
+    "ConnectionType": "VPC_LINK",
+    "ConnectionId": "vpc-link-zone-a"
+  }
+}
+```
+
+**SNS Topic Configuration (Para desacoplamiento):**
+```json
+{
+  "TopicName": "truetally-vote-events",
+  "DisplayName": "TrueTally Vote Processing Events",
+  "Attributes": {
+    "DeliveryPolicy": "{\"healthyRetryPolicy\":{\"numRetries\":3}}"
+  }
+}
+```
+
+**SQS Queue Configuration (Buffering asíncrono):**
+```json
+{
+  "QueueName": "truetally-vote-processing-queue",
+  "Attributes": {
+    "VisibilityTimeout": "300",
+    "MessageRetentionPeriod": "345600",
+    "ReceiveMessageWaitTimeSeconds": "20",
+    "DelaySeconds": "0",
+    "RedrivePolicy": "{\"deadLetterTargetArn\":\"arn:aws:sqs:region:account:truetally-vote-processing-dlq\",\"maxReceiveCount\":\"3\"}"
+  }
+}
+```
+
+**SQS Subscription to SNS:**
+```json
+{
+  "TopicArn": "arn:aws:sns:region:account:truetally-vote-events",
+  "Protocol": "sqs",
+  "Endpoint": "arn:aws:sqs:region:account:truetally-vote-processing-queue"
+}
+```
+
+**Lambda 1 Event Source Mapping (API Gateway - Directo):**
+- **Trigger**: API Gateway (HTTP API)
+- **Function**: `truetally-lambda-vote-validator`
+- **Timeout**: 30 segundos
+- **Memory**: 256 MB (suficiente para validación)
+
+**Lambda 2 Event Source Mapping (SQS Trigger):**
+```json
+{
+  "FunctionName": "truetally-lambda-blockchain-processor",
+  "EventSourceArn": "arn:aws:sqs:region:account:truetally-vote-processing-queue",
+  "Enabled": true,
+  "BatchSize": 1,
+  "MaximumBatchingWindowInSeconds": 0
+}
+```
+
+**Dead Letter Queue (DLQ) Configuration:**
+```json
+{
+  "QueueName": "truetally-vote-processing-dlq",
+  "Attributes": {
+    "MessageRetentionPeriod": "1209600" // 14 días
+  }
 }
 ```
 
@@ -775,7 +876,10 @@ Blockchain Operations Cost Breakdown:
 ├── ECS Fargate Node → $30-80/mes (1-2 instancias pequeñas)
 ├── ALB → $16-30/mes (Application Load Balancer 2 AZs)
 ├── VPC Link → $7/mes (VPC endpoint charges)
-├── Lambda Processing → $10-40/mes (un solo Lambda: validación + blockchain)
+├── Lambda 1 (Validator) → $5-20/mes (validación síncrona, bajo uso)
+├── Lambda 2 (Blockchain) → $5-20/mes (procesamiento asíncrono, alto uso)
+├── SNS → $1-5/mes (mensajes entre lambdas)
+├── SQS → $0.50/mes (cola de mensajes)
 ├── Storage (Blocks) → $5-20/mes (S3 Glacier)
 └── Monitoring → $10-30/mes (CloudWatch)
 Total: $55-269/mes (vs $1000+ en EC2 tradicional)
@@ -811,12 +915,12 @@ TrueTally es ideal para serverless: picos de uso (horarios laborales), operacion
 
 **Inversión inicial**: $0 (nivel gratuito cubre primeros 12 meses para tráfico bajo)
 
-**Mes 1-6 (crecimiento)**: $75-175/mes (incluye ALB + VPC Link)
-**Mes 7-12 (scale)**: $175-425/mes (alta disponibilidad multi-zona)
-**Año 1 promedio**: ~$225/mes
+**Mes 1-6 (crecimiento)**: $80-185/mes (ALB + VPC Link + 2 Lambdas)
+**Mes 7-12 (scale)**: $180-440/mes (alta disponibilidad multi-zona)
+**Año 1 promedio**: ~$235/mes
 
-**Vs. Alternativa EC2 tradicional**: Ahorro estimado **$3000-5000/año**
 **Vs. Arquitectura sin ALB**: +$20-30/mes por balanceo inteligente
+**Vs. Un solo Lambda**: +$5-10/mes por separación de responsabilidades
 
 ### Implementación ALB Multi-Zona - Guía Paso a Paso
 
@@ -896,12 +1000,14 @@ El modelo serverless paga solo el éxito (tráfico real), sin costos fijos de in
 
 ### 16.1 Arquitectura de Nodos Recomendada
 
-#### Diagrama de Nodos Blockchain con P2P Sync
+#### Diagrama de Nodos Blockchain con P2P Sync + 2 Lambdas
 ```
-[Usuarios] → [API Gateway] → [Lambda Validators]
+[Usuarios] → [API Gateway] → [Lambda 1: Validación]
                 ↓
-    [Blockchain as a Service] ← Primary operations
-                ↓
+    [Lambda 1] → SNS Topic → SQS Queue → [Lambda 2: Blockchain]
+                ↓                           ↓
+    [DynamoDB/S3] ← Results storage     [Nodo Blockchain]
+                ↓                           ↓
 [ECS Fargate Cluster] ← Persistent nodes
     ↓               ↓
 [Blockchain Node A] ⇄ [Blockchain Node B] ← P2P Sync Multi-Zona
@@ -909,6 +1015,9 @@ El modelo serverless paga solo el éxito (tráfico real), sin costos fijos de in
 [EBS Volumes]     [EBS Volumes]    Blocks sync
     ↓               ↓
 [S3 Glacier] ← Archive storage for old blocks
+
+Lambda 1: Validación síncrona + envío asíncrono
+Lambda 2: Procesamiento blockchain + confirmación
 
 P2P Communication Flow:
 - TCP 30333: Libp2p/Kademlia protocol
@@ -1380,110 +1489,192 @@ blockchain-node-zone-b.truetally.local → 10.0.2.200 (IP del nodo B)
 - Revisar fork resolution logic
 - Monitor peer majority consensus
 
-### 16.10 Integración con Arquitectura Serverless
+### 16.10 Integración con Arquitectura Serverless - 2 Lambdas
 
-#### Un Solo Lambda con Auto-Invocación Asíncrona
+#### Lambda 1: Validación y Envío a Cola (API Gateway Trigger)
 
-**Flujo del Lambda Principal:**
+**Responsabilidades:**
 ```
-1. Validación síncrona (respuesta inmediata al usuario)
-2. Publicación asíncrona a SNS (no bloqueante)
-3. Procesamiento blockchain vía SQS trigger
-4. Envío del voto al nodo blockchain
+1. Validación síncrona del voto
+2. Autenticación del usuario
+3. Almacenamiento inicial en DB
+4. Publicación a SNS (no bloqueante)
+5. Respuesta inmediata al usuario
 ```
 
-**Implementación del Lambda:**
+**Implementación Lambda 1:**
 
 ```javascript
-// lambda/index.js - Un solo Lambda para toda la lógica
+// lambda/lambda-vote-validator/index.js
 const AWS = require('aws-sdk');
 const sns = new AWS.SNS();
-const sqs = new AWS.SQS();
 const dynamo = new AWS.DynamoDB.DocumentClient();
 
-// 1. Handler principal - Validación síncrona
+// Handler principal - API Gateway trigger
 exports.handler = async (event) => {
   const { body, requestContext } = event;
 
   try {
-    // Validación inmediata
-    const voteData = validateVote(JSON.parse(body));
+    const voteData = JSON.parse(body);
 
-    // Respuesta síncrona al usuario
-    await sendImmediateResponse(requestContext, { status: 'accepted' });
+    // 1. Validación síncrona
+    const validationResult = await validateVote(voteData);
+    if (!validationResult.valid) {
+      return { statusCode: 400, body: JSON.stringify({ error: validationResult.error }) };
+    }
 
-    // Publicación asíncrona a SNS (no espera)
+    // 2. Autenticación usuario
+    const userAuth = await authenticateUser(voteData.userId, voteData.token);
+    if (!userAuth.valid) {
+      return { statusCode: 401, body: JSON.stringify({ error: 'Authentication failed' }) };
+    }
+
+    // 3. Almacenar estado inicial en DynamoDB
+    await dynamo.put({
+      TableName: 'truetally-votes',
+      Item: {
+        voteId: voteData.id,
+        userId: voteData.userId,
+        status: 'pending',
+        timestamp: Date.now(),
+        data: voteData
+      }
+    }).promise();
+
+    // 4. Publicación asíncrona a SNS (no bloqueante)
     await sns.publish({
       TopicArn: process.env.SNS_TOPIC_ARN,
       Message: JSON.stringify({
-        type: 'PROCESS_VOTE',
+        type: 'VOTE_READY',
+        voteId: voteData.id,
+        userId: voteData.userId,
         voteData,
         timestamp: Date.now()
       })
     }).promise();
 
-    return { statusCode: 202, body: JSON.stringify({ message: 'Vote accepted for processing' }) };
+    // 5. Respuesta inmediata al usuario
+    return {
+      statusCode: 202,
+      body: JSON.stringify({
+        message: 'Vote accepted for processing',
+        voteId: voteData.id,
+        status: 'processing'
+      })
+    };
 
   } catch (error) {
-    return { statusCode: 400, body: JSON.stringify({ error: error.message }) };
+    console.error('Validation error:', error);
+    return { statusCode: 500, body: JSON.stringify({ error: 'Internal server error' }) };
   }
 };
 
-// 2. Handler SQS - Procesamiento blockchain (mismo Lambda)
-exports.processVoteQueue = async (event) => {
+async function validateVote(voteData) {
+  // Lógica de validación (formato, campos requeridos, etc.)
+  return { valid: true };
+}
+
+async function authenticateUser(userId, token) {
+  // Lógica de autenticación
+  return { valid: true };
+}
+```
+
+#### Lambda 2: Procesamiento Blockchain (SQS Trigger)
+
+**Responsabilidades:**
+```
+1. Recibir mensaje de SQS
+2. Enviar voto a nodo blockchain
+3. Actualizar estado en DB
+4. Manejar errores y reintentos
+5. Notificar confirmación
+```
+
+**Implementación Lambda 2:**
+
+```javascript
+// lambda/lambda-blockchain-processor/index.js
+const AWS = require('aws-sdk');
+const dynamo = new AWS.DynamoDB.DocumentClient();
+
+// Handler SQS - Procesamiento blockchain
+exports.handler = async (event) => {
   for (const record of event.Records) {
     const { body } = record;
     const message = JSON.parse(body);
-    const { type, voteData } = JSON.parse(message);
+    const { type, voteId, userId, voteData } = JSON.parse(message);
 
-    if (type === 'PROCESS_VOTE') {
+    if (type === 'VOTE_READY') {
       try {
-        // Obtener URL del nodo activo
-        const nodeUrl = await getActiveNodeUrl();
+        console.log(`Processing vote ${voteId} for user ${userId}`);
 
-        // Enviar voto al nodo blockchain
+        // 1. Obtener URL del nodo blockchain activo
+        const nodeUrl = await getActiveBlockchainNode();
+
+        // 2. Enviar voto al nodo blockchain
         const response = await fetch(`${nodeUrl}/vote`, {
           method: 'POST',
           body: JSON.stringify(voteData),
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 30000 // 30 segundos timeout
         });
+
+        if (!response.ok) {
+          throw new Error(`Blockchain node error: ${response.status}`);
+        }
 
         const result = await response.json();
 
-        // Guardar resultado en DynamoDB
-        await dynamo.put({
+        // 3. Actualizar estado en DynamoDB
+        await dynamo.update({
           TableName: 'truetally-votes',
-          Item: {
-            voteId: voteData.id,
-            status: 'confirmed',
-            blockHash: result.blockHash,
-            timestamp: Date.now()
+          Key: { voteId },
+          UpdateExpression: 'SET #status = :status, blockHash = :blockHash, confirmedAt = :confirmedAt',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: {
+            ':status': 'confirmed',
+            ':blockHash': result.blockHash,
+            ':confirmedAt': Date.now()
           }
         }).promise();
 
-        // Notificar al usuario (opcional)
-        await notifyUser(voteData.userId, 'vote_confirmed');
+        // 4. Notificar confirmación (opcional)
+        await notifyUserConfirmation(userId, voteId, result.blockHash);
+
+        console.log(`Vote ${voteId} confirmed in block ${result.blockHash}`);
 
       } catch (error) {
-        console.error('Error processing vote:', error);
-        // Reintento automático vía SQS (configurable)
+        console.error(`Error processing vote ${voteId}:`, error);
+
+        // Actualizar estado a error
+        await dynamo.update({
+          TableName: 'truetally-votes',
+          Key: { voteId },
+          UpdateExpression: 'SET #status = :status, error = :error',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: {
+            ':status': 'error',
+            ':error': error.message
+          }
+        }).promise();
+
+        // Re-lanzar error para que SQS maneje reintento/DLQ
+        throw error;
       }
     }
   }
 };
 
-// Funciones auxiliares
-async function getActiveNodeUrl() {
-  // Service Discovery o configuración estática
-  return process.env.BLOCKCHAIN_NODE_URL || 'http://blockchain-node:9944';
+async function getActiveBlockchainNode() {
+  // Service Discovery: obtener nodo activo de Cloud Map
+  // O configuración estática con health checks
+  return process.env.BLOCKCHAIN_NODE_URL || 'http://blockchain-node-zone-a.truetally.local:9944';
 }
 
-async function sendImmediateResponse(requestContext, data) {
-  // Respuesta inmediata vía WebSocket o almacenar para polling
-}
-
-async function notifyUser(userId, event) {
-  // Notificación vía WebSocket, email, etc.
+async function notifyUserConfirmation(userId, voteId, blockHash) {
+  // Notificación vía WebSocket, SNS, etc.
+  // Implementar según necesidades de UI
 }
 ```
 
