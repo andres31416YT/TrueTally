@@ -35,9 +35,12 @@ Sistema de votación electrónica basado en blockchain con interfaz web moderna.
 
 ## Inicio Rápido
 
+> Los archivos de configuración y código fuente se encuentran en la carpeta `app/`.
+
 ### 1. Construir y ejecutar todos los servicios
 
 ```bash
+cd app
 docker compose up --build
 ```
 
@@ -99,7 +102,12 @@ docker compose down -v
 
 ## Uso del Sistema
 
-### 1. Votar
+### 1. Acceder al sistema
+
+1. Ve a http://localhost:3000/login
+2. Credenciales de prueba disponibles en `app/frontend/src/app/lib/api.ts`
+
+### 2. Votar
 
 1. Ve a http://localhost:3000
 2. Haz clic en "Generar Par de Claves"
@@ -126,7 +134,7 @@ docker compose down -v
 ### Desarrollo con reinicio automático
 
 ```bash
-docker compose -f docker-compose.dev.yml up --build
+docker compose up --build
 ```
 
 ### Ver logs de un servicio
@@ -168,30 +176,33 @@ Las variables se configuran automáticamente en Docker Compose:
 
 ```
 TrueTally/
-├── api-rust/               # API Gateway en Rust
-│   ├── src/
-│   │   ├── handlers.rs    # Endpoints HTTP
-│   │   ├── models.rs     # Modelos de datos
-│   │   ├── db.rs         # Operaciones de base de datos
-│   │   └── main.rs       # Punto de entrada
-│   └── Dockerfile
-├── blockchain-core/       # Nodo blockchain en Rust
-│   ├── src/
-│   │   ├── blockchain.rs # Implementación de blockchain
-│   │   ├── block.rs      # Estructura de bloques
-│   │   ├── consensus.rs  # Lógica de consenso
-│   │   ├── network.rs    # Networking P2P
-│   │   └── main.rs       # Punto de entrada
-│   └── Dockerfile
-├── frontend/             # Aplicación Next.js
-│   ├── src/
-│   │   ├── app/          # Páginas de Next.js
-│   │   ├── components/  # Componentes React
-│   │   ├── hooks/        # Custom hooks
-│   │   └── lib/          # Utilidades (API, crypto)
-│   └── Dockerfile
-├── docker-compose.yml    # Configuración de producción
-├── docker-compose.dev.yml # Configuración de desarrollo
+├── app/
+│   ├── blockchain-core/       # Nodo blockchain en Rust
+│   │   ├── src/
+│   │   │   ├── blockchain.rs # Implementación de blockchain
+│   │   │   ├── block.rs      # Estructura de bloques
+│   │   │   ├── consensus.rs  # Lógica de consenso
+│   │   │   ├── network.rs    # Networking P2P
+│   │   │   └── main.rs       # Punto de entrada
+│   │   └── Dockerfile
+│   ├── api-rust/              # API Gateway en Rust
+│   │   ├── src/
+│   │   │   ├── handlers.rs    # Endpoints HTTP
+│   │   │   ├── models.rs     # Modelos de datos
+│   │   │   ├── db.rs         # Operaciones de base de datos
+│   │   │   └── main.rs       # Punto de entrada
+│   │   └── Dockerfile
+│   ├── frontend/             # Aplicación Next.js
+│   │   ├── src/
+│   │   │   ├── app/          # Páginas de Next.js
+│   │   │   │   ├── login/    # Login de votantes
+│   │   │   │   ├── register/ # Registro de votantes
+│   │   │   │   └── blocks/   # Explorador de bloques
+│   │   │   ├── components/  # Componentes React
+│   │   │   └── lib/          # Utilidades (API, crypto)
+│   │   └── Dockerfile
+│   ├── docker-compose.yml    # Configuración Docker Compose
+│   └── .env                  # Variables de entorno locales
 └── README.md
 ```
 
