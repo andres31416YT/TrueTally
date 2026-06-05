@@ -1,0 +1,18 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!environments/*/terraform.tfvars
+.terraform.lock.hcl
+.DS_Store
+
+# AWS
+credentials
+config
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
