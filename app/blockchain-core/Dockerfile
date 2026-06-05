@@ -1,27 +1,24 @@
-FROM rust:1.85-bookworm
+# Multi-stage build: Rust binary in distroless image
+FROM rust:1.75-alpine AS builder
+
+RUN apk add --no-cache musl-dev openssl-dev pkgconfig
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY Cargo.toml ./
+COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 
-RUN cargo build --release
+RUN cargo build --release -p blockchain-core --bin blockchain-node
 
-FROM debian:bookworm-slim
+# Runtime stage
+FROM gcr.io/distroless/cc-debian12
 
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/target/release/blockchain-node /blockchain-node
 
-WORKDIR /app
+# CloudWatch agent config
+ENV PORT=9944
+ENV RUST_LOG=blockchain_core=info
 
-COPY --from=0 /app/target/release/blockchain-node /app/
+EXPOSE ${PORT}
 
-EXPOSE 9944 30333
-
-CMD ["/app/blockchain-node"]
+ENTRYPOINT ["/blockchain-node"]

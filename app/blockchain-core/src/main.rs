@@ -8,22 +8,23 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use axum::{
     extract::{Path, State},
-    http::{StatusCode, header},
+    http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
-    serve,
 };
+use tracing::{info, warn};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 const CHAIN_DATA_PATH: &str = "/data/db/chain.json";
 
 static BLOCKCHAIN: Lazy<Arc<Mutex<Blockchain>>> = Lazy::new(|| {
     let chain_path = PathBuf::from(CHAIN_DATA_PATH);
     if chain_path.exists() {
-        println!("Loading blockchain from {}", CHAIN_DATA_PATH);
+        info!("Loading blockchain from {}", CHAIN_DATA_PATH);
         Arc::new(Mutex::new(Blockchain::load_from_file(&chain_path, 2, false)))
     } else {
-        println!("Creating new blockchain");
+        info!("Creating new blockchain");
         Arc::new(Mutex::new(Blockchain::new(2, false)))
     }
 });
@@ -95,6 +96,9 @@ async fn add_vote(
     State(blockchain): State<Arc<Mutex<Blockchain>>>,
     Json(payload): Json<VoteRequest>,
 ) -> Response {
+    info!("Received vote: election={}, candidate={}, voter={}", 
+        payload.election_id, payload.candidate_id, payload.voter_public_key);
+
     let vote = Vote {
         voter_public_key: payload.voter_public_key.clone(),
         candidate_id: payload.candidate_id,
@@ -103,11 +107,12 @@ async fn add_vote(
         timestamp: Utc::now(),
     };
 
-let mut chain = blockchain.lock().await;
+    let mut chain = blockchain.lock().await;
     
     match chain.add_block(vote) {
         Ok(block) => {
             let _ = chain.save_to_file(CHAIN_DATA_PATH);
+            info!("Block added: index={}, hash={}", block.index, block.hash);
             (
                 StatusCode::CREATED,
                 Json(ApiResponse::success(VoteResult {
@@ -117,10 +122,13 @@ let mut chain = blockchain.lock().await;
                 })),
             ).into_response()
         }
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(ApiResponse::<VoteResult>::error(e)),
-        ).into_response(),
+        Err(e) => {
+            warn!("Vote rejected: {}", e);
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<VoteResult>::error(e)),
+            ).into_response()
+        }
     }
 }
 
@@ -182,9 +190,48 @@ async fn health_check() -> &'static str {
     "OK"
 }
 
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            info!("Received Ctrl+C, shutting down");
+        }
+        _ = terminate => {
+            info!("Received terminate signal, shutting down");
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
-    env_logger::init();
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| "blockchain_core=info".into()))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    let port = std::env::var("PORT")
+        .unwrap_or_else(|_| "9944".to_string())
+        .parse::<u16>()
+        .expect("PORT must be a valid u16");
+    
+    info!("Starting blockchain core on port {}", port);
     
     let blockchain = Arc::clone(&*BLOCKCHAIN);
     
@@ -197,12 +244,15 @@ async fn main() {
         .route("/validate", get(validate_chain))
         .with_state(blockchain);
     
-    let addr = SocketAddr::from(([0, 0, 0, 0], 9944));
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    info!("Blockchain node running on http://{}", addr);
     
-    println!("Blockchain node running on http://{}", addr);
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .expect("Failed to bind to port");
     
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
         .await
         .expect("Failed to start server");
 }
