@@ -54,14 +54,17 @@ variable "lambda_node_url_az2" {
 variable "domain_name" {
   description = "Custom domain for frontend"
   type        = string
+  default     = ""
 }
 
 variable "ssl_certificate_arn" {
   description = "ACM certificate ARN for CloudFront"
   type        = string
+  default     = ""
 }
 
 variable "route53_zone_id" {
   description = "Route53 hosted zone ID"
   type        = string
+  default     = ""
 }
