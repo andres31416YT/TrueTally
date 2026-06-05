@@ -1,17 +1,25 @@
-# Terraform
 .terraform/
 *.tfstate
 *.tfstate.backup
-*.tfvars
-!environments/*/terraform.tfvars
 .terraform.lock.hcl
 .DS_Store
 
-# AWS
+*.tfvars
+*.tfvars.json
+*.tfbackend
+
+
+crash.log
+crash.*.log
+
+
 credentials
 config
+*.pem
+*.pkcs12
+*.key
 
-# IDE
+
 .idea/
 .vscode/
 *.swp
