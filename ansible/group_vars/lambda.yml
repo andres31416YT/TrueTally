@@ -1,0 +1,15 @@
+---
+# Variables específicas para Lambda Acceso
+lambda_acceso_timeout: 30
+lambda_acceso_memory_size: 512
+lambda_acceso_reserved_concurrency: 5
+
+# Variables específicas para Lambda Despachador
+lambda_despachador_timeout: 30
+lambda_despachador_memory_size: 256
+lambda_despachador_reserved_concurrency: 5
+
+# Variables específicas para Lambda Procesador
+lambda_procesador_timeout: 300
+lambda_procesador_memory_size: 1024
+lambda_procesador_reserved_concurrency: 5

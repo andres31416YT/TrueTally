@@ -1,0 +1,89 @@
+---
+# Variables globales para todos los hosts
+environment: "{{ lookup('env', 'ENVIRONMENT') | default('dev') }}"
+aws_region: "{{ lookup('env', 'AWS_REGION') | default('us-east-1') }}"
+
+# AWS Account
+aws_account_id: "123456789012"  # Cambiar por el ID real
+
+# Nombres de recursos
+project_name: truetally
+name_prefix: "{{ project_name }}-{{ environment }}"
+
+# URLs de servicios
+blockchain_node_url_az1: "http://{{ name_prefix }}-blockchain-alb-1.elb.{{ aws_region }}.amazonaws.com:9944"
+blockchain_node_url_az2: "http://{{ name_prefix }}-blockchain-alb-2.elb.{{ aws_region }}.amazonaws.com:9944"
+api_gateway_url: "https://{{ name_prefix }}-api.execute-api.{{ aws_region }}.amazonaws.com"
+frontend_url: "https://{{ name_prefix }}-frontend.cloudfront.net"
+
+# SQS
+sqs_queue_url: "https://sqs.{{ aws_region }}.amazonaws.com/{{ aws_account_id }}/{{ name_prefix }}-vote-queue"
+sqs_dlq_url: "https://sqs.{{ aws_region }}.amazonaws.com/{{ aws_account_id }}/{{ name_prefix }}-vote-dlq"
+
+# Secrets Manager ARNs (se obtienen dinámicamente)
+secrets:
+  db_credentials: "arn:aws:secretsmanager:{{ aws_region }}:{{ aws_account_id }}:secret:{{ name_prefix }}/db/credentials"
+  lambda_sqs_url: "arn:aws:secretsmanager:{{ aws_region }}:{{ aws_account_id }}:secret:{{ name_prefix }}/lambda/sqs-url"
+  redis_auth_token: "arn:aws:secretsmanager:{{ aws_region }}:{{ aws_account_id }}:secret:{{ name_prefix }}/redis/auth-token"
+
+# Lambda configuration
+lambda:
+  runtime: provided.al2
+  handler: bootstrap
+  timeout: 30
+  memory_size: 512
+  reserved_concurrency: 5
+  layers: []
+  
+lambda_acceso:
+  timeout: 30
+  memory_size: 512
+  reserved_concurrency: 5
+  
+lambda_despachador:
+  timeout: 30
+  memory_size: 256
+  reserved_concurrency: 5
+  
+lambda_procesador:
+  timeout: 300
+  memory_size: 1024
+  reserved_concurrency: 5
+
+# ECS / Blockchain configuration
+ecs:
+  cluster_name: "{{ name_prefix }}-blockchain-cluster"
+  service_name: "{{ name_prefix }}-blockchain-service"
+  task_family: "{{ name_prefix }}-blockchain"
+  desired_count: 2
+  cpu: 256
+  memory: 512
+  container_port: 9944
+  image_tag: latest
+
+# Database configuration
+database:
+  db_name: truetally
+  db_username: truetally
+  db_port: 5432
+  rds_proxy_endpoint: "{{ name_prefix }}-aurora-proxy.proxy-{{ aws_region }}.rds.amazonaws.com"
+  elasticache_endpoint: "{{ name_prefix }}-redis.abc123.cache.amazonaws.com"
+  elasticache_port: 6379
+
+# Frontend configuration
+frontend:
+  s3_bucket: "{{ name_prefix }}-frontend"
+  cloudfront_distribution_id: "{{ name_prefix }}-frontend-cf"
+  build_command: npm run build:aws
+  dist_directory: out
+
+# Monitoring
+monitoring:
+  log_retention_days: 7
+  cloudwatch_namespace: "TrueTally/{{ environment }}"
+
+# Tags
+common_tags:
+  Project: "{{ project_name }}"
+  Environment: "{{ environment }}"
+  ManagedBy: "ansible"

@@ -1,0 +1,73 @@
+---
+# Prometheus node exporter role para monitoreo de ECS/Fargate
+# Instala y configura el exporter via sidecar o ECS exec
+
+- name: Install Prometheus Node Exporter
+  hosts: ecs_blockchain
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../../group_vars/all.yml
+
+  tasks:
+    - name: Create ECS task definition with node exporter sidecar
+      ecs_taskdefinition:
+        family: "{{ name_prefix }}-blockchain-monitored"
+        state: present
+        network_mode: awsvpc
+        task_role_arn: "{{ ecs_task_role_arn }}"
+        execution_role_arn: "{{ ecs_task_execution_role_arn }}"
+        containers:
+          - name: blockchain-node
+            image: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ name_prefix }}-blockchain:{{ ecs_image_tag }}"
+            essential: true
+            portMappings:
+              - containerPort: 9944
+                hostPort: 9944
+                protocol: tcp
+            mountPoints:
+              - sourceVolume: blockchain-data
+                containerPath: /data/db
+            logConfiguration:
+              logDriver: awslogs
+              options:
+                awslogs-group: "/ecs/{{ name_prefix }}-blockchain"
+                awslogs-region: "{{ aws_region }}"
+                awslogs-stream-prefix: blockchain
+          - name: node-exporter
+            image: prom/node-exporter:latest
+            essential: false
+            portMappings:
+              - containerPort: 9100
+                hostPort: 9100
+                protocol: tcp
+            logConfiguration:
+              logDriver: awslogs
+              options:
+                awslogs-group: "/ecs/{{ name_prefix }}-blockchain"
+                awslogs-region: "{{ aws_region }}"
+                awslogs-stream-prefix: exporter
+        volumes:
+          - name: blockchain-data
+            efs_volume_configuration:
+              file_system_id: "{{ efs_id }}"
+        tags: "{{ common_tags }}"
+      register: ecs_task
+
+    - name: Update ECS service with new task definition
+      ecs_service:
+        cluster: "{{ ecs_cluster_name }}"
+        service_name: "{{ ecs_service_name }}"
+        task_definition: "{{ ecs_task.taskDefinition.arn }}"
+        desired_count: "{{ ecs_desired_count }}"
+        launch_type: FARGATE
+        network_configuration:
+          subnets: "{{ blockchain_subnets }}"
+          securityGroups:
+            - "{{ ecs_security_group_id }}"
+          assignPublicIp: false
+        load_balancers:
+          - target_group_arn: "{{ target_group_arn }}"
+            container_name: blockchain-node
+            container_port: 9944
+      tags: "{{ common_tags }}"

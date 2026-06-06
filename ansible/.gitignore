@@ -1,0 +1,23 @@
+# Ansible
+.ansible/
+*.retry
+
+# Build artifacts
+build/
+release/
+
+# AWS credentials
+.aws/
+credentials
+
+# secrets
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/

@@ -1,0 +1,15 @@
+---
+# Meta información del rol
+galaxy_info:
+  author: TrueTally
+  description: Monitoring setup for blockchain ECS tasks with Prometheus node exporter
+  company: TrueTally
+  license: MIT
+  min_ansible_version: 2.15
+  platforms:
+    - name: Amazon Linux
+      versions:
+        - 2
+        - 2023
+
+dependencies: []
