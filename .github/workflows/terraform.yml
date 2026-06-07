@@ -13,7 +13,7 @@ on:
       - '.github/workflows/terraform.yml'
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: ${{ secrets.AWS_REGION }}
   TF_WORKSPACE: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
 
 jobs:
@@ -41,12 +41,12 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-terraform
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           mask-aws-account-id: true
 
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -backend-config="bucket=truetally-terraform-state" -backend-config="key=${{ env.TF_WORKSPACE }}/terraform.tfstate" -backend-config="region=${{ env.AWS_REGION }}"
 
       - name: Terraform Workspace
         run: |
