@@ -1,9 +1,9 @@
 locals {
-  project_name = "truetally"
-  env          = "dev"
-  region       = "us-east-1"
-  vpc_cidr     = "10.0.0.0/16"
-  azs          = ["us-east-1a", "us-east-1b"]
+  project_name = var.project_name
+  env          = var.environment
+  region       = var.aws_region
+  vpc_cidr     = var.vpc_cidr
+  azs          = var.azs
 }
 
 terraform {

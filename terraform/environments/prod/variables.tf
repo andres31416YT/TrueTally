@@ -15,7 +15,7 @@ variable "environment" {
 
 variable "vpc_cidr" {
   type    = string
-  default = "10.0.0.0/16"
+  default = "10.1.0.0/16"
 }
 
 variable "azs" {
@@ -35,24 +35,26 @@ variable "db_password" {
 }
 
 variable "lambda_node_url_az1" {
-  type = string
+  type    = string
+  default = "http://truetally-prod-blockchain-alb-1.elb.us-east-1.amazonaws.com"
 }
 
 variable "lambda_node_url_az2" {
-  type = string
+  type    = string
+  default = "http://truetally-prod-blockchain-alb-2.elb.us-east-1.amazonaws.com"
 }
 
 variable "domain_name" {
   type    = string
-  default = ""
+  default = "app.truetally.com"
 }
 
 variable "ssl_certificate_arn" {
   type    = string
-  default = ""
+  default = "arn:aws:acm:us-east-1:123456789:certificate/xxxxx"
 }
 
 variable "route53_zone_id" {
   type    = string
-  default = ""
+  default = "Z1234567890ABC"
 }

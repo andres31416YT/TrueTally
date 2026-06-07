@@ -35,11 +35,13 @@ variable "db_password" {
 }
 
 variable "lambda_node_url_az1" {
-  type = string
+  type    = string
+  default = "http://localhost:9944"
 }
 
 variable "lambda_node_url_az2" {
-  type = string
+  type    = string
+  default = "http://localhost:9944"
 }
 
 variable "domain_name" {
