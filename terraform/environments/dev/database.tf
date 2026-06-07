@@ -84,7 +84,7 @@ resource "aws_db_proxy" "main" {
   idle_client_timeout    = 1800
   require_tls            = true
   role_arn               = aws_iam_role.rds_proxy.arn
-  vpc_subnet_ids         = aws_subnet.private[*].id
+  vpc_subnet_ids         = values(aws_subnet.private)[*].id
   vpc_security_group_ids = [aws_security_group.rds.id]
 
   auth {

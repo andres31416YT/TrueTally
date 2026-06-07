@@ -306,7 +306,7 @@ resource "aws_ecs_service" "blockchain" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = aws_subnet.public[*].id
+    subnets          = values(aws_subnet.public)[*].id
     security_groups  = [aws_security_group.ecs.id, aws_security_group.blockchain.id]
     assign_public_ip = true
   }
