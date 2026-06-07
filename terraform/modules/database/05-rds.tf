@@ -7,14 +7,25 @@ resource "aws_db_subnet_group" "main" {
   }
 }
 
+resource "aws_rds_cluster_parameter_group" "main" {
+  family = "aurora-postgresql15"
+  name   = "${local.name_prefix}-aurora-params"
+
+  parameter {
+    name        = "log_statement"
+    value       = "all"
+    apply_method = "pending-reboot"
+  }
+}
+
 resource "aws_rds_cluster" "main" {
   cluster_identifier      = "${local.name_prefix}-aurora"
   engine                  = "aurora-postgresql"
   engine_mode             = "serverless"
   engine_version          = "15.5"
   database_name           = "truetally"
-  master_username         = jsondecode(aws_secretsmanager_secret_version.db_credentials.secret_string)["username"]
-  master_password         = jsondecode(aws_secretsmanager_secret_version.db_credentials.secret_string)["password"]
+  master_username         = var.db_username
+  master_password         = random_password.db_password.result
   db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.main.name
   db_subnet_group_name    = aws_db_subnet_group.main.name
   vpc_security_group_ids  = [aws_security_group.database.id]
@@ -53,17 +64,6 @@ resource "aws_rds_cluster_instance" "main" {
   }
 }
 
-resource "aws_rds_cluster_parameter_group" "main" {
-  family = "aurora-postgresql15"
-  name   = "${local.name_prefix}-aurora-params"
-
-  parameter {
-    name        = "log_statement"
-    value       = "all"
-    apply_method = "pending-reboot"
-  }
-}
-
 resource "aws_secretsmanager_secret" "db_credentials" {
   name        = "${local.name_prefix}/db/credentials"
   description = "Database credentials for TrueTally"
@@ -80,4 +80,8 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
     dbname   = "truetally"
     host     = aws_rds_cluster.main.endpoint
   })
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
 }

@@ -12,17 +12,10 @@ resource "aws_db_proxy" "main" {
     description = "TrueTally DB access"
     iam_auth    = false
     secret_arn  = aws_secretsmanager_secret.db_credentials.arn
-    username    = jsondecode(aws_secretsmanager_secret_version.db_credentials.secret_string)["username"]
+    username    = var.db_username
   }
 
   tags = {
     Name = "${local.name_prefix}-aurora-proxy"
   }
-}
-
-resource "aws_db_proxy_target" "main" {
-  db_instance_identifier = aws_rds_cluster_instance.main.id
-  db_cluster_identifier  = aws_rds_cluster.main.id
-  proxy_name             = aws_db_proxy.main.name
-  target_role            = "READ_WRITE"
 }

@@ -1,0 +1,94 @@
+name: Terraform Plan & Apply
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform.yml'
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform.yml'
+
+env:
+  AWS_REGION: us-east-1
+  TF_WORKSPACE: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+
+jobs:
+  terraform:
+    name: Terraform ${{ github.event_name == 'pull_request' && 'Plan' || 'Apply' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./terraform/environments/${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.7
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-terraform
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Workspace
+        run: |
+          terraform workspace select ${{ env.TF_WORKSPACE }} || terraform workspace new ${{ env.TF_WORKSPACE }}
+
+      - name: Terraform Plan (PR)
+        if: github.event_name == 'pull_request'
+        id: plan
+        run: terraform plan -no-color -out=tfplan
+
+      - name: Upload Plan Artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ github.event.pull_request.number }}
+          path: terraform/environments/${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}/tfplan
+          retention-days: 7
+
+      - name: Post Plan Comment (PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          terraform show -no-color tfplan | tail -n 50 >> plan_output.txt
+          gh pr comment ${{ github.event.pull_request.number }} --body "$(cat plan_output.txt)" || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Terraform Apply (main)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve
+
+      - name: Terraform Destroy (dev only)
+        if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+        run: terraform destroy -auto-approve
+
+      - name: Upload Terraform Outputs
+        if: success()
+        run: terraform output -json > terraform-outputs.json
+
+      - name: Upload Outputs Artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-outputs-${{ github.run_id }}
+          path: terraform/environments/${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}/terraform-outputs.json
+          retention-days: 30
