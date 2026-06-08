@@ -12,6 +12,10 @@ on:
       - 'terraform/**'
       - '.github/workflows/terraform.yml'
 
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   terraform:
     name: Terraform ${{ github.event_name == 'pull_request' && 'Plan' || (github.ref == 'refs/heads/feature' && 'Plan') || (github.ref == 'refs/heads/main' && 'Apply') || (github.ref == 'refs/heads/develop' && 'Destroy') }}
