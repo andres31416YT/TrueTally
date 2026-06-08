@@ -2,19 +2,19 @@ name: Terraform Plan & Apply
 
 on:
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develop, feature ]
     paths:
       - 'terraform/**'
       - '.github/workflows/terraform.yml'
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, feature ]
     paths:
       - 'terraform/**'
       - '.github/workflows/terraform.yml'
 
 jobs:
   terraform:
-    name: Terraform ${{ github.event_name == 'pull_request' && 'Plan' || 'Apply' }}
+    name: Terraform ${{ github.event_name == 'pull_request' && 'Plan' || (github.ref == 'refs/heads/feature' && 'Plan') || (github.ref == 'refs/heads/main' && 'Apply') || (github.ref == 'refs/heads/develop' && 'Destroy') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -55,16 +55,16 @@ jobs:
         run: |
           terraform workspace select ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }} || terraform workspace new ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
 
-      - name: Terraform Plan (PR)
-        if: github.event_name == 'pull_request'
+      - name: Terraform Plan
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/feature'
         id: plan
         run: terraform plan -no-color -out=tfplan
 
       - name: Upload Plan Artifact
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/feature'
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan-${{ github.event.pull_request.number }}
+          name: tfplan-${{ github.event.pull_request.number || github.run_number }}
           path: terraform/environments/${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}/tfplan
           retention-days: 7
 
