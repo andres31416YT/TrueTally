@@ -46,15 +46,15 @@ variable "lambda_node_url_az2" {
 
 variable "domain_name" {
   type    = string
-  default = "app.truetally.com"
+  default = "andrespaganroncall.qzz.io"
 }
 
 variable "ssl_certificate_arn" {
   type    = string
-  default = "arn:aws:acm:us-east-1:123456789:certificate/xxxxx"
+  default = ""
 }
 
 variable "route53_zone_id" {
   type    = string
-  default = "Z1234567890ABC"
+  default = ""
 }

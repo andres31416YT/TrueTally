@@ -27,10 +27,10 @@ jobs:
 
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      TF_VAR_db_username: ${{ secrets.TF_VAR_db_username }}
-      TF_VAR_db_password: ${{ github.ref == 'refs/heads/main' && secrets.TF_VAR_db_password_prod || secrets.TF_VAR_db_password_dev }}
-      TF_VAR_lambda_node_url_az1: ${{ github.ref == 'refs/heads/main' && secrets.TF_VAR_lambda_node_url_az1_prod || secrets.TF_VAR_lambda_node_url_az1_dev }}
-      TF_VAR_lambda_node_url_az2: ${{ github.ref == 'refs/heads/main' && secrets.TF_VAR_lambda_node_url_az2_prod || secrets.TF_VAR_lambda_node_url_az2_dev }}
+      TF_VAR_db_username: ${{ secrets.TF_VAR_DB_USERNAME }}
+      TF_VAR_db_password: ${{ github.ref == 'refs/heads/main' && secrets.TF_VAR_DB_PASSWORD_PROD || secrets.TF_VAR_DB_PASSWORD_DEV }}
+      TF_VAR_lambda_node_url_az1: ${{ github.ref == 'refs/heads/main' && secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_PROD || secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_DEV }}
+      TF_VAR_lambda_node_url_az2: ${{ github.ref == 'refs/heads/main' && secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_PROD || secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_DEV }}
 
     steps:
       - name: Checkout repository
