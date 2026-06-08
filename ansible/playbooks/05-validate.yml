@@ -1,0 +1,38 @@
+---
+- name: Validate deployment health
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - "../../group_vars/all.yml"
+
+  tasks:
+    - name: List deployed Lambda functions
+      amazon.aws.lambda_info:
+        query:
+          - FunctionName
+        region: "{{ aws_region }}"
+      register: lambda_info
+      ignore_errors: true
+
+    - name: List ECS services
+      amazon.aws.ecs_service_info:
+        cluster: "{{ name_prefix }}-blockchain-cluster"
+        region: "{{ aws_region }}"
+      register: ecs_info
+      ignore_errors: true
+
+    - name: SQS Queue attributes
+      amazon.aws.sqs_queue_info:
+        queue_url: "{{ sqs_queue_url }}"
+        region: "{{ aws_region }}"
+      register: sqs_info
+      ignore_errors: true
+
+    - name: Print deployment summary
+      debug:
+        msg: |
+          Deployment validation for {{ environment }}:
+          - Lambdas found: {{ lambda_info.function_names | default([]) | length }}
+          - ECS services: {{ ecs_info.services | default([]) | length }}
+          - SQS messages: {{ sqs_info.approximate_number_of_messages | default('N/A') }}

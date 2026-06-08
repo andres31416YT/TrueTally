@@ -1,0 +1,68 @@
+---
+- name: Deploy Lambdas to AWS
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - "../../group_vars/all.yml"
+
+  pre_tasks:
+    - name: Validate binaries exist
+      stat:
+        path: "{{ playbook_dir }}/../../app/lambda-acceso/target/release/bootstrap"
+      register: lambda_binaries
+      failed_when: not lambda_binaries.stat.exists
+      failed_when: false
+
+  tasks:
+    - name: Deploy Lambda Acceso
+      amazon.aws.lambda_function:
+        name: "{{ name_prefix }}-acceso"
+        state: present
+        runtime: provided.al2
+        handler: bootstrap
+        role: "{{ lambda_acceso_role_arn }}"
+        timeout: 30
+        memory_size: 512
+        zip_file: "{{ lookup('file', playbook_dir + '/../../app/lambda-acceso/target/release/bootstrap', errors='ignore') | default('') | b64encode }}"
+        environment_variables:
+          DATABASE_URL: "{{ rds_proxy_endpoint | default('') }}"
+          BLOCKCHAIN_NODE_URL: "{{ blockchain_node_url | default('http://localhost:9944') }}"
+        tags:
+          Project: "{{ project_name }}"
+          Environment: "{{ environment }}"
+          Component: "lambda-acceso"
+
+    - name: Deploy Lambda Despachador
+      amazon.aws.lambda_function:
+        name: "{{ name_prefix }}-despachador"
+        state: present
+        runtime: provided.al2
+        handler: bootstrap
+        role: "{{ lambda_despachador_role_arn }}"
+        timeout: 30
+        memory_size: 256
+        zip_file: "{{ lookup('file', playbook_dir + '/../../app/lambda-despachador/target/release/bootstrap', errors='ignore') | default('') | b64encode }}"
+        environment_variables:
+          VOTE_QUEUE_URL: "{{ vote_queue_url | default('') }}"
+        tags:
+          Project: "{{ project_name }}"
+          Environment: "{{ environment }}"
+          Component: "lambda-despachador"
+
+    - name: Deploy Lambda Procesador
+      amazon.aws.lambda_function:
+        name: "{{ name_prefix }}-procesador"
+        state: present
+        runtime: provided.al2
+        handler: bootstrap
+        role: "{{ lambda_procesador_role_arn }}"
+        timeout: 300
+        memory_size: 1024
+        zip_file: "{{ lookup('file', playbook_dir + '/../../app/lambda-procesador/target/release/bootstrap', errors='ignore') | default('') | b64encode }}"
+        environment_variables:
+          BLOCKCHAIN_NODE_URL: "{{ blockchain_node_url | default('http://localhost:9944') }}"
+        tags:
+          Project: "{{ project_name }}"
+          Environment: "{{ environment }}"
+          Component: "lambda-procesador"

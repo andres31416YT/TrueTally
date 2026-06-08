@@ -1,0 +1,8 @@
+---
+# Default vars for blockchain monitoring role
+ecs_task_execution_role_arn: ""
+ecs_task_role_arn: ""
+efs_id: ""
+blockchain_subnets: []
+ecs_security_group_id: ""
+target_group_arn: ""

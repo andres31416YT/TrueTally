@@ -1,0 +1,39 @@
+---
+# Playbook principal de configuración
+# Uso: ansible-playbook -i inventory/hosts.ini site.yml --extra-vars "environment=dev"
+
+- name: Configure TrueTally Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - group_vars/all.yml
+
+  pre_tasks:
+    - name: Validate required environment
+      assert:
+        that:
+          - environment is defined
+          - aws_region is defined
+        fail_msg: "Missing vars: environment={{ environment }} aws_region={{ aws_region }}"
+
+  tasks:
+    - name: Deploy Lambdas
+      import_tasks: tasks/deploy-lambdas.yml
+      tags: [lambdas]
+
+    - name: Deploy ECS
+      import_tasks: tasks/deploy-ecs.yml
+      tags: [ecs]
+
+    - name: Deploy Frontend
+      import_tasks: tasks/deploy-frontend.yml
+      tags: [frontend]
+
+    - name: Deploy Database
+      import_tasks: tasks/deploy-database.yml
+      tags: [database]
+
+    - name: Validate deployment
+      import_tasks: tasks/validate.yml
+      tags: [validate]
