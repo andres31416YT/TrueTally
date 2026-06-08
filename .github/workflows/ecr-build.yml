@@ -23,7 +23,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
-      url: https://${{ secrets.ECR_REPOSITORY_URI }}
 
     permissions:
       id-token: write
