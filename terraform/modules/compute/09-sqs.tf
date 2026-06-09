@@ -1,10 +1,10 @@
 resource "aws_sqs_queue" "vote_queue" {
-  name                      = "${local.name_prefix}-vote-queue"
+  name                       = "${local.name_prefix}-vote-queue"
   visibility_timeout_seconds = 300
-  message_retention_seconds   = 1209600
-  max_message_size          = 256000
+  message_retention_seconds  = 1209600
+  max_message_size           = 256000
 
-  kms_master_key_id = aws_kms_key.main.arn
+  kms_master_key_id                 = aws_kms_key.main.arn
   kms_data_key_reuse_period_seconds = 300
 
   redrive_policy = jsonencode({
@@ -19,7 +19,7 @@ resource "aws_sqs_queue" "vote_queue" {
 
 resource "aws_sqs_queue" "vote_dlq" {
   name                      = "${local.name_prefix}-vote-dlq"
-  message_retention_seconds   = 1209600
+  message_retention_seconds = 1209600
   kms_master_key_id         = aws_kms_key.main.arn
 
   tags = {
