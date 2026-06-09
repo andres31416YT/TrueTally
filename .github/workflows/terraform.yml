@@ -1,92 +1,78 @@
-name: Terraform Plan & Apply
+name: Terraform CI/CD
 
 on:
-  pull_request:
-    branches: [ main, develop, feature ]
-    paths:
-      - 'terraform/**'
-      - '.github/workflows/terraform.yml'
   push:
-    branches: [ main, develop, feature ]
-    paths:
-      - 'terraform/**'
-      - '.github/workflows/terraform.yml'
+    branches: [main, develop, feature]
+  pull_request:
+    branches: [main, develop, feature]
+  workflow_dispatch:
 
-env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
 
 jobs:
-  terraform:
-    name: Terraform ${{ github.event_name == 'pull_request' && 'Plan' || (github.ref == 'refs/heads/feature' && 'Plan') || (github.ref == 'refs/heads/main' && 'Apply') || (github.ref == 'refs/heads/develop' && 'Destroy') }}
+  plan:
+    name: Terraform Plan
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ./terraform/environments/${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
 
-    permissions:
-      id-token: write
-      contents: read
-      pull-requests: write
-
-    env:
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      TF_VAR_db_username: ${{ secrets.TF_VAR_DB_USERNAME }}
-      TF_VAR_db_password: ${{ github.ref == 'refs/heads/main' && secrets.TF_VAR_DB_PASSWORD_PROD || secrets.TF_VAR_DB_PASSWORD_DEV }}
-      TF_VAR_lambda_node_url_az1: ${{ github.ref == 'refs/heads/main' && secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_PROD || secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_DEV }}
-      TF_VAR_lambda_node_url_az2: ${{ github.ref == 'refs/heads/main' && secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_PROD || secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_DEV }}
-
     steps:
-      - name: Checkout repository
+      - name: Checkout del código
         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.5.7
-
-      - name: Configure AWS Credentials
+      - name: Autenticación con AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
           mask-aws-account-id: true
 
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
       - name: Terraform Init
-        run: terraform init -backend-config="bucket=truetally-terraform-state" -backend-config="key=${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}/terraform.tfstate" -backend-config="region=${{ env.AWS_REGION }}"
+        run: terraform init -backend-config="bucket=truetally-terraform-state" -backend-config="key=${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}/terraform.tfstate" -backend-config="region=${{ secrets.AWS_REGION }}"
 
       - name: Terraform Workspace
-        run: |
-          terraform workspace select -or-create ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+        run: terraform workspace select -or-create ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+
+      - name: Terraform FMT (verifica formato)
+        run: terraform fmt -check
+
+      - name: Terraform Validate
+        run: terraform validate
 
       - name: Terraform Plan
-        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/feature'
         id: plan
-        run: terraform plan -no-color -out=tfplan
+        run: |
+          terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
 
-      - name: Upload Plan Artifact
-        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/feature'
+      - name: Comentar plan en el PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('plan_output.txt', 'utf8');
+            const truncated = plan.length > 60000 ? plan.substring(0,60000) + '...(truncado)' : plan;
+            github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: '### Terraform Plan\n```\n' + truncated + '\n```'
+            });
+
+      - name: Guardar plan como artefacto
         uses: actions/upload-artifact@v4
         with:
           name: tfplan-${{ github.event.pull_request.number || github.run_number }}
           path: terraform/environments/${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}/tfplan
           retention-days: 7
-
-      - name: Post Plan Comment (PR)
-        if: github.event_name == 'pull_request'
-        run: |
-          terraform show -no-color tfplan | tail -n 50 >> plan_output.txt
-          gh pr comment ${{ github.event.pull_request.number }} --body "$(cat plan_output.txt)" || true
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-      - name: Terraform Apply (main)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
-
-      - name: Terraform Destroy (dev only)
-        if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-        run: terraform destroy -auto-approve
 
       - name: Upload Terraform Outputs
         if: success()
@@ -99,3 +85,46 @@ jobs:
           name: terraform-outputs-${{ github.run_id }}
           path: terraform/environments/${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}/terraform-outputs.json
           retention-days: 30
+
+  apply:
+    name: Terraform Apply
+    needs: plan
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://andrespaganroncall.qzz.io
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    defaults:
+      run:
+        working-directory: ./terraform/environments/prod
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Autenticación con AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Terraform Init
+        run: terraform init -backend-config="bucket=truetally-terraform-state" -backend-config="key=prod/terraform.tfstate" -backend-config="region=${{ secrets.AWS_REGION }}"
+
+      - name: Terraform Workspace
+        run: terraform workspace select -or-create prod
+
+      - name: Descargar plan aprobado
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ github.run_number }}
+          path: terraform/
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
