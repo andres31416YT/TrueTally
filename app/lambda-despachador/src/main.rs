@@ -3,6 +3,8 @@ use serde_json::json;
 use shared::VoteRequest;
 use std::sync::Arc;
 use aws_sdk_sqs::Client as SqsClient;
+use tracing::{error, info};
+use shared::logging;
 
 #[derive(serde::Serialize)]
 struct ApiGatewayResponse {
@@ -49,7 +51,7 @@ fn error_response(status: i32, msg: &str) -> ApiGatewayResponse {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    env_logger::init();
+    logging::init_logging("lambda-despachador");
     
     let config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
     let sqs_client = SqsClient::new(&config);
@@ -88,10 +90,26 @@ async fn handle_request(
 
     let body = event.payload.get("body").and_then(|v| v.as_str()).unwrap_or("{}");
     let payload: VoteRequest = serde_json::from_str(body)
-        .map_err(|e| format!("Invalid JSON: {}", e))?;
+        .map_err(|e| {
+            error!(
+                service = "lambda-despachador",
+                event = "json_parse_error",
+                error = %e,
+                "Failed to parse vote request"
+            );
+            format!("Invalid JSON: {}", e)
+        })?;
 
     let message_body = serde_json::to_string(&payload)
-        .map_err(|e| format!("Serialization error: {}", e))?;
+        .map_err(|e| {
+            error!(
+                service = "lambda-despachador",
+                event = "serialization_error",
+                error = %e,
+                "Failed to serialize vote"
+            );
+            format!("Serialization error: {}", e)
+        })?;
 
     state.sqs_client
         .send_message()
@@ -99,7 +117,21 @@ async fn handle_request(
         .message_body(message_body)
         .send()
         .await
-        .map_err(|e| format!("Failed to send message to SQS: {}", e))?;
+        .map_err(|e| {
+            error!(
+                service = "lambda-despachador",
+                event = "sqs_send_error",
+                error = %e,
+                "Failed to send message to SQS"
+            );
+            format!("Failed to send message to SQS: {}", e)
+        })?;
+
+    info!(
+        service = "lambda-despachador",
+        event = "vote_queued",
+        "Vote successfully queued for processing"
+    );
 
     Ok(success_response("Vote queued for processing"))
 }

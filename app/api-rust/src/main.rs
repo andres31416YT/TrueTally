@@ -3,11 +3,13 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
 use axum::{Router, serve};
+use tracing::{error, info};
+use crate::logging;
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
-    
+    logging::init_logging("api-gateway");
+
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://user:pass@localhost:5432/voting_db".to_string());
     
@@ -18,16 +20,31 @@ async fn main() {
     let db_pool = loop {
         match init_db(&database_url).await {
             Ok(pool) => {
-                println!("Database connected successfully");
+                info!(
+                    service = "api-gateway",
+                    event = "db_connection_success",
+                    "Database connected successfully"
+                );
                 break pool;
             }
             Err(e) if retries > 0 => {
-                eprintln!("Failed to connect to database ({} retries left): {}", retries, e);
+                error!(
+                    service = "api-gateway",
+                    event = "db_connection_retry",
+                    retries_left = retries,
+                    error = %e,
+                    "Failed to connect to database"
+                );
                 retries -= 1;
                 tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
             }
             Err(e) => {
-                eprintln!("Failed to connect to database: {}", e);
+                error!(
+                    service = "api-gateway",
+                    event = "db_connection_failed",
+                    error = %e,
+                    "Database connection failed"
+                );
                 panic!("Database connection failed");
             }
         }
@@ -71,7 +88,12 @@ async fn main() {
     
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 8080));
     
-    println!("API Gateway running on http://{}", addr);
+    info!(
+        service = "api-gateway",
+        event = "server_start",
+        address = %addr,
+        "API Gateway running"
+    );
     
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     serve(listener, app)

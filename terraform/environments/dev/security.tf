@@ -266,3 +266,36 @@ resource "aws_security_group" "efs_mount" {
     }
   )
 }
+
+resource "aws_cloudwatch_log_group" "lambda_acceso" {
+  name              = "/aws/lambda/${local.project_name}-${local.env}-acceso"
+  retention_in_days = 30
+  tags              = merge(local.common_tags, { Name = "${local.project_name}-${local.env}-acceso-logs" })
+}
+
+resource "aws_cloudwatch_log_stream" "lambda_acceso" {
+  name           = "${local.project_name}-${local.env}-acceso-stream"
+  log_group_name = aws_cloudwatch_log_group.lambda_acceso.name
+}
+
+resource "aws_cloudwatch_log_group" "lambda_despachador" {
+  name              = "/aws/lambda/${local.project_name}-${local.env}-despachador"
+  retention_in_days = 30
+  tags              = merge(local.common_tags, { Name = "${local.project_name}-${local.env}-despachador-logs" })
+}
+
+resource "aws_cloudwatch_log_stream" "lambda_despachador" {
+  name           = "${local.project_name}-${local.env}-despachador-stream"
+  log_group_name = aws_cloudwatch_log_group.lambda_despachador.name
+}
+
+resource "aws_cloudwatch_log_group" "lambda_procesador" {
+  name              = "/aws/lambda/${local.project_name}-${local.env}-procesador"
+  retention_in_days = 30
+  tags              = merge(local.common_tags, { Name = "${local.project_name}-${local.env}-procesador-logs" })
+}
+
+resource "aws_cloudwatch_log_stream" "lambda_procesador" {
+  name           = "${local.project_name}-${local.env}-procesador-stream"
+  log_group_name = aws_cloudwatch_log_group.lambda_procesador.name
+}

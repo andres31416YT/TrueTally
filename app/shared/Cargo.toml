@@ -18,3 +18,5 @@ aws-config = "1"
 aws-sdk-sqs = "1"
 lambda_runtime = "0.13"
 lambda_http = "0.13"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
