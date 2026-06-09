@@ -45,7 +45,7 @@ jobs:
         run: terraform workspace select -or-create ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
 
       - name: Terraform FMT (verifica formato)
-        run: terraform fmt -check -input=false
+        run: terraform fmt -check -recursive ../../
 
       - name: Terraform Validate
         run: terraform validate -input=false
