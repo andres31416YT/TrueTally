@@ -10,22 +10,22 @@ resource "random_password" "redis_auth_token" {
 }
 
 resource "aws_elasticache_replication_group" "main" {
-  replication_group_id           = "${local.name_prefix}-redis"
-  description                    = "Redis cache for TrueTally"
-  engine                         = "redis"
-  engine_version                 = "7.1"
-  node_type                      = "cache.t3.micro"
-  port                           = 6379
-  parameter_group_name           = "default.redis7.cluster.on"
-  num_cache_clusters             = 2
-  automatic_failover_enabled     = true
-  multi_az_enabled               = true
-  subnet_group_name              = aws_elasticache_subnet_group.main.name
-  security_group_ids             = [aws_security_group.elasticache.id]
-  at_rest_encryption_enabled     = true
-  transit_encryption_enabled     = true
-  auth_token                     = random_password.redis_auth_token.result
-  kms_key_id                     = aws_kms_key.main.arn
+  replication_group_id       = "${local.name_prefix}-redis"
+  description                = "Redis cache for TrueTally"
+  engine                     = "redis"
+  engine_version             = "7.1"
+  node_type                  = "cache.t3.micro"
+  port                       = 6379
+  parameter_group_name       = "default.redis7.cluster.on"
+  num_cache_clusters         = 2
+  automatic_failover_enabled = true
+  multi_az_enabled           = true
+  subnet_group_name          = aws_elasticache_subnet_group.main.name
+  security_group_ids         = [aws_security_group.elasticache.id]
+  at_rest_encryption_enabled = true
+  transit_encryption_enabled = true
+  auth_token                 = random_password.redis_auth_token.result
+  kms_key_id                 = aws_kms_key.main.arn
 
   log_delivery_configuration {
     destination      = aws_cloudwatch_log_group.elasticache.name
@@ -46,7 +46,7 @@ resource "aws_secretsmanager_secret" "redis_auth_token" {
 }
 
 resource "aws_secretsmanager_secret_version" "redis_auth_token" {
-  secret_id   = aws_secretsmanager_secret.redis_auth_token.id
+  secret_id     = aws_secretsmanager_secret.redis_auth_token.id
   secret_string = random_password.redis_auth_token.result
 }
 

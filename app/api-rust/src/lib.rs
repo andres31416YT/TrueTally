@@ -1,6 +1,7 @@
 pub mod handlers;
 pub mod models;
 pub mod db;
+pub mod logging;
 
 pub use handlers::*;
 pub use models::*;

@@ -27,3 +27,5 @@ terraform {
 provider "aws" {
   region = local.region
 }
+
+# Prueba CI/CD Dev (ADRIEL): cambio seguro que no altera recursos

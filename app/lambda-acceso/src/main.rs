@@ -1,6 +1,8 @@
 use lambda_runtime::{service_fn, Error, LambdaEvent};
 use serde_json::json;
 use std::sync::Arc;
+use tracing::{error, info};
+use shared::logging;
 
 #[derive(serde::Serialize)]
 struct ApiGatewayResponse {
@@ -45,7 +47,7 @@ fn error_response(status: i32, msg: &str) -> ApiGatewayResponse {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    env_logger::init();
+    shared::logging::init_logging("lambda-acceso");
     
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://user:pass@localhost:5432/voting_db".to_string());
@@ -55,11 +57,25 @@ async fn main() -> Result<(), Error> {
         match shared::init_db(&database_url).await {
             Ok(pool) => break pool,
             Err(e) if retries > 0 => {
-                eprintln!("Failed to connect to database ({} retries left): {}", retries, e);
+                error!(
+                    service = "lambda-acceso",
+                    event = "db_connection_retry",
+                    retries_left = retries,
+                    error = %e,
+                    "Failed to connect to database"
+                );
                 retries -= 1;
                 tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
             }
-            Err(e) => panic!("Database connection failed: {}", e),
+            Err(e) => {
+                error!(
+                    service = "lambda-acceso",
+                    event = "db_connection_failed",
+                    error = %e,
+                    "Database connection failed"
+                );
+                panic!("Database connection failed: {}", e);
+            }
         }
     };
     

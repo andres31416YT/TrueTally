@@ -103,9 +103,9 @@ resource "aws_efs_access_point" "blockchain" {
 
 # EFS Mount Targets (uno por AZ)
 resource "aws_efs_mount_target" "blockchain" {
-  for_each      = toset(var.azs)
-  file_system_id = aws_efs_file_system.blockchain.id
-  subnet_id      = aws_subnet.blockchain[each.key].id
+  for_each        = toset(var.azs)
+  file_system_id  = aws_efs_file_system.blockchain.id
+  subnet_id       = aws_subnet.blockchain[each.key].id
   security_groups = [aws_security_group.efs.id]
 }
 
@@ -169,8 +169,8 @@ resource "aws_ecs_task_definition" "blockchain" {
         }
       }
       environment = [
-        { name  = "PORT", value = "9944" },
-        { name  = "RUST_LOG", value = "blockchain_core=info" }
+        { name = "PORT", value = "9944" },
+        { name = "RUST_LOG", value = "blockchain_core=info" }
       ]
     }
   ])

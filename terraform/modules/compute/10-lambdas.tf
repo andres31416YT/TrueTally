@@ -1,7 +1,7 @@
 locals {
-  lambda_acceso_zip     = "${path.module}/../lambda/lambda-acceso.zip"
+  lambda_acceso_zip      = "${path.module}/../lambda/lambda-acceso.zip"
   lambda_despachador_zip = "${path.module}/../lambda/lambda-despachador.zip"
-  lambda_procesador_zip = "${path.module}/../lambda/lambda-procesador.zip"
+  lambda_procesador_zip  = "${path.module}/../lambda/lambda-procesador.zip"
 }
 
 locals {

@@ -107,7 +107,13 @@ async fn seed_admins(pool: &PgPool) -> Result<(), sqlx::Error> {
         .bind(&sudo_pass)
         .execute(pool)
         .await?;
-        println!("Sudo Admin seeded: {}", sudo_email);
+        tracing::info!(
+            service = "api-gateway",
+            event = "default_user_seeded",
+            role = "sudo_admin",
+            email = %sudo_email,
+            "Sudo Admin seeded"
+        );
     }
 
     // Solo insertar si no existe ningún admin
@@ -127,7 +133,13 @@ async fn seed_admins(pool: &PgPool) -> Result<(), sqlx::Error> {
         .bind(&admin_pass)
         .execute(pool)
         .await?;
-        println!("Admin seeded: {}", admin_email);
+        tracing::info!(
+            service = "api-gateway",
+            event = "default_user_seeded",
+            role = "admin",
+            email = %admin_email,
+            "Admin seeded"
+        );
     }
 
     Ok(())

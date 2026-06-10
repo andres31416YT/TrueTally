@@ -1,4 +1,5 @@
 use sqlx::{PgPool, Row};
+use tracing::info;
 
 pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
     let pool = PgPool::connect(database_url).await?;
@@ -119,7 +120,7 @@ async fn seed_admins(pool: &PgPool) -> Result<(), sqlx::Error> {
         .bind(&sudo_pass)
         .execute(pool)
         .await?;
-        println!("Sudo Admin seeded: {}", sudo_email);
+        tracing::info!(service = "api-gateway", event = "default_user_seeded", role = "sudo_admin", email = %sudo_email, "Sudo Admin seeded");
     }
 
     let admin_exists = sqlx::query("SELECT 1 FROM users WHERE role = 'admin'")
@@ -138,7 +139,7 @@ async fn seed_admins(pool: &PgPool) -> Result<(), sqlx::Error> {
         .bind(&admin_pass)
         .execute(pool)
         .await?;
-        println!("Admin seeded: {}", admin_email);
+        tracing::info!(service = "api-gateway", event = "default_user_seeded", role = "admin", email = %admin_email, "Admin seeded");
     }
 
     Ok(())

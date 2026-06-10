@@ -10,7 +10,7 @@ resource "random_password" "jwt_secret" {
 
 resource "aws_kms_key" "main" {
   description             = "KMS key for TrueTally infrastructure"
-  deletion_window_in_days  = 7
+  deletion_window_in_days = 7
   enable_key_rotation     = true
 
   policy = jsonencode({
