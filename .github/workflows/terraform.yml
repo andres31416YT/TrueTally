@@ -89,6 +89,48 @@ jobs:
           path: terraform/environments/${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}/terraform-outputs.json
           retention-days: 30
 
+  apply-dev:
+    name: Terraform Apply Dev
+    needs: plan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    defaults:
+      run:
+        working-directory: ./terraform/environments/dev
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Autenticación con AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Terraform Init
+        run: terraform init -input=false -backend-config="bucket=truetally-terraform-state" -backend-config="key=dev/terraform.tfstate" -backend-config="region=${{ secrets.AWS_REGION }}"
+
+      - name: Terraform Workspace
+        run: terraform workspace select -or-create dev
+
+      - name: Descargar plan aprobado
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ github.run_number }}
+          path: terraform/
+
+      - name: Terraform Apply
+        env:
+          TF_VAR_db_password: ${{ secrets.DEV_DB_PASSWORD }}
+        run: terraform apply -input=false -auto-approve tfplan
+
   apply:
     name: Terraform Apply
     needs: plan
