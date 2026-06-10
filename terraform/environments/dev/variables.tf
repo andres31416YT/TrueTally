@@ -29,11 +29,6 @@ variable "db_username" {
   sensitive = true
 }
 
-variable "db_password" {
-  type      = string
-  sensitive = true
-}
-
 variable "lambda_node_url_az1" {
   type    = string
   default = "http://localhost:9944"
