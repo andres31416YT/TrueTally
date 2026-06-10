@@ -82,14 +82,12 @@ resource "aws_elasticache_replication_group" "main" {
 }
 
 resource "aws_db_proxy" "main" {
-  # Create DB proxy only for prod environments (avoids Free Tier errors in dev)
-  count                  = local.env == "prod" ? 1 : 0
   name                   = "${local.project_name}-${local.env}-proxy"
   debug_logging          = false
   engine_family          = "POSTGRESQL"
   idle_client_timeout    = 1800
   require_tls            = true
-  role_arn               = local.env == "prod" ? aws_iam_role.rds_proxy[0].arn : null
+  role_arn               = aws_iam_role.rds_proxy.arn
   vpc_subnet_ids         = values(aws_subnet.private)[*].id
   vpc_security_group_ids = [aws_security_group.rds.id]
 
@@ -109,9 +107,7 @@ resource "aws_db_proxy" "main" {
 }
 
 resource "aws_iam_role" "rds_proxy" {
-  # Role for RDS Proxy: only create in prod
-  count = local.env == "prod" ? 1 : 0
-  name  = "${local.project_name}-${local.env}-rds-proxy-role"
+  name = "${local.project_name}-${local.env}-rds-proxy-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -128,9 +124,7 @@ resource "aws_iam_role" "rds_proxy" {
 }
 
 resource "aws_iam_role_policy_attachment" "rds_proxy" {
-  # Only attach the policy in prod (policy may not exist in FreeTier/accounts)
-  count      = local.env == "prod" ? 1 : 0
-  role       = aws_iam_role.rds_proxy[0].name
+  role       = aws_iam_role.rds_proxy.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/RDSProxyServiceRolePolicy"
 }
 
@@ -153,8 +147,7 @@ resource "aws_db_instance" "main" {
   allocated_storage     = 100
   max_allocated_storage = 1000
 
-  # Free-tier accounts often restrict backup retention; disable backups in dev to avoid FreeTierRestrictionError
-  backup_retention_period = local.env == "prod" ? 30 : 0
+  backup_retention_period = local.env == "prod" ? 30 : 7
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:04:00-sun:05:00"
 
