@@ -2,9 +2,9 @@ name: Terraform CI/CD
 
 on:
   push:
-    branches: [main, develop, feature]
+    branches: [main, develop]
   pull_request:
-    branches: [main, develop, feature]
+    branches: [main, develop]
   workflow_dispatch:
 
 permissions:
@@ -12,26 +12,34 @@ permissions:
   contents: read
   pull-requests: write
 
+env:
+  TF_INPUT: "0"
+
 jobs:
   plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
-    env:
-      TF_INPUT: "0"
-    defaults:
-      run:
-        working-directory: ./terraform/environments/${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
 
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
+
+      - name: Detectar ambiente
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "env_name=prod" >> $GITHUB_OUTPUT
+            echo "env_path=terraform/environments/prod" >> $GITHUB_OUTPUT
+          else
+            echo "env_name=dev" >> $GITHUB_OUTPUT
+            echo "env_path=terraform/environments/dev" >> $GITHUB_OUTPUT
+          fi
 
       - name: Autenticación con AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
-          mask-aws-account-id: true
 
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
@@ -39,22 +47,30 @@ jobs:
           terraform_version: 1.9.0
 
       - name: Terraform Init
-        run: terraform init -input=false -backend-config="bucket=truetally-terraform-state" -backend-config="key=${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}/terraform.tfstate" -backend-config="region=${{ secrets.AWS_REGION }}"
+        run: |
+          cd ${{ steps.env.outputs.env_path }}
+          terraform init -input=false -backend-config="bucket=truetally-terraform-state" -backend-config="key=${{ steps.env.outputs.env_name }}/terraform.tfstate" -backend-config="region=${{ secrets.AWS_REGION }}"
 
       - name: Terraform Workspace
-        run: terraform workspace select -or-create ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+        run: |
+          cd ${{ steps.env.outputs.env_path }}
+          terraform workspace select -or-create ${{ steps.env.outputs.env_name }}
 
       - name: Terraform FMT (verifica formato)
-        run: terraform fmt -check -recursive ../../
+        run: |
+          cd ${{ steps.env.outputs.env_path }}
+          terraform fmt -check
 
       - name: Terraform Validate
-        run: terraform validate
+        run: |
+          cd ${{ steps.env.outputs.env_path }}
+          terraform validate
 
       - name: Terraform Plan
         id: plan
-        env:
-          TF_VAR_db_password: ${{ secrets.DEV_DB_PASSWORD }}
-        run: terraform plan -input=false -no-color -out=tfplan 2>&1 | tee plan_output.txt
+        run: |
+          cd ${{ steps.env.outputs.env_path }}
+          terraform plan -input=false -no-color -out=tfplan 2>&1 | tee plan_output.txt
 
       - name: Comentar plan en el PR
         if: github.event_name == 'pull_request'
@@ -62,44 +78,29 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const plan = fs.readFileSync('plan_output.txt', 'utf8');
+            const path = '${{ steps.env.outputs.env_path }}';
+            const plan = fs.readFileSync(`${path}/plan_output.txt`, 'utf8');
             const truncated = plan.length > 60000 ? plan.substring(0,60000) + '...(truncado)' : plan;
             github.rest.issues.createComment({
               ...context.repo,
               issue_number: context.issue.number,
-              body: '### Terraform Plan\n```\n' + truncated + '\n```'
+              body: '### Terraform Plan (${{ steps.env.outputs.env_name }})\n```\n' + truncated + '\n```'
             });
 
       - name: Guardar plan como artefacto
+        if: steps.env.outputs.env_name == 'dev'
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan-${{ github.event.pull_request.number || github.run_number }}
-          path: terraform/environments/${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}/tfplan
+          name: tfplan-dev
+          path: ${{ steps.env.outputs.env_path }}/tfplan
           retention-days: 7
 
-      - name: Upload Terraform Outputs
-        if: success()
-        run: terraform output -json > terraform-outputs.json
-
-      - name: Upload Outputs Artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-outputs-${{ github.run_id }}
-          path: terraform/environments/${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}/terraform-outputs.json
-          retention-days: 30
-
-  apply:
-    name: Terraform Apply
+  apply-dev:
+    name: Terraform Apply (Dev)
     needs: plan
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: https://andrespaganroncall.qzz.io
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    defaults:
-      run:
-        working-directory: ./terraform/environments/prod
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: development
 
     steps:
       - name: Checkout del código
@@ -110,7 +111,6 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
-          mask-aws-account-id: true
 
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
@@ -118,16 +118,21 @@ jobs:
           terraform_version: 1.9.0
 
       - name: Terraform Init
-        run: terraform init -input=false -backend-config="bucket=truetally-terraform-state" -backend-config="key=prod/terraform.tfstate" -backend-config="region=${{ secrets.AWS_REGION }}"
+        run: |
+          cd terraform/environments/dev
+          terraform init -input=false -backend-config="bucket=truetally-terraform-state" -backend-config="key=dev/terraform.tfstate" -backend-config="region=${{ secrets.AWS_REGION }}"
 
       - name: Terraform Workspace
-        run: terraform workspace select -or-create prod
+        run: |
+          cd terraform/environments/dev
+          terraform workspace select -or-create dev
 
       - name: Descargar plan aprobado
         uses: actions/download-artifact@v4
         with:
-          name: tfplan-${{ github.run_number }}
-          path: terraform/
+          name: tfplan-dev
 
       - name: Terraform Apply
-        run: terraform apply -input=false -auto-approve tfplan
+        run: |
+          cd terraform/environments/dev
+          terraform apply -input=false -auto-approve tfplan
