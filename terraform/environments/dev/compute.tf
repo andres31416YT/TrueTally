@@ -2,9 +2,11 @@ locals {
   lambda_runtime   = "provided"
   lambda_arch      = "arm64"
   lambda_node_url  = "http://${aws_eip.blockchain[0].public_ip}:9944"
-  lambda_db_url    = local.env == "prod" ? 
-                      "postgresql://${local.db_creds.username}:${local.db_creds.password}@${aws_db_proxy.main[0].endpoint}:5432/${aws_db_instance.main.db_name}?sslmode=require" :
-                      "postgresql://${local.db_creds.username}:${local.db_creds.password}@${aws_db_instance.main.address}:5432/${aws_db_instance.main.db_name}?sslmode=require"
+  lambda_db_url = (
+    local.env == "prod"
+    ? "postgresql://${local.db_creds.username}:${local.db_creds.password}@${aws_db_proxy.main[0].endpoint}:5432/${aws_db_instance.main.db_name}?sslmode=require"
+    : "postgresql://${local.db_creds.username}:${local.db_creds.password}@${aws_db_instance.main.address}:5432/${aws_db_instance.main.db_name}?sslmode=require"
+  )
   lambda_sqs_url   = aws_sqs_queue.vote_queue.id
   lambda_dlq_url   = aws_sqs_queue.vote_dlq.id
   lambda_redis_url = "rediss://:${random_string.redis_password.result}@${aws_elasticache_replication_group.main.primary_endpoint_address}:6379"
