@@ -6,7 +6,7 @@ locals {
 
 locals {
   lambda_common_env = {
-    DATABASE_URL = aws_db_proxy.main.endpoint
+    DATABASE_URL = try(aws_db_proxy.main[0].endpoint, aws_db_instance.main.address)
     PORT         = "8080"
   }
 }

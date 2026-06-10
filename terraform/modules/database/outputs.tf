@@ -7,7 +7,7 @@ output "db_cluster_arn" {
 }
 
 output "rds_proxy_endpoint" {
-  value = aws_db_proxy.main.endpoint
+  value = try(aws_db_proxy.main[0].endpoint, "")
 }
 
 output "elasticache_address" {

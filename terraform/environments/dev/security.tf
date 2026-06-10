@@ -9,9 +9,6 @@ resource "random_string" "db_password" {
   length  = 16
   special = false
 
-  lifecycle {
-    ignore_changes = [result]
-  }
 }
 
 resource "aws_kms_key" "main" {
