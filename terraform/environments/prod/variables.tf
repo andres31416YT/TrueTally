@@ -29,11 +29,6 @@ variable "db_username" {
   sensitive = true
 }
 
-variable "db_password" {
-  type      = string
-  sensitive = true
-}
-
 variable "lambda_node_url_az1" {
   type    = string
   default = "http://truetally-prod-blockchain-alb-1.elb.us-east-1.amazonaws.com"

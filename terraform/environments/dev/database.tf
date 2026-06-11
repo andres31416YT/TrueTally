@@ -81,61 +81,14 @@ resource "aws_elasticache_replication_group" "main" {
   )
 }
 
-resource "aws_db_proxy" "main" {
-  name                   = "${local.project_name}-${local.env}-proxy"
-  debug_logging          = false
-  engine_family          = "POSTGRESQL"
-  idle_client_timeout    = 1800
-  require_tls            = true
-  role_arn               = aws_iam_role.rds_proxy.arn
-  vpc_subnet_ids         = values(aws_subnet.private)[*].id
-  vpc_security_group_ids = [aws_security_group.rds.id]
-
-  auth {
-    auth_scheme = "SECRETS"
-    description = "RDS Proxy authentication"
-    iam_auth    = "DISABLED"
-    secret_arn  = aws_secretsmanager_secret.db_credentials.arn
-  }
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "${local.project_name}-${local.env}-rds-proxy"
-    }
-  )
-}
-
-resource "aws_iam_role" "rds_proxy" {
-  name = "${local.project_name}-${local.env}-rds-proxy-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "rds.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "rds_proxy" {
-  role       = aws_iam_role.rds_proxy.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/RDSProxyServiceRolePolicy"
-}
-
 resource "aws_db_instance" "main" {
   identifier             = "${local.project_name}-${local.env}-postgres"
   engine                 = "postgres"
   engine_version         = "16.3"
-  instance_class         = "db.serverless"
+  instance_class         = "db.t3.micro"
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
-  multi_az               = local.env == "prod" ? true : false
+  multi_az               = false
 
   username = local.db_creds.username
   password = local.db_creds.password
@@ -143,19 +96,18 @@ resource "aws_db_instance" "main" {
   db_name = "truetally"
   port    = 5432
 
-  storage_type          = "io1"
-  allocated_storage     = 100
-  max_allocated_storage = 1000
+  storage_type          = "gp2"
+  allocated_storage     = 20
+  max_allocated_storage = 20
 
-  backup_retention_period = local.env == "prod" ? 30 : 7
+  backup_retention_period = 1
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:04:00-sun:05:00"
 
-  performance_insights_enabled = true
-  monitoring_interval          = 60
-  monitoring_role_arn          = aws_iam_role.rds_monitoring.arn
+  performance_insights_enabled = false
+  monitoring_interval          = 0
 
-  deletion_protection       = local.env == "prod" ? true : false
+  deletion_protection       = false
   skip_final_snapshot       = local.env == "dev" ? true : false
   final_snapshot_identifier = local.env == "prod" ? "${local.project_name}-${local.env}-final-snapshot" : null
 
@@ -171,27 +123,4 @@ resource "aws_db_instance" "main" {
     }
   )
 }
-
-resource "aws_iam_role" "rds_monitoring" {
-  name = "${local.project_name}-${local.env}-rds-monitoring-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "monitoring.rds.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "rds_monitoring" {
-  role       = aws_iam_role.rds_monitoring.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
-}
-
 
