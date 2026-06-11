@@ -131,8 +131,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: tfplan-dev
+          path: terraform/environments/dev/
 
       - name: Terraform Apply
+        working-directory: terraform/environments/dev
         run: |
-          cd terraform/environments/dev
           terraform apply -input=false -auto-approve tfplan
