@@ -12,7 +12,7 @@ async fn main() -> Result<(), Error> {
         .with_target(false)
         .init();
 
-    let config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+    let _config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
     let http_client = Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()

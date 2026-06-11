@@ -1,5 +1,4 @@
 use sqlx::{PgPool, Row};
-use tracing::info;
 
 pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
     let pool = PgPool::connect(database_url).await?;
