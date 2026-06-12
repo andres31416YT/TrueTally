@@ -1,12 +1,12 @@
 use lambda_runtime::{service_fn, Error, LambdaEvent};
 use serde_json::json;
 use std::sync::Arc;
-use tracing::{error, info};
-use shared::logging;
+use tracing::error;
 
 #[derive(serde::Serialize)]
 struct ApiGatewayResponse {
-    statusCode: i32,
+    #[serde(rename = "statusCode")]
+    status_code: i32,
     headers: std::collections::HashMap<String, String>,
     body: String,
     #[serde(rename = "isBase64Encoded")]
@@ -15,7 +15,7 @@ struct ApiGatewayResponse {
 
 fn success_response<T: serde::Serialize>(data: T) -> ApiGatewayResponse {
     ApiGatewayResponse {
-        statusCode: 200,
+        status_code: 200,
         headers: {
             let mut h = std::collections::HashMap::new();
             h.insert("Content-Type".to_string(), "application/json".to_string());
@@ -31,7 +31,7 @@ fn success_response<T: serde::Serialize>(data: T) -> ApiGatewayResponse {
 
 fn error_response(status: i32, msg: &str) -> ApiGatewayResponse {
     ApiGatewayResponse {
-        statusCode: status,
+        status_code: status,
         headers: {
             let mut h = std::collections::HashMap::new();
             h.insert("Content-Type".to_string(), "application/json".to_string());

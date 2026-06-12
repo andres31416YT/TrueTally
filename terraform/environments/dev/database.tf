@@ -26,6 +26,10 @@ locals {
 resource "random_string" "redis_password" {
   length  = 16
   special = false
+
+  lifecycle {
+    ignore_changes = [result]
+  }
 }
 
 resource "aws_security_group" "elasticache" {

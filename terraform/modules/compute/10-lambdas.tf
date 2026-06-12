@@ -6,7 +6,7 @@ locals {
 
 locals {
   lambda_common_env = {
-    DATABASE_URL = aws_db_proxy.main.endpoint
+    DATABASE_URL = aws_db_instance.main.address
     PORT         = "8080"
   }
 }
@@ -35,7 +35,7 @@ resource "aws_lambda_function" "acceso_az1" {
   function_name    = "${local.name_prefix}-acceso-az1"
   role             = aws_iam_role.lambda.arn
   handler          = "bootstrap"
-  runtime          = "provided.al2"
+  runtime          = "provided.al2023"
   timeout          = 30
   memory_size      = 512
   filename         = local.lambda_acceso_zip
@@ -63,7 +63,7 @@ resource "aws_lambda_function" "acceso_az2" {
   function_name    = "${local.name_prefix}-acceso-az2"
   role             = aws_iam_role.lambda.arn
   handler          = "bootstrap"
-  runtime          = "provided.al2"
+  runtime          = "provided.al2023"
   timeout          = 30
   memory_size      = 512
   filename         = local.lambda_acceso_zip
@@ -91,7 +91,7 @@ resource "aws_lambda_function" "despachador_az1" {
   function_name    = "${local.name_prefix}-despachador-az1"
   role             = aws_iam_role.lambda.arn
   handler          = "bootstrap"
-  runtime          = "provided.al2"
+  runtime          = "provided.al2023"
   timeout          = 30
   memory_size      = 256
   filename         = local.lambda_despachador_zip
@@ -118,7 +118,7 @@ resource "aws_lambda_function" "despachador_az2" {
   function_name    = "${local.name_prefix}-despachador-az2"
   role             = aws_iam_role.lambda.arn
   handler          = "bootstrap"
-  runtime          = "provided.al2"
+  runtime          = "provided.al2023"
   timeout          = 30
   memory_size      = 256
   filename         = local.lambda_despachador_zip
@@ -145,7 +145,7 @@ resource "aws_lambda_function" "procesador_az1" {
   function_name    = "${local.name_prefix}-procesador-az1"
   role             = aws_iam_role.lambda.arn
   handler          = "bootstrap"
-  runtime          = "provided.al2"
+  runtime          = "provided.al2023"
   timeout          = 300
   memory_size      = 1024
   filename         = local.lambda_procesador_zip
@@ -172,7 +172,7 @@ resource "aws_lambda_function" "procesador_az2" {
   function_name    = "${local.name_prefix}-procesador-az2"
   role             = aws_iam_role.lambda.arn
   handler          = "bootstrap"
-  runtime          = "provided.al2"
+  runtime          = "provided.al2023"
   timeout          = 300
   memory_size      = 1024
   filename         = local.lambda_procesador_zip
