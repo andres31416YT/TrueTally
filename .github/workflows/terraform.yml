@@ -39,27 +39,35 @@ jobs:
       # =========================================================================
       # 🚀 COMPILACIÓN AUTOMÁTICA DE LAMBDAS (DENTRO DE LA CARPETA APP)
       # =========================================================================
-      - name: Instalar herramientas de Rust y Linkers
-        run: |
-          sudo apt-get update && sudo apt-get install -y musl-tools zip
-          rustup target add aarch64-unknown-linux-musl
+      - name: Instalar Rust ARM64 toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-musl
 
-      - name: Compilar Lambdas Rust para ARM64
-        working-directory: app
+      - name: Instalar herramientas de Linkers y ZIP
         run: |
-          cargo build --release --target aarch64-unknown-linux-musl
+          sudo apt-get update
+          sudo apt-get install -y musl-tools zip unzip
 
       - name: Generar empaquetados ZIP reales (bootstrap)
-        working-directory: app
-        run: |
-          cp target/aarch64-unknown-linux-musl/release/lambda-acceso ../bootstrap && cd .. && zip lambda-acceso.zip bootstrap && rm bootstrap
-          cd app && cp target/aarch64-unknown-linux-musl/release/lambda-despachador ../bootstrap && cd .. && zip lambda-despachador.zip bootstrap && rm bootstrap
-          cd app && cp target/aarch64-unknown-linux-musl/release/lambda-procesador ../bootstrap && cd .. && zip lambda-procesador.zip bootstrap && rm bootstrap
-
-      - name: Inyectar ZIPs en la ruta de desarrollo o producción
         run: |
           mkdir -p ${{ steps.env.outputs.env_path }}
-          mv lambda-acceso.zip lambda-despachador.zip lambda-procesador.zip ${{ steps.env.outputs.env_path }}/
+
+          . "$HOME/.cargo/env"
+          cargo build --release --target aarch64-unknown-linux-musl -p lambda-acceso
+          cp app/target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j "${{ steps.env.outputs.env_path }}/lambda-acceso.zip" ./bootstrap
+          rm ./bootstrap
+
+          cargo build --release --target aarch64-unknown-linux-musl -p lambda-despachador
+          cp app/target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j "${{ steps.env.outputs.env_path }}/lambda-despachador.zip" ./bootstrap
+          rm ./bootstrap
+
+          cargo build --release --target aarch64-unknown-linux-musl -p lambda-procesador
+          cp app/target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j "${{ steps.env.outputs.env_path }}/lambda-procesador.zip" ./bootstrap
+          rm ./bootstrap
 
       # =========================================================================
       # 🔐 PASOS DE AWS Y TERRAFORM (CONEXIÓN Y FLUJO)
@@ -138,27 +146,35 @@ jobs:
       # =========================================================================
       # 🚀 RE-COMPILAR PARA EL PASO DE APLICACIÓN REAL
       # =========================================================================
-      - name: Instalar herramientas de Rust y Linkers (Apply)
-        run: |
-          sudo apt-get update && sudo apt-get install -y musl-tools zip
-          rustup target add aarch64-unknown-linux-musl
+      - name: Instalar Rust ARM64 toolchain (Apply)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-musl
 
-      - name: Compilar Lambdas Rust para ARM64 (Apply)
-        working-directory: app
+      - name: Instalar herramientas de Linkers y ZIP (Apply)
         run: |
-          cargo build --release --target aarch64-unknown-linux-musl
+          sudo apt-get update
+          sudo apt-get install -y musl-tools zip unzip
 
       - name: Generar empaquetados ZIP reales (Apply)
-        working-directory: app
-        run: |
-          cp target/aarch64-unknown-linux-musl/release/lambda-acceso ../bootstrap && cd .. && zip lambda-acceso.zip bootstrap && rm bootstrap
-          cd app && cp target/aarch64-unknown-linux-musl/release/lambda-despachador ../bootstrap && cd .. && zip lambda-despachador.zip bootstrap && rm bootstrap
-          cd app && cp target/aarch64-unknown-linux-musl/release/lambda-procesador ../bootstrap && cd .. && zip lambda-procesador.zip bootstrap && rm bootstrap
-
-      - name: Inyectar ZIPs en la ruta de desarrollo (Apply)
         run: |
           mkdir -p terraform/environments/dev
-          mv lambda-acceso.zip lambda-despachador.zip lambda-procesador.zip terraform/environments/dev/
+
+          . "$HOME/.cargo/env"
+          cargo build --release --target aarch64-unknown-linux-musl -p lambda-acceso
+          cp app/target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j terraform/environments/dev/lambda-acceso.zip ./bootstrap
+          rm ./bootstrap
+
+          cargo build --release --target aarch64-unknown-linux-musl -p lambda-despachador
+          cp app/target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j terraform/environments/dev/lambda-despachador.zip ./bootstrap
+          rm ./bootstrap
+
+          cargo build --release --target aarch64-unknown-linux-musl -p lambda-procesador
+          cp app/target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j terraform/environments/dev/lambda-procesador.zip ./bootstrap
+          rm ./bootstrap
 
       # =========================================================================
       - name: Autenticación con AWS via OIDC
