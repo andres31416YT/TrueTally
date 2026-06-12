@@ -44,6 +44,11 @@ jobs:
         with:
           targets: aarch64-unknown-linux-musl
 
+      - name: Instalar toolchain cruzado ARM64 musl
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: aarch64-unknown-linux-musl
+
       - name: Instalar herramientas de Linkers y ZIP
         run: |
           sudo apt-get update
@@ -52,9 +57,9 @@ jobs:
       - name: Generar empaquetados ZIP reales (bootstrap)
         working-directory: app
         env:
-          CC_aarch64_unknown_linux_musl: aarch64-linux-gnu-gcc
-          AR_aarch64_unknown_linux_musl: aarch64-linux-gnu-ar
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: rust-lld
+          CC_aarch64_unknown_linux_musl: aarch64-linux-musl-gcc
+          AR_aarch64_unknown_linux_musl: aarch64-linux-musl-ar
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-musl-gcc
         run: |
           mkdir -p "${{ github.workspace }}/${{ steps.env.outputs.env_path }}"
 
@@ -156,6 +161,11 @@ jobs:
         with:
           targets: aarch64-unknown-linux-musl
 
+      - name: Instalar toolchain cruzado ARM64 musl (Apply)
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: aarch64-unknown-linux-musl
+
       - name: Instalar herramientas de Linkers y ZIP (Apply)
         run: |
           sudo apt-get update
@@ -164,9 +174,9 @@ jobs:
       - name: Generar empaquetados ZIP reales (Apply)
         working-directory: app
         env:
-          CC_aarch64_unknown_linux_musl: aarch64-linux-gnu-gcc
-          AR_aarch64_unknown_linux_musl: aarch64-linux-gnu-ar
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: rust-lld
+          CC_aarch64_unknown_linux_musl: aarch64-linux-musl-gcc
+          AR_aarch64_unknown_linux_musl: aarch64-linux-musl-ar
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-musl-gcc
         run: |
           mkdir -p "${{ github.workspace }}/terraform/environments/dev"
 
