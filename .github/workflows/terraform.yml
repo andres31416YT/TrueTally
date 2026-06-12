@@ -134,12 +134,16 @@ jobs:
               body: '### Terraform Plan (${{ steps.env.outputs.env_name }})\n```\n' + truncated + '\n```'
             });
 
-      - name: Guardar plan como artefacto
+      - name: Guardar plan y paquetes Lambda como artefacto
         if: steps.env.outputs.env_name == 'dev'
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan-dev
-          path: ${{ steps.env.outputs.env_path }}/tfplan
+          name: terraform-dev-artifacts
+          path: |
+            ${{ steps.env.outputs.env_path }}/lambda-acceso.zip
+            ${{ steps.env.outputs.env_path }}/lambda-despachador.zip
+            ${{ steps.env.outputs.env_path }}/lambda-procesador.zip
+            ${{ steps.env.outputs.env_path }}/tfplan
           retention-days: 7
 
   apply-dev:
@@ -153,48 +157,11 @@ jobs:
       - name: Checkout del código
         uses: actions/checkout@v4
 
-      # =========================================================================
-      # 🚀 RE-COMPILAR PARA EL PASO DE APLICACIÓN REAL
-      # =========================================================================
-      - name: Instalar Rust ARM64 toolchain (Apply)
-        uses: dtolnay/rust-toolchain@stable
+      - name: Descargar plan y paquetes Lambda de dev
+        uses: actions/download-artifact@v4
         with:
-          targets: aarch64-unknown-linux-musl
-
-      - name: Instalar toolchain cruzado ARM64 musl (Apply)
-        uses: taiki-e/setup-cross-toolchain-action@v1
-        with:
-          target: aarch64-unknown-linux-musl
-
-      - name: Instalar herramientas de Linkers y ZIP (Apply)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools zip unzip gcc-aarch64-linux-gnu
-
-      - name: Generar empaquetados ZIP reales (Apply)
-        working-directory: app
-        env:
-          CC_aarch64_unknown_linux_musl: aarch64-linux-musl-gcc
-          AR_aarch64_unknown_linux_musl: aarch64-linux-musl-ar
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-musl-gcc
-        run: |
-          mkdir -p "${{ github.workspace }}/terraform/environments/dev"
-
-          . "$HOME/.cargo/env"
-          cargo build --release --target aarch64-unknown-linux-musl -p lambda-acceso
-          cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
-          zip -j "${{ github.workspace }}/terraform/environments/dev/lambda-acceso.zip" ./bootstrap
-          rm ./bootstrap
-
-          cargo build --release --target aarch64-unknown-linux-musl -p lambda-despachador
-          cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
-          zip -j "${{ github.workspace }}/terraform/environments/dev/lambda-despachador.zip" ./bootstrap
-          rm ./bootstrap
-
-          cargo build --release --target aarch64-unknown-linux-musl -p lambda-procesador
-          cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
-          zip -j "${{ github.workspace }}/terraform/environments/dev/lambda-procesador.zip" ./bootstrap
-          rm ./bootstrap
+          name: terraform-dev-artifacts
+          path: terraform/environments/dev
 
       # =========================================================================
       - name: Autenticación con AWS via OIDC
@@ -217,12 +184,6 @@ jobs:
         run: |
           cd terraform/environments/dev
           terraform workspace select -or-create dev
-
-      - name: Descargar plan aprobado
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan-dev
-          path: terraform/environments/dev
 
       - name: Terraform Apply
         run: |
