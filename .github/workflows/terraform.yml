@@ -47,10 +47,13 @@ jobs:
       - name: Instalar herramientas de Linkers y ZIP
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools zip unzip
+          sudo apt-get install -y musl-tools zip unzip gcc-aarch64-linux-gnu
 
       - name: Generar empaquetados ZIP reales (bootstrap)
         working-directory: app
+        env:
+          CC_aarch64_unknown_linux_musl: aarch64-linux-gnu-gcc
+          AR_aarch64_unknown_linux_musl: aarch64-linux-gnu-ar
         run: |
           mkdir -p "${{ github.workspace }}/${{ steps.env.outputs.env_path }}"
 
@@ -155,10 +158,13 @@ jobs:
       - name: Instalar herramientas de Linkers y ZIP (Apply)
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools zip unzip
+          sudo apt-get install -y musl-tools zip unzip gcc-aarch64-linux-gnu
 
       - name: Generar empaquetados ZIP reales (Apply)
         working-directory: app
+        env:
+          CC_aarch64_unknown_linux_musl: aarch64-linux-gnu-gcc
+          AR_aarch64_unknown_linux_musl: aarch64-linux-gnu-ar
         run: |
           mkdir -p "${{ github.workspace }}/terraform/environments/dev"
 
