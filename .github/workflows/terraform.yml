@@ -54,6 +54,7 @@ jobs:
         env:
           CC_aarch64_unknown_linux_musl: aarch64-linux-gnu-gcc
           AR_aarch64_unknown_linux_musl: aarch64-linux-gnu-ar
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: rust-lld
         run: |
           mkdir -p "${{ github.workspace }}/${{ steps.env.outputs.env_path }}"
 
@@ -165,6 +166,7 @@ jobs:
         env:
           CC_aarch64_unknown_linux_musl: aarch64-linux-gnu-gcc
           AR_aarch64_unknown_linux_musl: aarch64-linux-gnu-ar
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: rust-lld
         run: |
           mkdir -p "${{ github.workspace }}/terraform/environments/dev"
 
