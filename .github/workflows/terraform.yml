@@ -50,23 +50,24 @@ jobs:
           sudo apt-get install -y musl-tools zip unzip
 
       - name: Generar empaquetados ZIP reales (bootstrap)
+        working-directory: app
         run: |
-          mkdir -p ${{ steps.env.outputs.env_path }}
+          mkdir -p "${{ github.workspace }}/${{ steps.env.outputs.env_path }}"
 
           . "$HOME/.cargo/env"
           cargo build --release --target aarch64-unknown-linux-musl -p lambda-acceso
-          cp app/target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
-          zip -j "${{ steps.env.outputs.env_path }}/lambda-acceso.zip" ./bootstrap
+          cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j "${{ github.workspace }}/${{ steps.env.outputs.env_path }}/lambda-acceso.zip" ./bootstrap
           rm ./bootstrap
 
           cargo build --release --target aarch64-unknown-linux-musl -p lambda-despachador
-          cp app/target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
-          zip -j "${{ steps.env.outputs.env_path }}/lambda-despachador.zip" ./bootstrap
+          cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j "${{ github.workspace }}/${{ steps.env.outputs.env_path }}/lambda-despachador.zip" ./bootstrap
           rm ./bootstrap
 
           cargo build --release --target aarch64-unknown-linux-musl -p lambda-procesador
-          cp app/target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
-          zip -j "${{ steps.env.outputs.env_path }}/lambda-procesador.zip" ./bootstrap
+          cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j "${{ github.workspace }}/${{ steps.env.outputs.env_path }}/lambda-procesador.zip" ./bootstrap
           rm ./bootstrap
 
       # =========================================================================
@@ -157,23 +158,24 @@ jobs:
           sudo apt-get install -y musl-tools zip unzip
 
       - name: Generar empaquetados ZIP reales (Apply)
+        working-directory: app
         run: |
-          mkdir -p terraform/environments/dev
+          mkdir -p "${{ github.workspace }}/terraform/environments/dev"
 
           . "$HOME/.cargo/env"
           cargo build --release --target aarch64-unknown-linux-musl -p lambda-acceso
-          cp app/target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
-          zip -j terraform/environments/dev/lambda-acceso.zip ./bootstrap
+          cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j "${{ github.workspace }}/terraform/environments/dev/lambda-acceso.zip" ./bootstrap
           rm ./bootstrap
 
           cargo build --release --target aarch64-unknown-linux-musl -p lambda-despachador
-          cp app/target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
-          zip -j terraform/environments/dev/lambda-despachador.zip ./bootstrap
+          cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j "${{ github.workspace }}/terraform/environments/dev/lambda-despachador.zip" ./bootstrap
           rm ./bootstrap
 
           cargo build --release --target aarch64-unknown-linux-musl -p lambda-procesador
-          cp app/target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
-          zip -j terraform/environments/dev/lambda-procesador.zip ./bootstrap
+          cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j "${{ github.workspace }}/terraform/environments/dev/lambda-procesador.zip" ./bootstrap
           rm ./bootstrap
 
       # =========================================================================
