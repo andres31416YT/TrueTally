@@ -23,6 +23,7 @@ module "security" {
   project_name  = local.project_name
   env           = local.env
   db_password   = local.db_password
+  redis_auth_token = local.redis_auth_token
 }
 
 module "database" {
