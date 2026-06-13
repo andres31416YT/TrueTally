@@ -8,10 +8,8 @@
 *.tfvars.json
 *.tfbackend
 
-
 crash.log
 crash.*.log
-
 
 credentials
 config
@@ -19,8 +17,9 @@ config
 *.pkcs12
 *.key
 
-
 .idea/
 .vscode/
 *.swp
 *.swo
+
+*.zip

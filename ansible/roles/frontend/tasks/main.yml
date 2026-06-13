@@ -1,0 +1,25 @@
+---
+- name: Build frontend
+  command: npm run build:aws
+  args:
+    chdir: ../../app/frontend
+  run_once: true
+  delegate_to: localhost
+
+- name: Sincronizar archivos estáticos a S3
+  amazon.aws.s3_sync:
+    bucket: "{{ name_prefix }}-frontend"
+    file_root: "../../app/frontend/out"
+    permission: private
+    cache_control: "max-age=86400"
+  register: s3_sync
+
+- name: Invalidar cache en CloudFront
+  amazon.aws.cloudfront_distribution:
+    distribution_id: "{{ name_prefix }}-frontend-cf"
+    state: present
+    invalidation:
+      paths:
+        - "/*"
+      caller_reference: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+  when: s3_sync.changed

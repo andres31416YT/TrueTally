@@ -1,0 +1,93 @@
+---
+- name: Desplegar Lambdas en AWS
+  amazon.aws.lambda_function:
+    name: "{{ name_prefix }}-{{ item.name }}"
+    state: present
+    runtime: "{{ lambda.runtime }}"
+    handler: "{{ lambda.handler }}"
+    role: "{{ item.role }}"
+    timeout: "{{ item.timeout }}"
+    memory_size: "{{ item.memory_size }}"
+    filename: "{{ item.filename }}"
+    vpc_subnet_ids: "{{ private_subnet_ids }}"
+    vpc_security_group_ids: ["{{ lambda_security_group_id }}"]
+    environment_variables: "{{ item.environment_variables | default({}) }}"
+    tags: "{{ common_tags }}"
+  loop:
+    - name: acceso-az1
+      role: "{{ lambda_acceso_role_arn }}"
+      timeout: "{{ lambda_acceso.timeout }}"
+      memory_size: "{{ lambda_acceso.memory_size }}"
+      filename: "../../app/lambda-acceso/target/release/bootstrap"
+      environment_variables:
+        DATABASE_URL: "{{ rds_proxy_endpoint }}"
+        BLOCKCHAIN_NODE_URL: "{{ blockchain_node_url_az1 }}"
+        REDIS_URL: "rediss://:{{ redis_auth_token }}@{{ redis_endpoint }}:{{ redis_port }}"
+        SQS_QUEUE_URL: "{{ sqs_queue_url }}"
+        SQS_DLQ_URL: "{{ sqs_dlq_url }}"
+
+    - name: acceso-az2
+      role: "{{ lambda_acceso_role_arn }}"
+      timeout: "{{ lambda_acceso.timeout }}"
+      memory_size: "{{ lambda_acceso.memory_size }}"
+      filename: "../../app/lambda-acceso/target/release/bootstrap"
+      environment_variables:
+        DATABASE_URL: "{{ rds_proxy_endpoint }}"
+        BLOCKCHAIN_NODE_URL: "{{ blockchain_node_url_az2 }}"
+        REDIS_URL: "rediss://:{{ redis_auth_token }}@{{ redis_endpoint }}:{{ redis_port }}"
+        SQS_QUEUE_URL: "{{ sqs_queue_url }}"
+        SQS_DLQ_URL: "{{ sqs_dlq_url }}"
+
+    - name: despachador-az1
+      role: "{{ lambda_despachador_role_arn }}"
+      timeout: "{{ lambda_despachador.timeout }}"
+      memory_size: "{{ lambda_despachador.memory_size }}"
+      filename: "../../app/lambda-despachador/target/release/bootstrap"
+      environment_variables:
+        VOTE_QUEUE_URL: "{{ sqs_queue_url }}"
+        SQS_DLQ_URL: "{{ sqs_dlq_url }}"
+
+    - name: despachador-az2
+      role: "{{ lambda_despachador_role_arn }}"
+      timeout: "{{ lambda_despachador.timeout }}"
+      memory_size: "{{ lambda_despachador.memory_size }}"
+      filename: "../../app/lambda-despachador/target/release/bootstrap"
+      environment_variables:
+        VOTE_QUEUE_URL: "{{ sqs_queue_url }}"
+        SQS_DLQ_URL: "{{ sqs_dlq_url }}"
+
+    - name: procesador-az1
+      role: "{{ lambda_procesador_role_arn }}"
+      timeout: "{{ lambda_procesador.timeout }}"
+      memory_size: "{{ lambda_procesador.memory_size }}"
+      filename: "../../app/lambda-procesador/target/release/bootstrap"
+      environment_variables:
+        BLOCKCHAIN_NODE_URL: "{{ blockchain_node_url_az1 }}"
+        SQS_QUEUE_URL: "{{ sqs_queue_url }}"
+        SQS_DLQ_URL: "{{ sqs_dlq_url }}"
+
+    - name: procesador-az2
+      role: "{{ lambda_procesador_role_arn }}"
+      timeout: "{{ lambda_procesador.timeout }}"
+      memory_size: "{{ lambda_procesador.memory_size }}"
+      filename: "../../app/lambda-procesador/target/release/bootstrap"
+      environment_variables:
+        BLOCKCHAIN_NODE_URL: "{{ blockchain_node_url_az2 }}"
+        SQS_QUEUE_URL: "{{ sqs_queue_url }}"
+        SQS_DLQ_URL: "{{ sqs_dlq_url }}"
+
+  register: lambda_result
+
+- name: Configurar event source mapping SQS -> Procesador AZ1
+  amazon.aws.lambda_event_source_mapping:
+    event_source_arn: "{{ sqs_queue_url }}"
+    function_name: "{{ name_prefix }}-procesador-az1"
+    batch_size: 10
+    enabled: true
+
+- name: Configurar event source mapping SQS -> Procesador AZ2
+  amazon.aws.lambda_event_source_mapping:
+    event_source_arn: "{{ sqs_queue_url }}"
+    function_name: "{{ name_prefix }}-procesador-az2"
+    batch_size: 10
+    enabled: true

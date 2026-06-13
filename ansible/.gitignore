@@ -1,6 +1,7 @@
 # Ansible
 .ansible/
 *.retry
+vault/
 
 # Build artifacts
 build/

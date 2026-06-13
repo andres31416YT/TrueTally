@@ -1,0 +1,75 @@
+---
+- name: Build y push imagen blockchain a ECR
+  amazon.aws.ecr_image:
+    repository_name: "{{ name_prefix }}-blockchain"
+    region: "{{ aws_region }}"
+    tag: latest
+    scan_on_push: true
+    source_path: "../../app/blockchain-core"
+    dockerfile: "../../app/blockchain-core/Dockerfile"
+
+- name: Actualizar task definition ECS
+  amazon.aws.ecs_taskdefinition:
+    family: "{{ name_prefix }}-blockchain"
+    state: present
+    network_mode: awsvpc
+    task_role_arn: "{{ ecs_task_role_arn | default('') }}"
+    execution_role_arn: "{{ ecs_task_execution_role_arn | default('') }}"
+    containers:
+      - name: blockchain-node
+        image: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ name_prefix }}-blockchain:latest"
+        essential: true
+        portMappings:
+          - containerPort: 9944
+            hostPort: 9944
+            protocol: tcp
+        mountPoints:
+          - sourceVolume: blockchain-data
+            containerPath: /data/db
+        logConfiguration:
+          logDriver: awslogs
+          options:
+            awslogs-group: "/ecs/{{ name_prefix }}-blockchain"
+            awslogs-region: "{{ aws_region }}"
+            awslogs-stream-prefix: blockchain
+        environment:
+          - name: PORT
+            value: "9944"
+          - name: RUST_LOG
+            value: "blockchain_core=info"
+      - name: node-exporter
+        image: prom/node-exporter:latest
+        essential: false
+        portMappings:
+          - containerPort: 9100
+            hostPort: 9100
+            protocol: tcp
+        logConfiguration:
+          logDriver: awslogs
+          options:
+            awslogs-group: "/ecs/{{ name_prefix }}-blockchain"
+            awslogs-region: "{{ aws_region }}"
+            awslogs-stream-prefix: exporter
+    volumes:
+      - name: blockchain-data
+        efs_volume_configuration:
+          file_system_id: "{{ efs_id | default('') }}"
+    tags: "{{ common_tags }}"
+
+- name: Asegurar que ECS Service está corriendo
+  amazon.aws.ecs_service:
+    cluster: "{{ name_prefix }}-blockchain-cluster"
+    service_name: "{{ name_prefix }}-blockchain-service"
+    task_definition: "{{ name_prefix }}-blockchain"
+    desired_count: 2
+    launch_type: FARGATE
+    network_configuration:
+      subnets: "{{ blockchain_subnet_ids | default([]) }}"
+      securityGroups:
+        - "{{ ecs_security_group_id | default('') }}"
+      assignPublicIp: false
+    load_balancers:
+      - target_group_arn: "{{ target_group_arn | default('') }}"
+        container_name: blockchain-node
+        container_port: 9944
+    tags: "{{ common_tags }}"

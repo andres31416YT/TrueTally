@@ -1,55 +1,54 @@
-variable "aws_region" {
-  type    = string
-  default = "us-east-1"
-}
-
 variable "project_name" {
-  type    = string
   default = "truetally"
+  type    = string
 }
 
 variable "environment" {
-  type    = string
   default = "prod"
+  type    = string
 }
 
 variable "vpc_cidr" {
-  type    = string
   default = "10.1.0.0/16"
+  type    = string
 }
 
 variable "azs" {
-  type    = list(string)
   default = ["us-east-1a", "us-east-1b"]
+  type    = list(string)
 }
 
-variable "db_username" {
-  type      = string
-  default   = "truetally"
+variable "db_password" {
   sensitive = true
+  type      = string
+}
+
+variable "redis_auth_token" {
+  sensitive = true
+  type      = string
 }
 
 variable "lambda_node_url_az1" {
-  type    = string
   default = "http://truetally-prod-blockchain-alb-1.elb.us-east-1.amazonaws.com"
+  type    = string
 }
 
 variable "lambda_node_url_az2" {
-  type    = string
   default = "http://truetally-prod-blockchain-alb-2.elb.us-east-1.amazonaws.com"
+  type    = string
 }
 
 variable "domain_name" {
-  type    = string
   default = "andrespaganroncall.qzz.io"
+  type    = string
 }
 
 variable "ssl_certificate_arn" {
-  type    = string
   default = ""
+  type    = string
 }
 
 variable "route53_zone_id" {
-  type    = string
   default = ""
+  type    = string
 }

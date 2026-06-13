@@ -1,11 +1,3 @@
-locals {
-  name_prefix = "${var.project_name}-${var.environment}"
-  common_tags = {
-    Project     = var.project_name
-    Environment = var.environment
-  }
-}
-
 variable "project_name" {
   default = "truetally"
   type    = string
@@ -27,6 +19,12 @@ variable "azs" {
 }
 
 variable "db_password" {
+  default   = null
+  sensitive = true
+  type      = string
+}
+
+variable "redis_auth_token" {
   default   = null
   sensitive = true
   type      = string

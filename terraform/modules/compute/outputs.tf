@@ -1,9 +1,0 @@
-output "sqs_queue_url" { value = aws_sqs_queue.vote_queue.id }
-output "api_gateway_endpoint" { value = aws_apigatewayv2_api.main.api_endpoint }
-output "api_gateway_id" { value = aws_apigatewayv2_api.main.id }
-output "lambda_acceso_az1_arn" { value = aws_lambda_function.acceso_az1.arn }
-output "lambda_acceso_az2_arn" { value = aws_lambda_function.acceso_az2.arn }
-output "lambda_despachador_az1_arn" { value = aws_lambda_function.despachador_az1.arn }
-output "lambda_despachador_az2_arn" { value = aws_lambda_function.despachador_az2.arn }
-output "lambda_procesador_az1_arn" { value = aws_lambda_function.procesador_az1.arn }
-output "lambda_procesador_az2_arn" { value = aws_lambda_function.procesador_az2.arn }

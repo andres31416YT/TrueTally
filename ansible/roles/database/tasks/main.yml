@@ -1,0 +1,28 @@
+---
+- name: Validar conexión a RDS Proxy
+  amazon.aws.rds_cluster:
+    db_cluster_identifier: "{{ name_prefix }}-aurora"
+    state: present
+  register: rds_status
+
+- name: Validar conexión a ElastiCache Redis
+  amazon.aws.elasticache_replication_group:
+    replication_group_id: "{{ name_prefix }}-redis"
+    state: present
+  register: redis_status
+
+- name: Actualizar secret en Secrets Manager (DB credentials)
+  amazon.aws.secretsmanager_secret:
+    secret_name: "{{ name_prefix }}/db/credentials"
+    state: present
+    kms_key_id: "{{ kms_key_arn | default('') }}"
+    secret_string: "{{ lookup('template', 'templates/db_credentials.j2') }}"
+  vars:
+    kms_key_arn: "{{ kms_key_arn | default('') }}"
+
+- name: Actualizar secret en Secrets Manager (Redis auth)
+  amazon.aws.secretsmanager_secret:
+    secret_name: "{{ name_prefix }}/redis/auth-token"
+    state: present
+    kms_key_id: "{{ kms_key_arn | default('') }}"
+    secret_string: "{{ redis_auth_token }}"

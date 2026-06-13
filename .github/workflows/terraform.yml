@@ -2,7 +2,7 @@ name: Terraform CI/CD
 
 on:
   push:
-    branches: [main, develop, feature]
+    branches: [main, develop]
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
@@ -14,7 +14,15 @@ permissions:
 
 env:
   TF_INPUT: "0"
-  TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+  AWS_REGION: us-east-1
+  TF_VAR_db_password: ${{ secrets.TF_VAR_DB_PASSWORD }}
+  TF_VAR_db_password_dev: ${{ secrets.TF_VAR_DB_PASSWORD_DEV }}
+  TF_VAR_db_password_prod: ${{ secrets.TF_VAR_DB_PASSWORD_PROD }}
+  TF_VAR_redis_auth_token: ${{ secrets.TF_VAR_REDIS_AUTH_TOKEN }}
+  TF_VAR_lambda_node_url_az1_dev: ${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_DEV }}
+  TF_VAR_lambda_node_url_az2_dev: ${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_DEV }}
+  TF_VAR_lambda_node_url_az1_prod: ${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_PROD }}
+  TF_VAR_lambda_node_url_az2_prod: ${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_PROD }}
 
 jobs:
   plan:
@@ -31,14 +39,17 @@ jobs:
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             echo "env_name=prod" >> $GITHUB_OUTPUT
             echo "env_path=terraform/environments/prod" >> $GITHUB_OUTPUT
+            echo "db_password_secret=TF_VAR_db_password_prod" >> $GITHUB_OUTPUT
+            echo "node_url_az1=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_PROD }}" >> $GITHUB_OUTPUT
+            echo "node_url_az2=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_PROD }}" >> $GITHUB_OUTPUT
           else
             echo "env_name=dev" >> $GITHUB_OUTPUT
             echo "env_path=terraform/environments/dev" >> $GITHUB_OUTPUT
+            echo "db_password_secret=TF_VAR_db_password_dev" >> $GITHUB_OUTPUT
+            echo "node_url_az1=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_DEV }}" >> $GITHUB_OUTPUT
+            echo "node_url_az2=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_DEV }}" >> $GITHUB_OUTPUT
           fi
 
-      # =========================================================================
-      # 🚀 COMPILACIÓN AUTOMÁTICA DE LAMBDAS (DENTRO DE LA CARPETA APP)
-      # =========================================================================
       - name: Instalar Rust ARM64 toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -54,7 +65,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y musl-tools zip unzip gcc-aarch64-linux-gnu
 
-      - name: Generar empaquetados ZIP reales (bootstrap)
+      - name: Generar empaquetados ZIP de Lambdas
         working-directory: app
         env:
           CC_aarch64_unknown_linux_musl: aarch64-linux-musl-gcc
@@ -64,6 +75,7 @@ jobs:
           mkdir -p "${{ github.workspace }}/${{ steps.env.outputs.env_path }}"
 
           . "$HOME/.cargo/env"
+
           cargo build --release --target aarch64-unknown-linux-musl -p lambda-acceso
           cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
           zip -j "${{ github.workspace }}/${{ steps.env.outputs.env_path }}/lambda-acceso.zip" ./bootstrap
@@ -79,9 +91,6 @@ jobs:
           zip -j "${{ github.workspace }}/${{ steps.env.outputs.env_path }}/lambda-procesador.zip" ./bootstrap
           rm ./bootstrap
 
-      # =========================================================================
-      # 🔐 PASOS DE AWS Y TERRAFORM (CONEXIÓN Y FLUJO)
-      # =========================================================================
       - name: Autenticación con AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -134,18 +143,6 @@ jobs:
               body: '### Terraform Plan (${{ steps.env.outputs.env_name }})\n```\n' + truncated + '\n```'
             });
 
-      - name: Guardar plan y paquetes Lambda como artefacto
-        if: steps.env.outputs.env_name == 'dev'
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-dev-artifacts
-          path: |
-            ${{ steps.env.outputs.env_path }}/lambda-acceso.zip
-            ${{ steps.env.outputs.env_path }}/lambda-despachador.zip
-            ${{ steps.env.outputs.env_path }}/lambda-procesador.zip
-            ${{ steps.env.outputs.env_path }}/tfplan
-          retention-days: 7
-
   apply-dev:
     name: Terraform Apply (Dev)
     needs: plan
@@ -163,7 +160,6 @@ jobs:
           name: terraform-dev-artifacts
           path: terraform/environments/dev
 
-      # =========================================================================
       - name: Autenticación con AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -188,4 +184,47 @@ jobs:
       - name: Terraform Apply
         run: |
           cd terraform/environments/dev
+          terraform apply -input=false -auto-approve tfplan
+
+  apply-prod:
+    name: Terraform Apply (Prod)
+    needs: plan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Descargar plan y paquetes Lambda de prod
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-prod-artifacts
+          path: terraform/environments/prod
+
+      - name: Autenticación con AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Terraform Init
+        run: |
+          cd terraform/environments/prod
+          terraform init -input=false -backend-config="bucket=truetally-terraform-state" -backend-config="key=prod/terraform.tfstate" -backend-config="region=${{ secrets.AWS_REGION }}"
+
+      - name: Terraform Workspace
+        run: |
+          cd terraform/environments/prod
+          terraform workspace select -or-create prod
+
+      - name: Terraform Apply
+        run: |
+          cd terraform/environments/prod
           terraform apply -input=false -auto-approve tfplan
