@@ -5,16 +5,17 @@ on:
     branches: [ main, develop ]
     paths:
       - 'app/blockchain-core/**'
+      - 'Dockerfile'
       - '.github/workflows/ecr-build.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
       - 'app/blockchain-core/**'
+      - 'Dockerfile'
       - '.github/workflows/ecr-build.yml'
 
 env:
   AWS_REGION: us-east-1
-  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   build:
@@ -42,37 +43,28 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set repository name
-        id: repo
+      - name: Set ECR repository URI
+        id: ecr
         run: |
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "name=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/truetally-prod-blockchain" >> $GITHUB_OUTPUT
+            echo "REPO=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/truetally-prod-blockchain" >> $GITHUB_OUTPUT
           else
-            echo "name=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/truetally-dev-blockchain" >> $GITHUB_OUTPUT
+            echo "REPO=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/truetally-dev-blockchain" >> $GITHUB_OUTPUT
           fi
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ steps.repo.outputs.name }}
-          tags: |
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-          labels: |
-            org.opencontainers.image.source=${{ github.event.repository.html_url }}
-            org.opencontainers.image.revision=${{ github.sha }}
+      - name: Set tag
+        id: tag
+        run: echo "TAG=${{ github.sha }}" >> $GITHUB_OUTPUT
 
-      - name: Build Docker image
+      - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: ./app/blockchain-core
           file: ./app/blockchain-core/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref:${{ steps.repo.outputs.name }}:buildcache
-          cache-to: type=registry,ref=${{ steps.repo.outputs.name }}:buildcache,mode=max
+          tags: ${{ steps.ecr.outputs.REPO }}:${{ steps.tag.outputs.TAG }}
+          cache-from: type=registry,ref=${{ steps.ecr.outputs.REPO }}:buildcache
+          cache-to: type=registry,ref=${{ steps.ecr.outputs.REPO }}:buildcache,mode=max
 
       - name: Image digest
-        run: echo "Image pushed with digest ${{ steps.meta.outputs.tags }}"
+        run: echo "Image pushed: ${{ steps.ecr.outputs.REPO }}:${{ steps.tag.outputs.TAG }}"
