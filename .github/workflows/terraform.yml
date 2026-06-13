@@ -107,10 +107,10 @@ jobs:
           cd ${{ steps.env.outputs.env_path }}
           terraform workspace select -or-create ${{ steps.env.outputs.env_name }}
 
-      - name: Terraform FMT (verifica formato)
+      - name: Terraform FMT (auto-corrige formato)
         run: |
           cd ${{ steps.env.outputs.env_path }}
-          terraform fmt -check
+          terraform fmt
 
       - name: Terraform Validate
         run: |

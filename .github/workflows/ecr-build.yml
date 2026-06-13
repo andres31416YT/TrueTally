@@ -43,28 +43,16 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set ECR repository URI
-        id: ecr
-        run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "REPO=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/truetally-prod-blockchain" >> $GITHUB_OUTPUT
-          else
-            echo "REPO=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/truetally-dev-blockchain" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Set tag
-        id: tag
-        run: echo "TAG=${{ github.sha }}" >> $GITHUB_OUTPUT
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: ./app/blockchain-core
           file: ./app/blockchain-core/Dockerfile
           push: true
-          tags: ${{ steps.ecr.outputs.REPO }}:${{ steps.tag.outputs.TAG }}
-          cache-from: type=registry,ref=${{ steps.ecr.outputs.REPO }}:buildcache
-          cache-to: type=registry,ref=${{ steps.ecr.outputs.REPO }}:buildcache,mode=max
+          tags: |
+            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ github.ref == 'refs/heads/main' && 'truetally-prod-blockchain' || 'truetally-dev-blockchain' }}:${{ github.sha }}
+          cache-from: type=registry,ref=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ github.ref == 'refs/heads/main' && 'truetally-prod-blockchain' || 'truetally-dev-blockchain' }}:buildcache
+          cache-to: type=registry,ref=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ github.ref == 'refs/heads/main' && 'truetally-prod-blockchain' || 'truetally-dev-blockchain' }}:buildcache,mode=max
 
       - name: Image digest
-        run: echo "Image pushed: ${{ steps.ecr.outputs.REPO }}:${{ steps.tag.outputs.TAG }}"
+        run: echo "Image pushed ${{ github.sha }}"
