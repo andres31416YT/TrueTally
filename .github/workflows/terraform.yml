@@ -15,9 +15,6 @@ permissions:
 env:
   TF_INPUT: "0"
   AWS_REGION: us-east-1
-  TF_VAR_db_password: ${{ secrets.TF_VAR_DB_PASSWORD }}
-  TF_VAR_db_password_dev: ${{ secrets.TF_VAR_DB_PASSWORD_DEV }}
-  TF_VAR_db_password_prod: ${{ secrets.TF_VAR_DB_PASSWORD_PROD }}
   TF_VAR_redis_auth_token: ${{ secrets.TF_VAR_REDIS_AUTH_TOKEN }}
   TF_VAR_lambda_node_url_az1_dev: ${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_DEV }}
   TF_VAR_lambda_node_url_az2_dev: ${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_DEV }}
@@ -39,13 +36,11 @@ jobs:
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             echo "env_name=prod" >> $GITHUB_OUTPUT
             echo "env_path=terraform/environments/prod" >> $GITHUB_OUTPUT
-            echo "db_password_secret=TF_VAR_db_password_prod" >> $GITHUB_OUTPUT
             echo "node_url_az1=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_PROD }}" >> $GITHUB_OUTPUT
             echo "node_url_az2=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_PROD }}" >> $GITHUB_OUTPUT
           else
             echo "env_name=dev" >> $GITHUB_OUTPUT
             echo "env_path=terraform/environments/dev" >> $GITHUB_OUTPUT
-            echo "db_password_secret=TF_VAR_db_password_dev" >> $GITHUB_OUTPUT
             echo "node_url_az1=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_DEV }}" >> $GITHUB_OUTPUT
             echo "node_url_az2=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_DEV }}" >> $GITHUB_OUTPUT
           fi
