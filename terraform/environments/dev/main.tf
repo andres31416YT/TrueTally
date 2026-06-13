@@ -37,7 +37,7 @@ module "database" {
   private_subnet_ids       = module.networking.private_subnet_ids
   kms_key_arn              = module.security.kms_key_arn
   lambda_security_group_id = module.networking.lambda_security_group_id
-  rds_security_group_id    = module.security.rds_security_group_id
+
 }
 
 module "compute" {

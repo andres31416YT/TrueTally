@@ -13,11 +13,6 @@ variable "vpc_id" { type = string }
 variable "private_subnet_ids" { type = list(string) }
 variable "kms_key_arn" { type = string }
 variable "lambda_security_group_id" { type = string }
-variable "rds_security_group_id" { type = string }
-
-locals {
-  name_prefix = "${var.project_name}-${var.env}"
-}
 
 # === 04-elasticache.tf ===
 resource "aws_elasticache_subnet_group" "main" {

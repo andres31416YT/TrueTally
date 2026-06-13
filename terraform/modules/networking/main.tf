@@ -87,3 +87,7 @@ output "database_subnet_ids" { value = [for s in aws_subnet.database : s.id] }
 output "blockchain_subnet_ids" { value = [for s in aws_subnet.blockchain : s.id] }
 output "lambda_security_group_id" { value = aws_security_group.lambda.id }
 output "lambda_sg_arn" { value = aws_security_group.lambda.arn }
+
+output "database_sg_id" {
+  value = aws_security_group.database.id
+}
