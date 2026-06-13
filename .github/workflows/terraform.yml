@@ -120,7 +120,12 @@ jobs:
         id: plan
         run: |
           cd ${{ steps.env.outputs.env_path }}
-          terraform plan -input=false -no-color -out=tfplan 2>&1 | tee plan_output.txt
+          terraform plan \
+            -input=false \
+            -no-color \
+            -var="db_password=${{ secrets.TF_VAR_DB_PASSWORD_DEV }}" \
+            -var="redis_auth_token=${{ secrets.TF_VAR_REDIS_AUTH_TOKEN }}" \
+            -out=tfplan 2>&1 | tee plan_output.txt
 
       - name: Comentar plan en el PR
         if: github.event_name == 'pull_request'
