@@ -49,4 +49,4 @@ jobs:
           context: ./app/blockchain-core
           file: ./app/blockchain-core/Dockerfile
           push: true
-          tags: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ github.ref == 'refs/heads/main' && 'truetally-prod-blockchain' || 'truetally-dev-blockchain' }}:${{ github.sha }}
+          tags: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ github.ref == 'refs/heads/main' && 'truetally-prod-blockchain' || 'truetally-dev-blockchain' }}:${{ github.sha }}
