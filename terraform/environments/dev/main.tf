@@ -27,16 +27,17 @@ module "security" {
 }
 
 module "database" {
-  source               = "../../modules/database"
-  project_name         = local.project_name
-  env                  = local.env
-  db_password          = local.db_password
-  redis_auth_token     = local.redis_auth_token
-  vpc_id               = module.networking.vpc_id
-  private_subnet_ids   = module.networking.private_subnet_ids
-  kms_key_arn          = module.security.kms_key_arn
-  lambda_security_group_id  = module.security.lambda_security_group_id
-  rds_security_group_id     = module.security.rds_security_group_id
+  source                  = "../../modules/database"
+  project_name            = local.project_name
+  env                     = local.env
+  db_username             = "truetally"
+  db_password             = local.db_password
+  redis_auth_token        = local.redis_auth_token
+  vpc_id                  = module.networking.vpc_id
+  private_subnet_ids      = module.networking.private_subnet_ids
+  kms_key_arn             = module.security.kms_key_arn
+  lambda_security_group_id = module.security.lambda_security_group_id
+  rds_security_group_id   = module.security.rds_security_group_id
 }
 
 module "compute" {
