@@ -11,39 +11,44 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags = { Name = "${local.name_prefix}-vpc" }
+  tags                 = { Name = "${local.name_prefix}-vpc" }
 }
 
 resource "aws_subnet" "public" {
-  for_each = toset(var.azs)
+  for_each                = toset(var.azs)
   vpc_id                  = aws_vpc.main.id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, index(var.azs, each.key) * 2)
   availability_zone       = each.key
   map_public_ip_on_launch = true
-  tags = { Name = "${local.name_prefix}-public-${each.key}" }
+  tags                    = { Name = "${local.name_prefix}-public-${each.key}" }
 }
 
 resource "aws_subnet" "compute" {
-  for_each = toset(var.azs)
+  for_each          = toset(var.azs)
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, index(var.azs, each.key) * 2 + 10)
   availability_zone = each.key
-  tags = { Name = "${local.name_prefix}-compute-${each.key}" }
+  tags              = { Name = "${local.name_prefix}-compute-${each.key}" }
 }
 
 resource "aws_subnet" "database" {
-  for_each = toset(var.azs)
+  for_each          = toset(var.azs)
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, index(var.azs, each.key) * 2 + 20)
   availability_zone = each.key
-  tags = { Name = "${local.name_prefix}-database-${each.key}" }
+  tags              = { Name = "${local.name_prefix}-database-${each.key}" }
 }
 
 resource "aws_security_group" "lambda" {
   name        = "${local.name_prefix}-lambda-sg"
   description = "Security group for Lambda"
   vpc_id      = aws_vpc.main.id
-  egress { from_port = 0; to_port = 0; protocol = "-1"; cidr_blocks = ["0.0.0.0/0"] }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
   tags = { Name = "${local.name_prefix}-lambda-sg" }
 }
 
@@ -51,8 +56,18 @@ resource "aws_security_group" "database" {
   name        = "${local.name_prefix}-database-sg"
   description = "Security group for Aurora"
   vpc_id      = aws_vpc.main.id
-  ingress { from_port = 5432; to_port = 5432; protocol = "tcp"; security_groups = [aws_security_group.lambda.id] }
-  egress { from_port = 0; to_port = 0; protocol = "-1"; cidr_blocks = ["0.0.0.0/0"] }
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.lambda.id]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
   tags = { Name = "${local.name_prefix}-database-sg" }
 }
 

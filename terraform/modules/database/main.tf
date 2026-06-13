@@ -1,12 +1,32 @@
-variable "project_name" { type = string }
-variable "env" { type = string }
-variable "db_username" { type = string }
-variable "db_password" { type = string; sensitive = true }
-variable "redis_auth_token" { type = string; sensitive = true }
-variable "vpc_id" { type = string }
-variable "private_subnet_ids" { type = list(string) }
-variable "kms_key_arn" { type = string }
-variable "lambda_security_group_id" { type = string }
+variable "project_name" {
+  type = string
+}
+variable "env" {
+  type = string
+}
+variable "db_username" {
+  type = string
+}
+variable "db_password" {
+  type      = string
+  sensitive = true
+}
+variable "redis_auth_token" {
+  type      = string
+  sensitive = true
+}
+variable "vpc_id" {
+  type = string
+}
+variable "private_subnet_ids" {
+  type = list(string)
+}
+variable "kms_key_arn" {
+  type = string
+}
+variable "lambda_security_group_id" {
+  type = string
+}
 
 locals {
   name_prefix = "${var.project_name}-${var.env}"
@@ -21,9 +41,17 @@ resource "aws_security_group" "elasticache" {
   name_prefix = "${local.name_prefix}-elasticache-"
   description = "Allow Redis access from Lambda"
   vpc_id      = var.vpc_id
-  ingress { from_port = 6379; to_port = 6379; protocol = "tcp"; security_groups = [var.lambda_security_group_id] }
-  egress { from_port = 0; to_port = 0; protocol = "-1"; cidr_blocks = ["0.0.0.0/0"] }
-  tags = { Name = "${local.name_prefix}-elasticache-sg" }
+
+  ingress {
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    security_groups = [var.lambda_security_group_id]
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-elasticache-sg"
+  }
 }
 
 resource "aws_elasticache_replication_group" "main" {
@@ -42,7 +70,10 @@ resource "aws_elasticache_replication_group" "main" {
   transit_encryption_enabled = true
   auth_token                 = var.redis_auth_token
   kms_key_id                 = var.kms_key_arn
-  tags = { Name = "${local.name_prefix}-redis" }
+
+  tags = {
+    Name = "${local.name_prefix}-redis"
+  }
 }
 
 resource "aws_secretsmanager_secret" "redis_auth_token" {
@@ -59,13 +90,21 @@ resource "aws_secretsmanager_secret_version" "redis_auth_token" {
 resource "aws_db_subnet_group" "main" {
   name       = "${local.name_prefix}-db-subnet-group"
   subnet_ids = var.private_subnet_ids
-  tags = { Name = "${local.name_prefix}-db-subnet-group" }
+
+  tags = {
+    Name = "${local.name_prefix}-db-subnet-group"
+  }
 }
 
 resource "aws_rds_cluster_parameter_group" "main" {
   family = "aurora-postgresql15"
   name   = "${local.name_prefix}-aurora-params"
-  parameter { name = "log_statement"; value = "all"; apply_method = "pending-reboot" }
+
+  parameter {
+    name         = "log_statement"
+    value        = "all"
+    apply_method = "pending-reboot"
+  }
 }
 
 resource "aws_rds_cluster" "main" {
@@ -81,6 +120,7 @@ resource "aws_rds_cluster" "main" {
   storage_encrypted               = true
   kms_key_id                      = var.kms_key_arn
   skip_final_snapshot             = true
+
   scaling_configuration {
     auto_pause               = false
     min_capacity             = 2
@@ -88,7 +128,10 @@ resource "aws_rds_cluster" "main" {
     timeout_action           = "RollbackCapacityChange"
     seconds_until_auto_pause = 300
   }
-  tags = { Name = "${local.name_prefix}-aurora" }
+
+  tags = {
+    Name = "${local.name_prefix}-aurora"
+  }
 }
 
 resource "aws_rds_cluster_instance" "main" {
@@ -100,7 +143,10 @@ resource "aws_rds_cluster_instance" "main" {
   db_subnet_group_name = aws_db_subnet_group.main.name
   publicly_accessible  = false
   monitoring_interval  = 0
-  tags = { Name = "${local.name_prefix}-aurora-instance" }
+
+  tags = {
+    Name = "${local.name_prefix}-aurora-instance"
+  }
 }
 
 resource "aws_secretsmanager_secret" "db_credentials" {
@@ -110,11 +156,30 @@ resource "aws_secretsmanager_secret" "db_credentials" {
 }
 
 resource "aws_secretsmanager_secret_version" "db_credentials" {
-  secret_id     = aws_secretsmanager_secret.db_credentials.id
-  secret_string = jsonencode({ username = var.db_username; password = var.db_password; engine = "postgres"; port = 5432; dbname = "truetally"; host = aws_rds_cluster.main.endpoint })
+  secret_id = aws_secretsmanager_secret.db_credentials.id
+
+  secret_string = jsonencode({
+    username = var.db_username
+    password = var.db_password
+    engine   = "postgres"
+    port     = 5432
+    dbname   = "truetally"
+    host     = aws_rds_cluster.main.endpoint
+  })
 }
 
-output "rds_proxy_endpoint" { value = aws_rds_cluster.main.endpoint }
-output "rds_endpoint"       { value = aws_rds_cluster.main.endpoint }
-output "elasticache_address" { value = aws_elasticache_replication_group.main.primary_endpoint_address }
-output "elasticache_port"   { value = aws_elasticache_replication_group.main.port }
+output "rds_proxy_endpoint" {
+  value = aws_rds_cluster.main.endpoint
+}
+
+output "rds_endpoint" {
+  value = aws_rds_cluster.main.endpoint
+}
+
+output "elasticache_address" {
+  value = aws_elasticache_replication_group.main.primary_endpoint_address
+}
+
+output "elasticache_port" {
+  value = aws_elasticache_replication_group.main.port
+}
