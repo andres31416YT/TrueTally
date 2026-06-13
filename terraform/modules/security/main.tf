@@ -18,15 +18,6 @@ locals {
 }
 
 # === 02-kms.tf ===
-resource "random_password" "db_password" {
-  length  = 16
-  special = false
-}
-
-resource "random_password" "jwt_secret" {
-  length  = 32
-  special = false
-}
 
 resource "aws_kms_key" "main" {
   description             = "KMS key for TrueTally infrastructure"
@@ -238,8 +229,8 @@ output "kms_key_arn" {
   value = aws_kms_key.main.arn
 }
 
-output "lambda_role_arn" {
-  value = aws_iam_role.lambda.arn
+output "lambda_security_group_id" {
+  value = aws_security_group.lambda.id
 }
 
 output "rds_monitoring_role_arn" {
