@@ -17,7 +17,10 @@ variable "rds_endpoint" { type = string }
 variable "redis_endpoint" { type = string }
 variable "redis_port" { type = number }
 variable "sqs_queue_url" { type = string }
-variable "aws_region" { type = string, default = "us-east-1" }
+variable "aws_region" {
+  type    = string
+  default = "us-east-1"
+}
 
 locals {
   name_prefix = "${var.project_name}-${var.env}"
