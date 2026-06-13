@@ -51,8 +51,8 @@ jobs:
           push: true
           tags: |
             ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ github.ref == 'refs/heads/main' && 'truetally-prod-blockchain' || 'truetally-dev-blockchain' }}:${{ github.sha }}
-          cache-from: type=registry,ref=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ github.ref == 'refs/heads/main' && 'truetally-prod-blockchain' || 'truetally-dev-blockchain' }}:buildcache
-          cache-to: type=registry,ref=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ github.ref == 'refs/heads/main' && 'truetally-prod-blockchain' || 'truetally-dev-blockchain' }}:buildcache,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Image digest
         run: echo "Image pushed ${{ github.sha }}"
