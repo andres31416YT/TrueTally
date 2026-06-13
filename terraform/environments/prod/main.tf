@@ -35,7 +35,7 @@ module "database" {
   vpc_id                  = module.networking.vpc_id
   private_subnet_ids      = module.networking.private_subnet_ids
   kms_key_arn             = module.security.kms_key_arn
-  lambda_security_group_id = module.security.lambda_security_group_id
+  lambda_security_group_id = module.networking.lambda_security_group_id
   rds_security_group_id   = module.security.rds_security_group_id
 }
 
@@ -49,8 +49,8 @@ module "compute" {
   public_subnet_ids         = module.networking.public_subnet_ids
   private_subnet_ids        = module.networking.private_subnet_ids
   kms_key_arn               = module.security.kms_key_arn
-  lambda_security_group_id  = module.security.lambda_security_group_id
-  lambda_sg_arn             = module.security.lambda_security_group_arn
+  lambda_security_group_id  = module.networking.lambda_security_group_id
+  lambda_sg_arn             = module.networking.lambda_sg_arn
   db_credentials_secret_arn = module.security.db_credentials_secret_arn
   redis_auth_token_secret_arn = module.security.redis_auth_token_secret_arn
   lambda_node_url_az1       = local.lambda_node_url_az1

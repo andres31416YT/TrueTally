@@ -354,6 +354,10 @@ output "compute_subnet_ids" {
   value = [for s in aws_subnet.compute : s.id]
 }
 
+output "private_subnet_ids" {
+  value = [for s in aws_subnet.compute : s.id]
+}
+
 output "database_subnet_ids" {
   value = [for s in aws_subnet.database : s.id]
 }
@@ -368,4 +372,12 @@ output "public_route_table" {
 
 output "private_route_tables" {
   value = { for k, v in aws_route_table.private : k => v.id }
+}
+
+output "lambda_security_group_id" {
+  value = aws_security_group.lambda.id
+}
+
+output "lambda_sg_arn" {
+  value = aws_security_group.lambda.arn
 }

@@ -52,3 +52,8 @@ variable "route53_zone_id" {
   default = ""
   type    = string
 }
+
+variable "aws_region" {
+  type    = string
+  default = "us-east-1"
+}
