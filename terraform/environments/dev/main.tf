@@ -23,7 +23,6 @@ module "security" {
   project_name  = local.project_name
   env           = local.env
   db_password   = local.db_password
-  vpc_cidr      = local.vpc_cidr
 }
 
 module "database" {
