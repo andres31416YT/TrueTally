@@ -68,19 +68,15 @@ jobs:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-musl-gcc
         run: |
           mkdir -p "${{ github.workspace }}/${{ steps.env.outputs.env_path }}"
-
           . "$HOME/.cargo/env"
-
           cargo build --release --target aarch64-unknown-linux-musl -p lambda-acceso
           cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
           zip -j "${{ github.workspace }}/${{ steps.env.outputs.env_path }}/lambda-acceso.zip" ./bootstrap
           rm ./bootstrap
-
           cargo build --release --target aarch64-unknown-linux-musl -p lambda-despachador
           cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
           zip -j "${{ github.workspace }}/${{ steps.env.outputs.env_path }}/lambda-despachador.zip" ./bootstrap
           rm ./bootstrap
-
           cargo build --release --target aarch64-unknown-linux-musl -p lambda-procesador
           cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
           zip -j "${{ github.workspace }}/${{ steps.env.outputs.env_path }}/lambda-procesador.zip" ./bootstrap
@@ -100,7 +96,10 @@ jobs:
       - name: Terraform Init
         run: |
           cd ${{ steps.env.outputs.env_path }}
-          terraform init -input=false -backend-config="bucket=truetally-terraform-state" -backend-config="key=${{ steps.env.outputs.env_name }}/terraform.tfstate" -backend-config="region=${{ secrets.AWS_REGION }}"
+          terraform init -input=false \
+            -backend-config="bucket=truetally-terraform-state" \
+            -backend-config="key=${{ steps.env.outputs.env_name }}/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}"
 
       - name: Terraform Workspace
         run: |
@@ -124,13 +123,6 @@ jobs:
           terraform plan -input=false -no-color -out=tfplan 2>&1 | tee plan_output.txt
 
       - name: Comentar plan en el PR
-
-      - name: Guardar plan como artefacto
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-${{ steps.env.outputs.env_name }}-artifacts
-          path: ${{ steps.env.outputs.env_path }}/tfplan
-          retention-days: 7
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
@@ -145,6 +137,13 @@ jobs:
               body: '### Terraform Plan (${{ steps.env.outputs.env_name }})\n```\n' + truncated + '\n```'
             });
 
+      - name: Guardar plan como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-${{ steps.env.outputs.env_name }}-artifacts
+          path: ${{ steps.env.outputs.env_path }}/tfplan
+          retention-days: 7
+
   apply-dev:
     name: Terraform Apply (Dev)
     needs: plan
@@ -156,7 +155,7 @@ jobs:
       - name: Checkout del código
         uses: actions/checkout@v4
 
-      - name: Descargar plan y paquetes Lambda de dev
+      - name: Descargar plan de dev
         uses: actions/download-artifact@v4
         with:
           name: terraform-dev-artifacts
@@ -176,7 +175,10 @@ jobs:
       - name: Terraform Init
         run: |
           cd terraform/environments/dev
-          terraform init -input=false -backend-config="bucket=truetally-terraform-state" -backend-config="key=dev/terraform.tfstate" -backend-config="region=${{ secrets.AWS_REGION }}"
+          terraform init -input=false \
+            -backend-config="bucket=truetally-terraform-state" \
+            -backend-config="key=dev/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}"
 
       - name: Terraform Workspace
         run: |
@@ -193,13 +195,13 @@ jobs:
     needs: plan
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment: "production"
+    environment: production
 
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
 
-      - name: Descargar plan y paquetes Lambda de prod
+      - name: Descargar plan de prod
         uses: actions/download-artifact@v4
         with:
           name: terraform-prod-artifacts
@@ -219,7 +221,10 @@ jobs:
       - name: Terraform Init
         run: |
           cd terraform/environments/prod
-          terraform init -input=false -backend-config="bucket=truetally-terraform-state" -backend-config="key=prod/terraform.tfstate" -backend-config="region=${{ secrets.AWS_REGION }}"
+          terraform init -input=false \
+            -backend-config="bucket=truetally-terraform-state" \
+            -backend-config="key=prod/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}"
 
       - name: Terraform Workspace
         run: |
