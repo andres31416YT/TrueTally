@@ -16,10 +16,6 @@ env:
   TF_INPUT: "0"
   AWS_REGION: us-east-1
   TF_VAR_redis_auth_token: ${{ secrets.TF_VAR_REDIS_AUTH_TOKEN }}
-  TF_VAR_lambda_node_url_az1_dev: ${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_DEV }}
-  TF_VAR_lambda_node_url_az2_dev: ${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_DEV }}
-  TF_VAR_lambda_node_url_az1_prod: ${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_PROD }}
-  TF_VAR_lambda_node_url_az2_prod: ${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_PROD }}
 
 jobs:
   plan:
@@ -37,14 +33,10 @@ jobs:
             echo "env_name=prod" >> $GITHUB_OUTPUT
             echo "env_path=terraform/environments/prod" >> $GITHUB_OUTPUT
             echo "db_password=${{ secrets.TF_VAR_DB_PASSWORD_PROD }}" >> $GITHUB_OUTPUT
-            echo "node_url_az1=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_PROD }}" >> $GITHUB_OUTPUT
-            echo "node_url_az2=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_PROD }}" >> $GITHUB_OUTPUT
           else
             echo "env_name=dev" >> $GITHUB_OUTPUT
             echo "env_path=terraform/environments/dev" >> $GITHUB_OUTPUT
             echo "db_password=${{ secrets.TF_VAR_DB_PASSWORD_DEV }}" >> $GITHUB_OUTPUT
-            echo "node_url_az1=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_DEV }}" >> $GITHUB_OUTPUT
-            echo "node_url_az2=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_DEV }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Instalar Rust ARM64 toolchain
@@ -151,7 +143,7 @@ jobs:
           path: ${{ steps.env.outputs.env_path }}/tfplan
           retention-days: 7
 
-apply-dev:
+  apply-dev:
     name: Terraform Apply (Dev)
     needs: plan
     runs-on: ubuntu-latest
@@ -190,7 +182,7 @@ apply-dev:
       - name: Terraform Workspace
         run: |
           cd terraform/environments/dev
-          terraform workspace select -or-create dev
+          terraform workspace select dev || terraform workspace select -or-create dev
 
       - name: Terraform Apply
         run: |
@@ -236,7 +228,7 @@ apply-dev:
       - name: Terraform Workspace
         run: |
           cd terraform/environments/prod
-          terraform workspace select -or-create prod
+          terraform workspace select prod || terraform workspace select -or-create prod
 
       - name: Terraform Apply
         run: |
