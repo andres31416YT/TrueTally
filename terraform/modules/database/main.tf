@@ -1,29 +1,37 @@
 variable "project_name" {
   type = string
 }
+
 variable "env" {
   type = string
 }
+
 variable "db_username" {
   type = string
 }
+
 variable "db_password" {
   type      = string
   sensitive = true
 }
+
 variable "redis_auth_token" {
   type      = string
   sensitive = true
 }
+
 variable "vpc_id" {
   type = string
 }
+
 variable "private_subnet_ids" {
   type = list(string)
 }
+
 variable "kms_key_arn" {
   type = string
 }
+
 variable "lambda_security_group_id" {
   type = string
 }
@@ -35,6 +43,10 @@ locals {
 resource "aws_elasticache_subnet_group" "main" {
   name       = "${local.name_prefix}-elasticache-subnet-group"
   subnet_ids = var.private_subnet_ids
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 resource "aws_security_group" "elasticache" {
@@ -76,20 +88,13 @@ resource "aws_elasticache_replication_group" "main" {
   }
 }
 
-resource "aws_secretsmanager_secret" "redis_auth_token" {
-  name        = "${local.name_prefix}/redis/auth-token"
-  description = "Redis auth token"
-  kms_key_id  = var.kms_key_arn
-}
-
-resource "aws_secretsmanager_secret_version" "redis_auth_token" {
-  secret_id     = aws_secretsmanager_secret.redis_auth_token.id
-  secret_string = var.redis_auth_token
-}
-
 resource "aws_db_subnet_group" "main" {
   name       = "${local.name_prefix}-db-subnet-group"
   subnet_ids = var.private_subnet_ids
+
+  lifecycle {
+    ignore_changes = all
+  }
 
   tags = {
     Name = "${local.name_prefix}-db-subnet-group"
@@ -101,9 +106,8 @@ resource "aws_rds_cluster_parameter_group" "main" {
   name   = "${local.name_prefix}-aurora-params"
 
   parameter {
-    name         = "log_statement"
-    value        = "all"
-    apply_method = "pending-reboot"
+    name  = "log_statement"
+    value = "all"
   }
 }
 
@@ -147,25 +151,6 @@ resource "aws_rds_cluster_instance" "main" {
   tags = {
     Name = "${local.name_prefix}-aurora-instance"
   }
-}
-
-resource "aws_secretsmanager_secret" "db_credentials" {
-  name        = "${local.name_prefix}/db/credentials"
-  description = "Database credentials"
-  kms_key_id  = var.kms_key_arn
-}
-
-resource "aws_secretsmanager_secret_version" "db_credentials" {
-  secret_id = aws_secretsmanager_secret.db_credentials.id
-
-  secret_string = jsonencode({
-    username = var.db_username
-    password = var.db_password
-    engine   = "postgres"
-    port     = 5432
-    dbname   = "truetally"
-    host     = aws_rds_cluster.main.endpoint
-  })
 }
 
 output "rds_proxy_endpoint" {

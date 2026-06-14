@@ -58,6 +58,10 @@ resource "aws_secretsmanager_secret" "db_credentials" {
   name        = "${local.name_prefix}/db/credentials"
   description = "DB credentials"
   kms_key_id  = aws_kms_key.main.arn
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "db_credentials" {
@@ -74,6 +78,10 @@ resource "aws_secretsmanager_secret" "redis_auth_token" {
   name        = "${local.name_prefix}/redis/auth-token"
   description = "Redis auth token"
   kms_key_id  = aws_kms_key.main.arn
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "redis_auth_token" {
