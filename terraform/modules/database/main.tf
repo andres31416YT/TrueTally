@@ -73,15 +73,11 @@ resource "aws_elasticache_replication_group" "main" {
   engine_version             = "7.1"
   node_type                  = "cache.t3.micro"
   port                       = 6379
-  num_cache_clusters         = 2
-  automatic_failover_enabled = true
-  multi_az_enabled           = true
+  num_cache_clusters         = 1
+  automatic_failover_enabled = false
+  multi_az_enabled           = false
   subnet_group_name          = aws_elasticache_subnet_group.main.name
   security_group_ids         = [aws_security_group.elasticache.id]
-  at_rest_encryption_enabled = true
-  transit_encryption_enabled = true
-  auth_token                 = var.redis_auth_token
-  kms_key_id                 = var.kms_key_arn
 
   tags = {
     Name = "${local.name_prefix}-redis"
@@ -101,64 +97,33 @@ resource "aws_db_subnet_group" "main" {
   }
 }
 
-resource "aws_rds_cluster_parameter_group" "main" {
-  family = "aurora-postgresql15"
-  name   = "${local.name_prefix}-aurora-params"
-
-  parameter {
-    name  = "log_statement"
-    value = "all"
-  }
-}
-
-resource "aws_rds_cluster" "main" {
-  cluster_identifier              = "${local.name_prefix}-aurora"
-  engine                          = "aurora-postgresql"
-  engine_mode                     = "serverless"
-  engine_version                  = "15.5"
-  database_name                   = "truetally"
-  master_username                 = var.db_username
-  master_password                 = var.db_password
-  db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.main.name
-  db_subnet_group_name            = aws_db_subnet_group.main.name
-  storage_encrypted               = true
-  kms_key_id                      = var.kms_key_arn
-  skip_final_snapshot             = true
-
-  scaling_configuration {
-    auto_pause               = false
-    min_capacity             = 2
-    max_capacity             = 8
-    timeout_action           = "RollbackCapacityChange"
-    seconds_until_auto_pause = 300
-  }
+resource "aws_db_instance" "main" {
+  identifier             = "${local.name_prefix}-postgres"
+  engine                 = "postgres"
+  engine_version         = "15.7"
+  instance_class         = "db.t3.micro"
+  allocated_storage      = 20
+  db_name                = "truetally"
+  username               = var.db_username
+  password               = var.db_password
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_id  = var.lambda_security_group_id
+  storage_encrypted      = true
+  kms_key_id             = var.kms_key_arn
+  skip_final_snapshot    = true
+  publicly_accessible    = false
 
   tags = {
-    Name = "${local.name_prefix}-aurora"
-  }
-}
-
-resource "aws_rds_cluster_instance" "main" {
-  identifier           = "${local.name_prefix}-aurora-instance-1"
-  cluster_identifier   = aws_rds_cluster.main.id
-  engine               = "aurora-postgresql"
-  engine_version       = "15.5"
-  instance_class       = "db.serverless"
-  db_subnet_group_name = aws_db_subnet_group.main.name
-  publicly_accessible  = false
-  monitoring_interval  = 0
-
-  tags = {
-    Name = "${local.name_prefix}-aurora-instance"
+    Name = "${local.name_prefix}-postgres"
   }
 }
 
 output "rds_proxy_endpoint" {
-  value = aws_rds_cluster.main.endpoint
+  value = aws_db_instance.main.endpoint
 }
 
 output "rds_endpoint" {
-  value = aws_rds_cluster.main.endpoint
+  value = aws_db_instance.main.endpoint
 }
 
 output "elasticache_address" {
