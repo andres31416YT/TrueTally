@@ -36,11 +36,13 @@ jobs:
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             echo "env_name=prod" >> $GITHUB_OUTPUT
             echo "env_path=terraform/environments/prod" >> $GITHUB_OUTPUT
+            echo "db_password=${{ secrets.TF_VAR_DB_PASSWORD_PROD }}" >> $GITHUB_OUTPUT
             echo "node_url_az1=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_PROD }}" >> $GITHUB_OUTPUT
             echo "node_url_az2=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_PROD }}" >> $GITHUB_OUTPUT
           else
             echo "env_name=dev" >> $GITHUB_OUTPUT
             echo "env_path=terraform/environments/dev" >> $GITHUB_OUTPUT
+            echo "db_password=${{ secrets.TF_VAR_DB_PASSWORD_DEV }}" >> $GITHUB_OUTPUT
             echo "node_url_az1=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ1_DEV }}" >> $GITHUB_OUTPUT
             echo "node_url_az2=${{ secrets.TF_VAR_LAMBDA_NODE_URL_AZ2_DEV }}" >> $GITHUB_OUTPUT
           fi
@@ -123,7 +125,7 @@ jobs:
           terraform plan \
             -input=false \
             -no-color \
-            -var="db_password=${{ secrets.TF_VAR_DB_PASSWORD_DEV }}" \
+            -var="db_password=${{ steps.env.outputs.db_password }}" \
             -var="redis_auth_token=${{ secrets.TF_VAR_REDIS_AUTH_TOKEN }}" \
             -out=tfplan 2>&1 | tee plan_output.txt
 
@@ -149,7 +151,7 @@ jobs:
           path: ${{ steps.env.outputs.env_path }}/tfplan
           retention-days: 7
 
-  apply-dev:
+apply-dev:
     name: Terraform Apply (Dev)
     needs: plan
     runs-on: ubuntu-latest
