@@ -170,10 +170,12 @@ resource "aws_ecs_task_definition" "blockchain" {
   execution_role_arn       = aws_iam_role.ecs_task.arn
 
   container_definitions = jsonencode([{
-    name      = "blockchain-node"
-    image     = "${var.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.project_name}-blockchain:latest"
-    essential = true
-    portMappings = [{
+    name                 = "blockchain-node"
+    image                = "${var.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.project_name}-blockchain:latest"
+    essential            = true
+    privileged           = false
+    readonlyRootFilesystem = true
+    portMappings         = [{
       containerPort = 9944
       hostPort      = 9944
     }]
