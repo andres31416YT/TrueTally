@@ -192,8 +192,8 @@ resource "aws_ecs_service" "blockchain" {
   desired_count   = 1
 
   network_configuration {
-    subnets         = var.blockchain_subnet_ids
-    security_groups = [var.lambda_security_group_id]
+    subnets          = var.blockchain_subnet_ids
+    security_groups  = [var.lambda_security_group_id]
     assign_public_ip = false
   }
 }

@@ -17,6 +17,7 @@ env:
   AWS_REGION: us-east-1
   TF_VAR_redis_auth_token: ${{ secrets.TF_VAR_REDIS_AUTH_TOKEN }}
   TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
+  TF_VAR_lambda_zip_path: ${{ github.workspace }}/terraform/artifacts
 
 jobs:
   plan:
@@ -57,10 +58,6 @@ jobs:
 
       - name: Generar empaquetados ZIP de Lambdas
         working-directory: app
-        env:
-          CC_aarch64_unknown_linux_musl: aarch64-linux-musl-gcc
-          AR_aarch64_unknown_linux_musl: aarch64-linux-musl-ar
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-musl-gcc
         run: |
           mkdir -p "${{ github.workspace }}/terraform/artifacts"
           . "$HOME/.cargo/env"
@@ -128,6 +125,7 @@ jobs:
             -var="db_password=${{ steps.env.outputs.db_password }}" \
             -var="redis_auth_token=${{ secrets.TF_VAR_REDIS_AUTH_TOKEN }}" \
             -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
+            -var="lambda_zip_path=${{ env.TF_VAR_lambda_zip_path }}" \
             -out=tfplan 2>&1 | tee plan_output.txt
 
       - name: Comentar plan en el PR
@@ -158,6 +156,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
     environment: development
+    env:
+      TF_VAR_lambda_zip_path: ${{ github.workspace }}/terraform/artifacts
 
     steps:
       - name: Checkout del código
@@ -210,6 +210,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
+    env:
+      TF_VAR_lambda_zip_path: ${{ github.workspace }}/terraform/artifacts
 
     steps:
       - name: Checkout del código

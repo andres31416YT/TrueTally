@@ -62,3 +62,9 @@ variable "aws_account_id" {
   type    = string
   default = ""
 }
+
+variable "lambda_zip_path" {
+  type        = string
+  default     = "terraform/artifacts"
+  description = "Path to lambda ZIP artifacts directory"
+}

@@ -68,7 +68,7 @@ module "compute" {
   lambda_node_url_az2         = local.lambda_node_url_az2
   account_id                  = local.account_id
   aws_region                  = local.region
-  lambda_zip_path             = "${path.module}/../../artifacts"
+  lambda_zip_path             = var.lambda_zip_path
 }
 
 module "frontend" {
@@ -81,7 +81,7 @@ module "frontend" {
 }
 
 module "monitoring" {
-  source      = "../../modules/monitoring"
+  source       = "../../modules/monitoring"
   project_name = local.project_name
-  env         = local.env
+  env          = local.env
 }
