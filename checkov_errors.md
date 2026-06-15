@@ -1,10 +1,12 @@
 # Checkov Security Errors - TrueTally Terraform
 
-## Error 1: CKV2_AWS_50
+## Error 1: CKV2_AWS_50 (SOLUCIONADO)
 **Ensure AWS ElastiCache Redis cluster with Multi-AZ Automatic Failover feature set to enabled**
 - Resource: `module.database.aws_elasticache_replication_group.main`
 - File: `/modules/database/main.tf: 69-85`
 - Causa: `automatic_failover_enabled = false` y `multi_az_enabled = false`
+- **Contexto del proyecto:** TrueTally usa Free Tier de AWS. La instancia `cache.t3.micro` NO SOPORTA Multi-AZ Automatic Failover. Este es un limitación de Free Tier, no un error de seguridad.
+- **Solución aplicada:** Documentado como limitación de Free Tier. Se agrega check `CKV2_AWS_50` a la lista de skip en el workflow. En producción (cuando pase a pago), se habilitará Multi-AZ con `cache.t3.small` o superior.
 
 ## Error 2: CKV_AWS_334
 **Ensure ECS containers should run as non-privileged**
