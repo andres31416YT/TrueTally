@@ -71,16 +71,16 @@ module "compute" {
 }
 
 module "frontend" {
-  source             = "../../modules/frontend"
-  project_name       = local.project_name
-  env                = local.env
-  aws_region         = local.region
-  domain_name        = var.domain_name
+  source              = "../../modules/frontend"
+  project_name        = local.project_name
+  env                 = local.env
+  aws_region          = local.region
+  domain_name         = var.domain_name
   ssl_certificate_arn = var.ssl_certificate_arn
 }
 
 module "monitoring" {
-  source      = "../../modules/monitoring"
+  source       = "../../modules/monitoring"
   project_name = local.project_name
-  env         = local.env
+  env          = local.env
 }
