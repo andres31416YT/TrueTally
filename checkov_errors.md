@@ -23,5 +23,19 @@
 **Ensure that RDS instances has backup policy**
 - Resource: `module.database.aws_db_instance.main`
 - File: `/modules/database/main.tf: 100-119`
-- **Contexto:** RDS tiene `skip_final_snapshot = true` (Free Tier evita costos de snapshots automáticos).
-- **Solución:** Documented como limitación de Free Tier. Check agregado a skip. En producción se habilitará `backup_retention_period = 7`.
+- **Contexto:** RDS tiene `skip_final_snapshot = true` (Free Tier).
+- **Solución:** Skipeado como limitación de Free Tier.
+
+## Error 5: CKV_AWS_97
+**Ensure Encryption in transit is enabled for EFS volumes in ECS Task definitions**
+- Resource: `module.compute.aws_ecs_task_definition.blockchain`
+- File: `/modules/compute/main.tf: 164-181`
+- **Contexto:** El contenedor no tiene encryptionConfiguration para EFS.
+- **Estado:** PENDIENTE - requiere agregar `encryptionConfiguration` en mountPoints.
+
+## Error 6: CKV_AWS_249
+**Ensure that the Execution Role ARN and the Task Role ARN are different in ECS Task definitions**
+- Resource: `module.compute.aws_ecs_task_definition.blockchain`
+- File: `/modules/compute/main.tf: 164-181`
+- **Contexto:** El task definition usa solo `execution_role_arn`, falta `task_role_arn`.
+- **Estado:** PENDIENTE - requiere crear rol separado para task execution.
