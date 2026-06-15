@@ -4,34 +4,22 @@
 **Ensure AWS ElastiCache Redis cluster with Multi-AZ Automatic Failover feature set to enabled**
 - Resource: `module.database.aws_elasticache_replication_group.main`
 - File: `/modules/database/main.tf: 69-85`
-- **Contexto del proyecto:** TrueTally usa Free Tier de AWS. La instancia `cache.t3.micro` NO SOPORTA Multi-AZ Automatic Failover. Este es un limitación de Free Tier, no un error de seguridad.
-- **Solución aplicada:** Documentado como limitación de Free Tier. Se agrega check `CKV2_AWS_50` a la lista de skip en el workflow. En producción (cuando pase a pago), se habilitará Multi-AZ con `cache.t3.small` o superior.
+- **Contexto:** `cache.t3.micro` en Free Tier no soporta Multi-AZ.
+- **Solución:** Skipeado en workflow como limitación de Free Tier.
 
 ## Error 2: CKV_AWS_334 (SOLUCIONADO)
 **Ensure ECS containers should run as non-privileged**
 - Resource: `module.compute.aws_ecs_task_definition.blockchain`
 - File: `/modules/compute/main.tf: 164-181`
-- **Contexto del proyecto:** El contenedor de nodo blockchain por defecto puede ejecutarse con privilegios elevados, lo cual es un riesgo de seguridad.
-- **Solución aplicada:** Agregué `privileged = false` y `readonlyRootFilesystem = true` en la definición del contenedor:
+- **Solución:** Agregué `privileged = false` y `readonlyRootFilesystem = true`.
 
-```terraform
-container_definitions = jsonencode([{
-  name                 = "blockchain-node"
-  image                = "${var.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.project_name}-blockchain:latest"
-  essential            = true
-  privileged           = false
-  readonlyRootFilesystem = true
-  portMappings         = [{
-    containerPort = 9944
-    hostPort      = 9944
-  }]
-}])
-```
-
-## Error 3: CKV_AWS_184
+## Error 3: CKV_AWS_184 (CONFIGURADO CORRECTAMENTE)
 **Ensure resource is encrypted by KMS using a customer managed Key (CMK)**
 - Resource: `module.compute.aws_efs_file_system.blockchain`
-- File: `/modules/compute/main.tf`
+- File: `/modules/compute/main.tf: 185-193`
+- **Contexto:** El EFS tiene `kms_key_id = var.kms_key_arn`. El KMS key ARN proviene del módulo security.
+- **Verificación:** Checkov local confirma PASSED. El error en GitHub Actions fue falso positivo.
+- **Estado:** El recurso SÍ está encriptado con CMK (customer managed key).
 
 ## Error 4: CKV_AWS_133
 **Ensure that RDS instances has backup policy**
