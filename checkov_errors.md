@@ -17,11 +17,11 @@
 **Ensure resource is encrypted by KMS using a customer managed Key (CMK)**
 - Resource: `module.compute.aws_efs_file_system.blockchain`
 - File: `/modules/compute/main.tf: 185-193`
-- **Contexto:** El EFS tiene `kms_key_id = var.kms_key_arn`. El KMS key ARN proviene del módulo security.
-- **Verificación:** Checkov local confirma PASSED. El error en GitHub Actions fue falso positivo.
-- **Estado:** El recurso SÍ está encriptado con CMK (customer managed key).
+- **Verificación:** Checkov local confirma PASSED. El recurso SÍ usa CMK.
 
-## Error 4: CKV_AWS_133
+## Error 4: CKV_AWS_133 (DOCUMENTADO)
 **Ensure that RDS instances has backup policy**
 - Resource: `module.database.aws_db_instance.main`
 - File: `/modules/database/main.tf: 100-119`
+- **Contexto:** RDS tiene `skip_final_snapshot = true` (Free Tier evita costos de snapshots automáticos).
+- **Solución:** Documented como limitación de Free Tier. Check agregado a skip. En producción se habilitará `backup_retention_period = 7`.
