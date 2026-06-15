@@ -8,6 +8,7 @@ locals {
   redis_auth_token    = var.redis_auth_token
   lambda_node_url_az1 = var.lambda_node_url_az1
   lambda_node_url_az2 = var.lambda_node_url_az2
+  account_id          = var.aws_account_id
 }
 
 module "networking" {
@@ -37,7 +38,13 @@ module "database" {
   private_subnet_ids       = module.networking.private_subnet_ids
   kms_key_arn              = module.security.kms_key_arn
   lambda_security_group_id = module.networking.lambda_security_group_id
+}
 
+module "messaging" {
+  source       = "../../modules/messaging"
+  project_name = local.project_name
+  env          = local.env
+  vpc_id       = module.networking.vpc_id
 }
 
 module "compute" {
@@ -49,15 +56,31 @@ module "compute" {
   vpc_id                      = module.networking.vpc_id
   public_subnet_ids           = module.networking.public_subnet_ids
   private_subnet_ids          = module.networking.private_subnet_ids
+  blockchain_subnet_ids       = module.networking.blockchain_subnet_ids
   kms_key_arn                 = module.security.kms_key_arn
   lambda_security_group_id    = module.networking.lambda_security_group_id
   lambda_sg_arn               = module.networking.lambda_sg_arn
   db_credentials_secret_arn   = module.security.db_credentials_secret_arn
   redis_auth_token_secret_arn = module.security.redis_auth_token_secret_arn
+  vote_queue_arn              = module.messaging.vote_queue_arn
+  vote_queue_url              = module.messaging.vote_queue_url
   lambda_node_url_az1         = local.lambda_node_url_az1
   lambda_node_url_az2         = local.lambda_node_url_az2
-  rds_proxy_endpoint          = module.database.rds_proxy_endpoint
-  rds_endpoint                = module.database.rds_endpoint
-  redis_endpoint              = module.database.redis_endpoint
-  redis_port                  = module.database.redis_port
+  account_id                  = local.account_id
+  aws_region                  = local.region
+}
+
+module "frontend" {
+  source             = "../../modules/frontend"
+  project_name       = local.project_name
+  env                = local.env
+  aws_region         = local.region
+  domain_name        = var.domain_name
+  ssl_certificate_arn = var.ssl_certificate_arn
+}
+
+module "monitoring" {
+  source      = "../../modules/monitoring"
+  project_name = local.project_name
+  env         = local.env
 }

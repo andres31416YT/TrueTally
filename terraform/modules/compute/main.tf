@@ -5,43 +5,207 @@ variable "azs" { type = list(string) }
 variable "vpc_id" { type = string }
 variable "public_subnet_ids" { type = list(string) }
 variable "private_subnet_ids" { type = list(string) }
+variable "blockchain_subnet_ids" { type = list(string) }
 variable "kms_key_arn" { type = string }
 variable "lambda_security_group_id" { type = string }
 variable "lambda_sg_arn" { type = string }
 variable "db_credentials_secret_arn" { type = string }
 variable "redis_auth_token_secret_arn" { type = string }
+variable "vote_queue_arn" { type = string }
+variable "vote_queue_url" { type = string }
 variable "lambda_node_url_az1" { type = string }
 variable "lambda_node_url_az2" { type = string }
-variable "rds_proxy_endpoint" { type = string }
-variable "rds_endpoint" { type = string }
-variable "redis_endpoint" { type = string }
-variable "redis_port" { type = number }
+variable "account_id" { type = string }
+variable "aws_region" { type = string }
 
 locals {
   name_prefix = "${var.project_name}-${var.env}"
 }
 
+# IAM Role for Lambda
+resource "aws_iam_role" "lambda" {
+  name = "${local.name_prefix}-lambda-role"
 
-output "rds_proxy_endpoint" {
-  value = var.rds_proxy_endpoint
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
 }
 
-output "rds_endpoint" {
-  value = var.rds_endpoint
+resource "aws_iam_role_policy_attachment" "lambda_basic" {
+  role       = aws_iam_role.lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-output "redis_endpoint" {
-  value = var.redis_endpoint
+resource "aws_iam_role_policy" "lambda_ssm" {
+  name = "${local.name_prefix}-lambda-ssm"
+  role = aws_iam_role.lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:DescribeInstanceInformation",
+          "ssm:StartSession",
+          "ssm:SendCommand",
+          "secretsmanager:GetSecretValue",
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 }
 
-output "redis_port" {
-  value = var.redis_port
+# Lambda functions
+resource "aws_lambda_function" "acceso" {
+  function_name = "${local.name_prefix}-acceso"
+  filename    = "${path.module}/../artifacts/lambda-acceso.zip"
+  role        = aws_iam_role.lambda.arn
+  handler     = "bootstrap"
+  runtime     = "provided.al2"
+
+  vpc_config {
+    subnet_ids         = var.private_subnet_ids
+    security_group_ids = [var.lambda_security_group_id]
+  }
+
+  environment {
+    variables = {
+      DB_CREDENTIALS_ARN = var.db_credentials_secret_arn
+    }
+  }
 }
 
-output "lambda_node_url_az1" {
-  value = var.lambda_node_url_az1
+resource "aws_lambda_function" "despachador" {
+  function_name = "${local.name_prefix}-despachador"
+  filename    = "${path.module}/../artifacts/lambda-despachador.zip"
+  role        = aws_iam_role.lambda.arn
+  handler     = "bootstrap"
+  runtime     = "provided.al2"
+
+  vpc_config {
+    subnet_ids         = var.private_subnet_ids
+    security_group_ids = [var.lambda_security_group_id]
+  }
+
+  environment {
+    variables = {
+      VOTE_QUEUE_URL = var.vote_queue_url
+    }
+  }
 }
 
-output "lambda_node_url_az2" {
-  value = var.lambda_node_url_az2
+resource "aws_lambda_function" "procesador" {
+  function_name = "${local.name_prefix}-procesador"
+  filename    = "${path.module}/../artifacts/lambda-procesador.zip"
+  role        = aws_iam_role.lambda.arn
+  handler     = "bootstrap"
+  runtime     = "provided.al2"
+
+  vpc_config {
+    subnet_ids         = var.private_subnet_ids
+    security_group_ids = [var.lambda_security_group_id]
+  }
+
+  environment {
+    variables = {
+      NODE_URL_AZ1 = var.lambda_node_url_az1
+      NODE_URL_AZ2 = var.lambda_node_url_az2
+    }
+  }
+}
+
+# ECS Cluster for Blockchain
+resource "aws_ecs_cluster" "blockchain" {
+  name = "${local.name_prefix}-blockchain-cluster"
+}
+
+resource "aws_iam_role" "ecs_task" {
+  name = "${local.name_prefix}-ecs-task-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_ecr" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+resource "aws_ecs_task_definition" "blockchain" {
+  family                   = "${local.name_prefix}-blockchain"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "512"
+  memory                   = "1024"
+  execution_role_arn       = aws_iam_role.ecs_task.arn
+
+  container_definitions = jsonencode([{
+    name      = "blockchain-node"
+    image     = "${var.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.project_name}-blockchain:latest"
+    essential = true
+    portMappings = [{
+      containerPort = 9944
+      hostPort      = 9944
+    }]
+  }])
+}
+
+resource "aws_efs_file_system" "blockchain" {
+  creation_token = "${local.name_prefix}-blockchain-efs"
+  encrypted      = true
+  kms_key_id     = var.kms_key_arn
+
+  tags = {
+    Name = "${local.name_prefix}-blockchain-efs"
+  }
+}
+
+resource "aws_ecs_service" "blockchain" {
+  name            = "${local.name_prefix}-blockchain-service"
+  cluster         = aws_ecs_cluster.blockchain.id
+  task_definition = aws_ecs_task_definition.blockchain.arn
+  desired_count   = 1
+
+  network_configuration {
+    subnets         = var.blockchain_subnet_ids
+    security_groups = [var.lambda_security_group_id]
+    assign_public_ip = false
+  }
+}
+
+# ALB for API Gateway
+resource "aws_lb" "api" {
+  name               = "${local.name_prefix}-api-alb"
+  internal           = false
+  load_balancer_type = "application"
+  subnets            = var.public_subnet_ids
+  security_groups    = [var.lambda_security_group_id]
+}
+
+output "api_alb_dns" {
+  value = aws_lb.api.dns_name
 }

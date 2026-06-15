@@ -1,63 +1,21 @@
 variable "project_name" { type = string }
 variable "env" { type = string }
+variable "aws_region" { type = string }
 variable "domain_name" { type = string }
 variable "ssl_certificate_arn" { type = string }
-variable "route53_zone_id" { type = string }
 
 locals {
-  name_prefix       = "${var.project_name}-${var.env}"
-  use_custom_domain = var.domain_name != ""
-  cert_arn          = var.ssl_certificate_arn != "" ? var.ssl_certificate_arn : aws_acm_certificate.frontend[0].arn
+  name_prefix = "${var.project_name}-${var.env}"
 }
 
-
-# === 13-acm.tf ===
-resource "aws_acm_certificate" "frontend" {
-  domain_name       = var.domain_name
-  validation_method = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  tags = {
-    Name = "${var.project_name}-${var.env}-frontend-cert"
-  }
-}
-
-resource "aws_acm_certificate_validation" "frontend" {
-  certificate_arn = aws_acm_certificate.frontend.arn
-  domain_name     = var.domain_name
-
-  timeouts {
-    create = "10m"
-  }
-}
-
-# === 14-frontend-s3.tf ===
-# S3 Bucket - Frontend estático
+# S3 Bucket for static website
 resource "aws_s3_bucket" "frontend" {
   bucket = "${local.name_prefix}-frontend"
-
-  tags = {
-    Name = "${local.name_prefix}-frontend"
-  }
 }
 
-resource "aws_s3_bucket_ownership_controls" "frontend" {
+resource "aws_s3_bucket_acl" "frontend" {
   bucket = aws_s3_bucket.frontend.id
-  rule {
-    object_ownership = "BucketOwnerPreferred"
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+  acl    = "private"
 }
 
 resource "aws_s3_bucket_versioning" "frontend" {
@@ -71,68 +29,45 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
   bucket = aws_s3_bucket.frontend.id
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.main.arn
+      sse_algorithm = "AES256"
     }
-    bucket_key_enabled = true
   }
 }
 
-output "frontend_bucket_name" {
-  value = aws_s3_bucket.frontend.id
-}
-# === 15-frontend-cloudfront.tf ===
-resource "aws_cloudfront_origin_access_identity" "frontend" {
-  comment = "OAI for ${local.name_prefix} frontend"
-}
-
-resource "aws_s3_bucket_policy" "frontend" {
+resource "aws_s3_bucket_public_access_block" "frontend" {
   bucket = aws_s3_bucket.frontend.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AllowCloudFrontOAI"
-        Effect = "Allow"
-        Principal = {
-          AWS = aws_cloudfront_origin_access_identity.frontend.iam_arn
-        }
-        Action = [
-          "s3:GetObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.frontend.arn,
-          "${aws_s3_bucket.frontend.arn}/*"
-        ]
-      }
-    ]
-  })
+
+  block_public_acls       = true
+  block_public_policy       = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_website_configuration" "frontend" {
+  bucket = aws_s3_bucket.frontend.id
+
+  index_document {
+    suffix = "index.html"
+  }
+
+  error_document {
+    key = "index.html"
+  }
+}
+
+# CloudFront Distribution
 resource "aws_cloudfront_distribution" "frontend" {
   enabled             = true
   is_ipv6_enabled     = true
-  comment             = "${local.name_prefix} frontend distribution"
+  comment             = "Frontend for ${local.name_prefix}"
   default_root_object = "index.html"
-  price_class         = "PriceClass_100"
-  aliases             = [var.domain_name]
 
-  origin {
-    domain_name = aws_s3_bucket.frontend.bucket_regional_domain_name
-    origin_id   = "S3-${aws_s3_bucket.frontend.id}"
-
-    s3_origin_config {
-      origin_access_identity = aws_cloudfront_origin_access_identity.frontend.cloudfront_access_identity_path
-    }
-  }
+  aliases = var.domain_name != "" ? [var.domain_name] : []
 
   default_cache_behavior {
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD"]
-    target_origin_id       = "S3-${aws_s3_bucket.frontend.id}"
-    compress               = true
-    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "s3-origin"
 
     forwarded_values {
       query_string = false
@@ -141,23 +76,10 @@ resource "aws_cloudfront_distribution" "frontend" {
       }
     }
 
-    min_ttl     = 0
-    default_ttl = 3600
-    max_ttl     = 86400
-  }
-
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
-
-  custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 3600
+    max_ttl                = 86400
   }
 
   restrictions {
@@ -167,24 +89,24 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   viewer_certificate {
-    acm_certificate_arn      = local.cert_arn
-    ssl_support_method       = "sni-only"
-    minimum_protocol_version = "TLSv1.2_2024"
+    acm_certificate_arn = var.ssl_certificate_arn != "" ? var.ssl_certificate_arn : null
+    ssl_support_method  = var.ssl_certificate_arn != "" ? "sni-only" : null
   }
 
-  tags = {
-    Name = "${local.name_prefix}-frontend-cf"
+  origin {
+    domain_name = aws_s3_bucket.frontend.bucket_regional_domain_name
+    origin_id   = "s3-origin"
   }
 }
 
-output "frontend_cloudfront_id" {
+output "s3_bucket_name" {
+  value = aws_s3_bucket.frontend.id
+}
+
+output "cloudfront_domain_name" {
+  value = aws_cloudfront_distribution.frontend.domain_name
+}
+
+output "cloudfront_distribution_id" {
   value = aws_cloudfront_distribution.frontend.id
-}
-
-output "frontend_domain" {
-  value = var.domain_name
-}
-
-output "frontend_url" {
-  value = "https://${var.domain_name}"
 }

@@ -39,6 +39,14 @@ resource "aws_subnet" "database" {
   tags              = { Name = "${local.name_prefix}-database-${each.key}" }
 }
 
+resource "aws_subnet" "blockchain" {
+  for_each          = toset(var.azs)
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, index(var.azs, each.key) * 2 + 30)
+  availability_zone = each.key
+  tags              = { Name = "${local.name_prefix}-blockchain-${each.key}" }
+}
+
 resource "aws_security_group" "lambda" {
   name        = "${local.name_prefix}-lambda-sg"
   description = "Security group for Lambda"
@@ -76,6 +84,7 @@ output "public_subnet_ids" { value = [for s in aws_subnet.public : s.id] }
 output "compute_subnet_ids" { value = [for s in aws_subnet.compute : s.id] }
 output "private_subnet_ids" { value = [for s in aws_subnet.compute : s.id] }
 output "database_subnet_ids" { value = [for s in aws_subnet.database : s.id] }
+output "blockchain_subnet_ids" { value = [for s in aws_subnet.blockchain : s.id] }
 output "lambda_security_group_id" { value = aws_security_group.lambda.id }
 output "lambda_sg_arn" { value = aws_security_group.lambda.arn }
 output "database_sg_id" { value = aws_security_group.database.id }
