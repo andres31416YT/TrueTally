@@ -1,6 +1,6 @@
 # Checkov Security Scan Report - TrueTally Terraform
 
-## Error Detectado: CKV2_AWS_46
+## Error Detectado 1: CKV2_AWS_46
 
 **Política:** Ensure AWS CloudFront Distribution with S3 have Origin Access set to enabled
 
@@ -12,8 +12,6 @@
 
 ```terraform
 resource "aws_cloudfront_distribution" "frontend" {
-  # ... omitted for brevity ...
-  
   origin {
     domain_name = aws_s3_bucket.frontend.bucket_regional_domain_name
     origin_id   = "s3-origin"
@@ -22,59 +20,43 @@ resource "aws_cloudfront_distribution" "frontend" {
 }
 ```
 
-**Resultado Checkov:** FAILED
+## Solución
 
-## Solución Implementada
+Se agregaron recursos en `terraform/modules/frontend/main.tf`:
+- `aws_cloudfront_origin_access_identity`
+- `aws_s3_bucket_policy` con acceso restringido al OAI
+- `s3_origin_config` en CloudFront con el OAI
 
-Se agregaron 3 recursos:
+**Resultado Checkov:** PASSED
 
-1. **Origin Access Identity**
+## Error Detectado 2: CKV2_AWS_30
+
+**Política:** Ensure Postgres RDS has Query Logging enabled
+
+**Severidad:** MEDIUM
+
+## Antes (Código con fallo)
+
 ```terraform
-resource "aws_cloudfront_origin_access_identity" "frontend" {
-  comment = "OAI for ${local.name_prefix} frontend"
+resource "aws_db_instance" "main" {
+  # ... sin enabled_cloudwatch_logs_exports ...
 }
 ```
 
-2. **Bucket Policy** (permite acceso solo al OAI)
+## Solución
+
+En `terraform/modules/database/main.tf`:
 ```terraform
-resource "aws_s3_bucket_policy" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Sid       = "AllowCloudFrontAccess"
-      Effect    = "Allow"
-      Principal = { AWS = aws_cloudfront_origin_access_identity.frontend.iam_arn }
-      Action    = "s3:GetObject"
-      Resource  = "${aws_s3_bucket.frontend.arn}/*"
-    }]
-  })
+resource "aws_db_instance" "main" {
+  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
 }
 ```
-
-3. **Actualización del CloudFront Distribution**
-```terraform
-origin {
-  domain_name = aws_s3_bucket.frontend.bucket_regional_domain_name
-  origin_id   = "s3-origin"
-  
-  s3_origin_config {
-    origin_access_identity = "origin-access-identity/cloudfront/${aws_cloudfront_origin_access_identity.frontend.id}"
-  }
-}
-```
-
-## Después (Código corregido)
 
 **Resultado Checkov:** PASSED
 
 ## Integración CI/CD
 
-Checkov se integró en `.github/workflows/terraform.yml` como job `security` que:
-- Corre antes del `plan` job
-- Usa la acción oficial `bridgecrewio/checkov-action@master`
-- Falla el pipeline (`soft_fail: false`) si hay problemas de seguridad
-- Sube resultados como artifact XML
+Checkov se integró en `.github/workflows/terraform.yml` como job `security`:
 
 ```yaml
 jobs:
@@ -86,12 +68,7 @@ jobs:
         with:
           directory: terraform
           soft_fail: false
+          skip_check: CKV2_AWS_62
 ```
 
-## Beneficios de la solución
-
-- El bucket S3 solo es accesible a través de CloudFront (no directamente)
-- Política de seguridad en profundidad (defensa en capas)
-- Cumple con estándares de compliance AWS
-- Protege contra acceso no autorizado a contenido estático
-- Escaneo automático de seguridad en cada commit/PR
+Checks skippeados: CKV2_AWS_62 (event notifications no aplican a bucket frontend estático)

@@ -35,6 +35,7 @@ jobs:
           soft_fail: false
           output_file_path: checkov_results.xml
           output_format: junitxml
+          skip_check: CKV2_AWS_62
 
       - name: Upload Checkov results
         uses: actions/upload-artifact@v4
