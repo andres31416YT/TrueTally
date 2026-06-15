@@ -59,7 +59,7 @@ origin {
   origin_id   = "s3-origin"
   
   s3_origin_config {
-    origin_access_identity = aws_cloudfront_origin_access_identity.frontend.cdn_aws_source_arn
+    origin_access_identity = "origin-access-identity/cloudfront/${aws_cloudfront_origin_access_identity.frontend.id}"
   }
 }
 ```
@@ -68,9 +68,30 @@ origin {
 
 **Resultado Checkov:** PASSED
 
+## Integración CI/CD
+
+Checkov se integró en `.github/workflows/terraform.yml` como job `security` que:
+- Corre antes del `plan` job
+- Usa la acción oficial `bridgecrewio/checkov-action@master`
+- Falla el pipeline (`soft_fail: false`) si hay problemas de seguridad
+- Sube resultados como artifact XML
+
+```yaml
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bridgecrewio/checkov-action@master
+        with:
+          directory: terraform
+          soft_fail: false
+```
+
 ## Beneficios de la solución
 
 - El bucket S3 solo es accesible a través de CloudFront (no directamente)
 - Política de seguridad en profundidad (defensa en capas)
 - Cumple con estándares de compliance AWS
 - Protege contra acceso no autorizado a contenido estático
+- Escaneo automático de seguridad en cada commit/PR

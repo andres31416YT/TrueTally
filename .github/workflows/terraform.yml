@@ -20,9 +20,32 @@ env:
   TF_VAR_lambda_zip_path: ${{ github.workspace }}/terraform/artifacts
 
 jobs:
+  security:
+    name: Security Scan (Checkov)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Ejecutar Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: terraform
+          soft_fail: false
+          output_file_path: checkov_results.xml
+          output_format: junitxml
+
+      - name: Upload Checkov results
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-results
+          path: checkov_results.xml
+
   plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
+    needs: security
 
     steps:
       - name: Checkout del código

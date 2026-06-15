@@ -113,7 +113,7 @@ resource "aws_cloudfront_distribution" "frontend" {
     origin_id   = "s3-origin"
 
     s3_origin_config {
-      origin_access_identity = aws_cloudfront_origin_access_identity.frontend.cdn_aws_source_arn
+      origin_access_identity = "origin-access-identity/cloudfront/${aws_cloudfront_origin_access_identity.frontend.id}"
     }
   }
 }
