@@ -14,6 +14,30 @@ resource "aws_vpc" "main" {
   tags                 = { Name = "${local.name_prefix}-vpc" }
 }
 
+resource "aws_flow_log" "main" {
+  vpc_id = aws_vpc.main.id
+  iam_role_arn = aws_iam_role.vpc_flow_log.arn
+  log_destination_type = "cloud-watch-logs"
+  log_group_name = "${local.name_prefix}-vpc-flow-logs"
+}
+
+resource "aws_iam_role" "vpc_flow_log" {
+  name = "${local.name_prefix}-vpc-flow-log-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "vpc-flow-logs.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "vpc_flow_log" {
+  role       = aws_iam_role.vpc_flow_log.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonVPCCrossAccountNetworkInterfaceOperations"
+}
+
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
   tags   = { Name = "${local.name_prefix}-igw" }
