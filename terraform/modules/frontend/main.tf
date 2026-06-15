@@ -13,11 +13,6 @@ resource "aws_s3_bucket" "frontend" {
   bucket = "${local.name_prefix}-frontend"
 }
 
-resource "aws_s3_bucket_acl" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
-  acl    = "private"
-}
-
 resource "aws_s3_bucket_versioning" "frontend" {
   bucket = aws_s3_bucket.frontend.id
   versioning_configuration {
@@ -55,14 +50,12 @@ resource "aws_s3_bucket_website_configuration" "frontend" {
   }
 }
 
-# CloudFront Distribution
+# CloudFront Distribution - HTTP only for dev
 resource "aws_cloudfront_distribution" "frontend" {
   enabled             = true
   is_ipv6_enabled     = true
   comment             = "Frontend for ${local.name_prefix}"
   default_root_object = "index.html"
-
-  aliases = var.domain_name != "" ? [var.domain_name] : []
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
@@ -76,7 +69,7 @@ resource "aws_cloudfront_distribution" "frontend" {
       }
     }
 
-    viewer_protocol_policy = "redirect-to-https"
+    viewer_protocol_policy = "allow-all"
     min_ttl                = 0
     default_ttl            = 3600
     max_ttl                = 86400
@@ -89,8 +82,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   viewer_certificate {
-    acm_certificate_arn = var.ssl_certificate_arn != "" ? var.ssl_certificate_arn : null
-    ssl_support_method  = var.ssl_certificate_arn != "" ? "sni-only" : null
+    cloudfront_default_certificate = true
   }
 
   origin {

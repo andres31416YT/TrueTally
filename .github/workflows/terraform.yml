@@ -62,20 +62,27 @@ jobs:
           AR_aarch64_unknown_linux_musl: aarch64-linux-musl-ar
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-musl-gcc
         run: |
-          mkdir -p "${{ github.workspace }}/${{ steps.env.outputs.env_path }}"
+          mkdir -p "${{ github.workspace }}/terraform/artifacts"
           . "$HOME/.cargo/env"
           cargo build --release --target aarch64-unknown-linux-musl -p lambda-acceso
           cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
-          zip -j "${{ github.workspace }}/${{ steps.env.outputs.env_path }}/lambda-acceso.zip" ./bootstrap
+          zip -j "${{ github.workspace }}/terraform/artifacts/lambda-acceso.zip" ./bootstrap
           rm ./bootstrap
           cargo build --release --target aarch64-unknown-linux-musl -p lambda-despachador
           cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
-          zip -j "${{ github.workspace }}/${{ steps.env.outputs.env_path }}/lambda-despachador.zip" ./bootstrap
+          zip -j "${{ github.workspace }}/terraform/artifacts/lambda-despachador.zip" ./bootstrap
           rm ./bootstrap
           cargo build --release --target aarch64-unknown-linux-musl -p lambda-procesador
           cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
-          zip -j "${{ github.workspace }}/${{ steps.env.outputs.env_path }}/lambda-procesador.zip" ./bootstrap
+          zip -j "${{ github.workspace }}/terraform/artifacts/lambda-procesador.zip" ./bootstrap
           rm ./bootstrap
+
+      - name: Upload Lambda artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-artifacts
+          path: terraform/artifacts/*.zip
+          retention-days: 7
 
       - name: Autenticación con AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -120,6 +127,7 @@ jobs:
             -no-color \
             -var="db_password=${{ steps.env.outputs.db_password }}" \
             -var="redis_auth_token=${{ secrets.TF_VAR_REDIS_AUTH_TOKEN }}" \
+            -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
             -out=tfplan 2>&1 | tee plan_output.txt
 
       - name: Comentar plan en el PR
@@ -154,6 +162,12 @@ jobs:
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
+
+      - name: Descargar Lambda artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-artifacts
+          path: terraform/artifacts
 
       - name: Descargar plan de dev
         uses: actions/download-artifact@v4
@@ -200,6 +214,12 @@ jobs:
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
+
+      - name: Descargar Lambda artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-artifacts
+          path: terraform/artifacts
 
       - name: Descargar plan de prod
         uses: actions/download-artifact@v4

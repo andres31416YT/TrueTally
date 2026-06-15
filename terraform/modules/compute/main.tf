@@ -17,6 +17,7 @@ variable "lambda_node_url_az1" { type = string }
 variable "lambda_node_url_az2" { type = string }
 variable "account_id" { type = string }
 variable "aws_region" { type = string }
+variable "lambda_zip_path" { type = string }
 
 locals {
   name_prefix = "${var.project_name}-${var.env}"
@@ -72,10 +73,10 @@ resource "aws_iam_role_policy" "lambda_ssm" {
 # Lambda functions
 resource "aws_lambda_function" "acceso" {
   function_name = "${local.name_prefix}-acceso"
-  filename    = "${path.module}/../artifacts/lambda-acceso.zip"
-  role        = aws_iam_role.lambda.arn
-  handler     = "bootstrap"
-  runtime     = "provided.al2"
+  filename      = "${var.lambda_zip_path}/lambda-acceso.zip"
+  role          = aws_iam_role.lambda.arn
+  handler       = "bootstrap"
+  runtime       = "provided.al2"
 
   vpc_config {
     subnet_ids         = var.private_subnet_ids
@@ -91,10 +92,10 @@ resource "aws_lambda_function" "acceso" {
 
 resource "aws_lambda_function" "despachador" {
   function_name = "${local.name_prefix}-despachador"
-  filename    = "${path.module}/../artifacts/lambda-despachador.zip"
-  role        = aws_iam_role.lambda.arn
-  handler     = "bootstrap"
-  runtime     = "provided.al2"
+  filename      = "${var.lambda_zip_path}/lambda-despachador.zip"
+  role          = aws_iam_role.lambda.arn
+  handler       = "bootstrap"
+  runtime       = "provided.al2"
 
   vpc_config {
     subnet_ids         = var.private_subnet_ids
@@ -110,10 +111,10 @@ resource "aws_lambda_function" "despachador" {
 
 resource "aws_lambda_function" "procesador" {
   function_name = "${local.name_prefix}-procesador"
-  filename    = "${path.module}/../artifacts/lambda-procesador.zip"
-  role        = aws_iam_role.lambda.arn
-  handler     = "bootstrap"
-  runtime     = "provided.al2"
+  filename      = "${var.lambda_zip_path}/lambda-procesador.zip"
+  role          = aws_iam_role.lambda.arn
+  handler       = "bootstrap"
+  runtime       = "provided.al2"
 
   vpc_config {
     subnet_ids         = var.private_subnet_ids
@@ -195,17 +196,4 @@ resource "aws_ecs_service" "blockchain" {
     security_groups = [var.lambda_security_group_id]
     assign_public_ip = false
   }
-}
-
-# ALB for API Gateway
-resource "aws_lb" "api" {
-  name               = "${local.name_prefix}-api-alb"
-  internal           = false
-  load_balancer_type = "application"
-  subnets            = var.public_subnet_ids
-  security_groups    = [var.lambda_security_group_id]
-}
-
-output "api_alb_dns" {
-  value = aws_lb.api.dns_name
 }

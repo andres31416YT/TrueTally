@@ -68,14 +68,15 @@ module "compute" {
   lambda_node_url_az2         = local.lambda_node_url_az2
   account_id                  = local.account_id
   aws_region                  = local.region
+  lambda_zip_path             = "${path.module}/../../artifacts"
 }
 
 module "frontend" {
-  source             = "../../modules/frontend"
-  project_name       = local.project_name
-  env                = local.env
-  aws_region         = local.region
-  domain_name        = var.domain_name
+  source              = "../../modules/frontend"
+  project_name        = local.project_name
+  env                 = local.env
+  aws_region          = local.region
+  domain_name         = var.domain_name
   ssl_certificate_arn = var.ssl_certificate_arn
 }
 
