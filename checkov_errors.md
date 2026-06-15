@@ -33,3 +33,24 @@ container_definitions = jsonencode([{
 - **Contexto del proyecto:** El EFS tiene `kms_key_id = var.kms_key_arn`. El KMS key ARN proviene del módulo security.
 
 
+
+## Error 3: CKV_AWS_18
+**Ensure the S3 bucket has access logging enabled**
+- Resource: `module.frontend.aws_s3_bucket.frontend`
+- File: `/modules/frontend/main.tf: 12-14`
+- **Contexto del proyecto:** El bucket de frontend estático no tiene logging de acceso habilitado.
+- **Error:** No hay configuración de access logging.
+
+## Error 4: CKV2_AWS_61
+**Ensure that an S3 bucket has a lifecycle configuration**
+- Resource: `module.frontend.aws_s3_bucket.frontend`
+- File: `/modules/frontend/main.tf: 12-14`
+- **Contexto del proyecto:** El bucket de frontend no tiene política de lifecycle para limpieza de objetos.
+- **Error:** No hay lifecycle configuration.
+
+## Error 5: CKV2_AWS_11
+**Ensure VPC flow logging is enabled in all VPCs**
+- Resource: `module.networking.aws_vpc.main`
+- File: `/modules/networking/main.tf: 10-15`
+- **Contexto del proyecto:** La VPC no tiene flow logs habilitados para monitoreo de tráfico.
+- **Error:** No hay flow log configuration.
