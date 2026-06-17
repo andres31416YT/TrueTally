@@ -79,7 +79,6 @@ jobs:
             sonarsource/sonar-scanner-cli:latest \
             -Dsonar.projectKey=truetally-backend \
             -Dsonar.sources=src \
-            -Dsonar.tests=tests \
             -Dsonar.sourceEncoding=UTF-8 \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.login="${{ secrets.SONAR_TOKEN }}" \
