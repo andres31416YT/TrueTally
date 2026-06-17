@@ -27,3 +27,5 @@ Thumbs.db
 # Next.js build
 next-env.d.ts
 *.tsbuildinfo
+# SonarQube
+.sonarqube/
