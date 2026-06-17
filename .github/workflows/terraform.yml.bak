@@ -57,6 +57,7 @@ jobs:
       - name: Analizar Frontend (Next.js / TypeScript)
         run: |
           docker run --rm \
+            -e SONAR_HOST_URL="${{ secrets.SONAR_HOST_URL }}" \
             -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
             -e SONAR_PROJECT_BASE_DIR=/workspace \
             -v "${{ github.workspace }}/app/frontend:/workspace" \
@@ -66,12 +67,13 @@ jobs:
             -Dsonar.tests=src \
             -Dsonar.test.inclusions=**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx \
             -Dsonar.sourceEncoding=UTF-8 \
-            -Dsonar.host.url=https://sonarcloud.io
-            -Dsonar.login=${{ secrets.SONAR_TOKEN }} -Dsonar.organization=${{ secrets.SONAR_ORG }}
+            -Dsonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
+            -Dsonar.token="${{ secrets.SONAR_TOKEN }}"
 
       - name: Analizar Backend (Rust)
         run: |
           docker run --rm \
+            -e SONAR_HOST_URL="${{ secrets.SONAR_HOST_URL }}" \
             -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
             -e SONAR_PROJECT_BASE_DIR=/workspace \
             -v "${{ github.workspace }}/app/api-rust:/workspace" \
@@ -80,8 +82,8 @@ jobs:
             -Dsonar.sources=src \
             -Dsonar.tests=tests \
             -Dsonar.sourceEncoding=UTF-8 \
-            -Dsonar.host.url=https://sonarcloud.io
-            -Dsonar.login=${{ secrets.SONAR_TOKEN }} -Dsonar.organization=${{ secrets.SONAR_ORG }}
+            -Dsonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
+            -Dsonar.token="${{ secrets.SONAR_TOKEN }}"
 
   plan:
     name: Terraform Plan
