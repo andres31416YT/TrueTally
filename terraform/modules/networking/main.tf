@@ -14,11 +14,16 @@ resource "aws_vpc" "main" {
   tags                 = { Name = "${local.name_prefix}-vpc" }
 }
 
+resource "aws_cloudwatch_log_group" "vpc_flow_log" {
+  name              = "${local.name_prefix}-vpc-flow-logs"
+  retention_in_days = 7
+}
+
 resource "aws_flow_log" "main" {
-  vpc_id = aws_vpc.main.id
-  iam_role_arn = aws_iam_role.vpc_flow_log.arn
-  log_destination_type = "cloud-watch-logs"
-  log_group_name = "${local.name_prefix}-vpc-flow-logs"
+  vpc_id                 = aws_vpc.main.id
+  iam_role_arn           = aws_iam_role.vpc_flow_log.arn
+  log_destination        = aws_cloudwatch_log_group.vpc_flow_log.arn
+  traffic_type           = "ALL"
 }
 
 resource "aws_iam_role" "vpc_flow_log" {
@@ -35,7 +40,7 @@ resource "aws_iam_role" "vpc_flow_log" {
 
 resource "aws_iam_role_policy_attachment" "vpc_flow_log" {
   role       = aws_iam_role.vpc_flow_log.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonVPCCrossAccountNetworkInterfaceOperations"
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsRolePolicy"
 }
 
 resource "aws_internet_gateway" "main" {
