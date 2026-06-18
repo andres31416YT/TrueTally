@@ -254,11 +254,14 @@ jobs:
           name: lambda-artifacts
           path: terraform/artifacts
 
+      - name: Create frontend out directory
+        run: mkdir -p app/frontend/out
+
       - name: Descargar Frontend artifacts
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
-          path: app/frontend
+          path: app/frontend/out
 
       - name: Descargar plan de dev
         uses: actions/download-artifact@v4
@@ -326,11 +329,14 @@ jobs:
           name: lambda-artifacts
           path: terraform/artifacts
 
+      - name: Create frontend out directory
+        run: mkdir -p app/frontend/out
+
       - name: Descargar Frontend artifacts
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
-          path: app/frontend
+          path: app/frontend/out
 
       - name: Descargar plan de prod
         uses: actions/download-artifact@v4
