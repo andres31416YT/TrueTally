@@ -65,7 +65,7 @@ resource "aws_secretsmanager_secret" "db_credentials" {
 }
 
 resource "aws_secretsmanager_secret_version" "db_credentials" {
-  secret_id = aws_secretsmanager_secret.db_credentials.id
+  secret_id     = aws_secretsmanager_secret.db_credentials.id
   secret_string = jsonencode({
     username = "truetally"
     password = var.db_password
@@ -89,14 +89,6 @@ resource "aws_secretsmanager_secret_version" "redis_auth_token" {
   secret_string = var.redis_auth_token
 }
 
-resource "aws_ecr_repository" "blockchain" {
-  name = "${var.project_name}-blockchain"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-}
-
 output "kms_key_arn" {
   value = aws_kms_key.main.arn
 }
@@ -110,5 +102,5 @@ output "redis_auth_token_secret_arn" {
 }
 
 output "ecr_repository_url" {
-  value = aws_ecr_repository.blockchain.repository_url
+  value = "${var.project_name}-blockchain"
 }

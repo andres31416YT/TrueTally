@@ -113,6 +113,10 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.main.id
   }
   tags = { Name = "${local.name_prefix}-public-rt" }
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 resource "aws_route_table_association" "public" {
