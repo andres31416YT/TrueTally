@@ -133,46 +133,29 @@ resource "aws_security_group" "aurora" {
   }
 }
 
-resource "aws_rds_cluster" "main" {
-  cluster_identifier     = "${local.name_prefix}-aurora"
-  engine                 = "aurora-postgresql"
-  engine_version         = "15.7"
-  database_name          = "truetally"
-  master_username        = var.db_username
-  master_password        = var.db_password
-  db_subnet_group_name   = aws_db_subnet_group.main.name
+resource "aws_db_instance" "main" {
+  identifier         = "${local.name_prefix}-postgres"
+  engine             = "postgres"
+  engine_version     = "15.7"
+  instance_class     = "db.t3.micro"
+  allocated_storage  = 20
+  storage_encrypted  = true
+  kms_key_id         = var.kms_key_arn
+  username           = var.db_username
+  password           = var.db_password
+  db_name            = "truetally"
+  skip_final_snapshot = true
+
   vpc_security_group_ids = [aws_security_group.aurora.id]
-  storage_encrypted      = true
-  kms_key_id             = var.kms_key_arn
-  skip_final_snapshot    = true
-  engine_mode            = "serverless"
-
-  scaling_configuration {
-    auto_pause               = true
-    max_capacity             = 2
-    min_capacity             = 1
-    seconds_until_auto_pause = 300
-    timeout_action           = "ForceApplyCapacityChange"
-  }
-
-  enabled_cloudwatch_logs_exports = ["postgresql"]
+  db_subnet_group_name  = aws_db_subnet_group.main.name
 
   tags = {
-    Name = "${local.name_prefix}-aurora"
+    Name = "${local.name_prefix}-postgres"
   }
 }
 
-resource "aws_rds_cluster_instance" "main" {
-  identifier          = "${local.name_prefix}-aurora-instance"
-  cluster_identifier  = aws_rds_cluster.main.id
-  instance_class      = "db.t3.medium"
-  engine              = aws_rds_cluster.main.engine
-  engine_version      = aws_rds_cluster.main.engine_version
-  publicly_accessible = false
-
-  tags = {
-    Name = "${local.name_prefix}-aurora-instance"
-  }
+output "rds_endpoint" {
+  value = aws_db_instance.main.endpoint
 }
 
 output "rds_proxy_endpoint" {

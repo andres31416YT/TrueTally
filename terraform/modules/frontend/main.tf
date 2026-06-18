@@ -140,7 +140,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   comment               = "Frontend for ${local.name_prefix}"
   default_root_object   = "index.html"
 
-  aliases = var.domain_name != "" ? [var.domain_name] : []
+  aliases = var.ssl_certificate_arn != "" ? [var.domain_name] : []
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
