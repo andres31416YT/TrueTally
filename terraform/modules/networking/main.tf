@@ -181,7 +181,7 @@ resource "aws_vpc_endpoint" "secretsmanager" {
   vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.aws_region}.secretsmanager"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = concat([for s in aws_subnet.compute : s.id], [for s in aws_subnet.database : s.id])
+  subnet_ids          = [for s in aws_subnet.compute : s.id]
   security_group_ids  = [aws_security_group.lambda.id]
   private_dns_enabled = true
 
@@ -192,7 +192,7 @@ resource "aws_vpc_endpoint" "sqs" {
   vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.aws_region}.sqs"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = concat([for s in aws_subnet.compute : s.id], [for s in aws_subnet.database : s.id])
+  subnet_ids          = [for s in aws_subnet.compute : s.id]
   security_group_ids  = [aws_security_group.lambda.id]
   private_dns_enabled = true
 

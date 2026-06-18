@@ -79,17 +79,19 @@ resource "aws_security_group" "elasticache" {
 }
 
 resource "aws_elasticache_replication_group" "main" {
-  replication_group_id       = "${local.name_prefix}-redis"
-  description                = "Redis cache"
-  engine                     = "redis"
-  engine_version             = "7.1"
-  node_type                  = "cache.t3.micro"
-  port                       = 6379
-  num_cache_clusters         = 1
-  automatic_failover_enabled = false
-  multi_az_enabled           = false
-  subnet_group_name          = aws_elasticache_subnet_group.main.name
-  security_group_ids         = [aws_security_group.elasticache.id]
+  replication_group_id          = "${local.name_prefix}-redis"
+  description                   = "Redis cache"
+  engine                        = "redis"
+  engine_version                = "7.1"
+  node_type                     = "cache.t3.micro"
+  port                          = 6379
+  num_cache_clusters            = 1
+  automatic_failover_enabled    = false
+  multi_az_enabled              = false
+  subnet_group_name             = aws_elasticache_subnet_group.main.name
+  security_group_ids            = [aws_security_group.elasticache.id]
+  transit_encryption_enabled    = true
+  
 
   tags = {
     Name = "${local.name_prefix}-redis"
@@ -111,7 +113,7 @@ resource "aws_db_subnet_group" "main" {
 
 resource "aws_security_group" "aurora" {
   name_prefix = "${local.name_prefix}-aurora-"
-  description = "Security group for Aurora cluster and RDS Proxy"
+  description = "Security group for Aurora cluster"
   vpc_id      = var.vpc_id
 
   ingress {
@@ -133,27 +135,26 @@ resource "aws_security_group" "aurora" {
   }
 }
 
-# Aurora Serverless v2 Cluster
 resource "aws_rds_cluster" "main" {
-  cluster_identifier     = "${local.name_prefix}-aurora"
-  engine                 = "aurora-postgresql"
-  engine_version         = "15.7"
-  database_name          = "truetally"
-  master_username        = var.db_username
-  master_password        = var.db_password
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-  vpc_security_group_ids = [aws_security_group.aurora.id]
-  storage_encrypted      = true
-  kms_key_id             = var.kms_key_arn
-  skip_final_snapshot    = true
-
-  serverlessv2_scaling_configuration {
-    min_capacity = 0.5
-    max_capacity = 2
+  cluster_identifier              = "${local.name_prefix}-aurora"
+  engine                          = "aurora-postgresql"
+  engine_version                  = "15.7"
+  database_name                   = "truetally"
+  master_username                 = var.db_username
+  master_password                 = var.db_password
+  db_subnet_group_name            = aws_db_subnet_group.main.name
+  vpc_security_group_ids          = [aws_security_group.aurora.id]
+  storage_encrypted               = true
+  kms_key_id                      = var.kms_key_arn
+  skip_final_snapshot             = true
+  scaling_configuration {
+    auto_pause           = true
+    max_capacity         = 2
+    min_capacity         = 1
+    seconds_until_auto_pause = 300
+    timeout_action       = "ForceApplyCapacityChange"
   }
-
   enabled_cloudwatch_logs_exports = ["postgresql"]
-
   tags = {
     Name = "${local.name_prefix}-aurora"
   }
@@ -162,65 +163,17 @@ resource "aws_rds_cluster" "main" {
 resource "aws_rds_cluster_instance" "main" {
   identifier          = "${local.name_prefix}-aurora-instance"
   cluster_identifier  = aws_rds_cluster.main.id
-  instance_class      = "db.serverless"
+  instance_class      = "db.t3.medium"
   engine              = aws_rds_cluster.main.engine
   engine_version      = aws_rds_cluster.main.engine_version
   publicly_accessible = false
-
   tags = {
     Name = "${local.name_prefix}-aurora-instance"
   }
 }
 
-# IAM role for RDS Proxy
-resource "aws_iam_role" "rds_proxy" {
-  name = "${local.name_prefix}-rds-proxy-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "rds.amazonaws.com" }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "rds_proxy_kms" {
-  role       = aws_iam_role.rds_proxy.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
-}
-
-# RDS Proxy
-resource "aws_db_proxy" "main" {
-  name                   = "${local.name_prefix}-rds-proxy"
-  engine_family          = "POSTGRESQL"
-  vpc_subnet_ids         = var.private_subnet_ids
-  vpc_security_group_ids = [aws_security_group.aurora.id]
-  role_arn               = aws_iam_role.rds_proxy.arn
-
-  auth {
-    auth_scheme = "SECRETS"
-    secret_arn  = var.db_credentials_secret_arn
-    iam_auth    = "DISABLED"
-  }
-
-  require_tls         = true
-  idle_client_timeout = 1800
-
-  tags = {
-    Name = "${local.name_prefix}-rds-proxy"
-  }
-}
-
-resource "aws_db_proxy_target" "main" {
-  db_proxy_name         = aws_db_proxy.main.name
-  target_group_name     = "default"
-  db_cluster_identifier = aws_rds_cluster.main.id
-}
-
 output "rds_proxy_endpoint" {
-  value = aws_db_proxy.main.endpoint
+  value = ""
 }
 
 output "rds_endpoint" {

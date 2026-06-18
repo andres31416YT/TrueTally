@@ -153,9 +153,9 @@ resource "aws_cloudfront_distribution" "frontend" {
   dynamic "viewer_certificate" {
     for_each = var.domain_name != "" ? [1] : []
     content {
-      acm_certificate_arn      = var.ssl_certificate_arn != "" ? var.ssl_certificate_arn : aws_acm_certificate.main[0].arn
-      ssl_support_method       = "sni-only"
-      minimum_protocol_version = "TLSv1.2_2021"
+      acm_certificate_arn            = var.ssl_certificate_arn != "" ? var.ssl_certificate_arn : aws_acm_certificate.main[0].arn
+      ssl_support_method            = "sni-only"
+      minimum_protocol_version      = "TLSv1.2_2021"
     }
   }
 
@@ -172,46 +172,6 @@ resource "aws_cloudfront_distribution" "frontend" {
 
     s3_origin_config {
       origin_access_identity = "origin-access-identity/cloudfront/${aws_cloudfront_origin_access_identity.frontend.id}"
-    }
-  }
-
-  web_acl_id = aws_wafv2_web_acl.main.id
-}
-
-# WAF for CloudFront
-resource "aws_wafv2_web_acl" "main" {
-  name  = "${local.name_prefix}-waf"
-  scope = "CLOUDFRONT"
-
-  default_action {
-    allow {}
-  }
-
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                = "${local.name_prefix}-waf"
-    sampled_requests_enabled   = true
-  }
-
-  rule {
-    name     = "AWSManagedRulesCommonRuleSet"
-    priority = 1
-
-    override_action {
-      none {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesCommonRuleSet"
-        vendor_name = "AWS"
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "AWSManagedRulesCommonRuleSet"
-      sampled_requests_enabled   = true
     }
   }
 }
