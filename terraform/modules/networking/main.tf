@@ -2,6 +2,7 @@ variable "project_name" { type = string }
 variable "env" { type = string }
 variable "vpc_cidr" { type = string }
 variable "azs" { type = list(string) }
+variable "aws_region" { type = string }
 
 locals {
   name_prefix = "${var.project_name}-${var.env}"
@@ -20,10 +21,10 @@ resource "aws_cloudwatch_log_group" "vpc_flow_log" {
 }
 
 resource "aws_flow_log" "main" {
-  vpc_id                 = aws_vpc.main.id
-  iam_role_arn           = aws_iam_role.vpc_flow_log.arn
-  log_destination        = aws_cloudwatch_log_group.vpc_flow_log.arn
-  traffic_type           = "ALL"
+  vpc_id          = aws_vpc.main.id
+  iam_role_arn    = aws_iam_role.vpc_flow_log.arn
+  log_destination = aws_cloudwatch_log_group.vpc_flow_log.arn
+  traffic_type    = "ALL"
 }
 
 resource "aws_iam_role" "vpc_flow_log" {
@@ -31,8 +32,8 @@ resource "aws_iam_role" "vpc_flow_log" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "vpc-flow-logs.amazonaws.com" }
     }]
   })
@@ -103,6 +104,21 @@ resource "aws_subnet" "blockchain" {
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, index(var.azs, each.key) * 2 + 30)
   availability_zone = each.key
   tags              = { Name = "${local.name_prefix}-blockchain-${each.key}" }
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+  tags = { Name = "${local.name_prefix}-public-rt" }
+}
+
+resource "aws_route_table_association" "public" {
+  for_each       = toset(var.azs)
+  subnet_id      = aws_subnet.public[each.key].id
+  route_table_id = aws_route_table.public.id
 }
 
 resource "aws_security_group" "lambda" {

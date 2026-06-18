@@ -17,6 +17,7 @@ module "networking" {
   env          = local.env
   vpc_cidr     = local.vpc_cidr
   azs          = local.azs
+  aws_region   = local.region
 }
 
 module "security" {
@@ -51,8 +52,6 @@ module "compute" {
   source                      = "../../modules/compute"
   project_name                = local.project_name
   env                         = local.env
-  vpc_cidr                    = local.vpc_cidr
-  azs                         = local.azs
   vpc_id                      = module.networking.vpc_id
   public_subnet_ids           = module.networking.public_subnet_ids
   private_subnet_ids          = module.networking.private_subnet_ids
@@ -66,8 +65,7 @@ module "compute" {
   vote_queue_url              = module.messaging.vote_queue_url
   lambda_node_url_az1         = local.lambda_node_url_az1
   lambda_node_url_az2         = local.lambda_node_url_az2
-  account_id                  = local.account_id
-  aws_region                  = local.region
+  ecr_repository_url          = module.security.ecr_repository_url
   lambda_zip_path             = var.lambda_zip_path
 }
 

@@ -89,6 +89,14 @@ resource "aws_secretsmanager_secret_version" "redis_auth_token" {
   secret_string = var.redis_auth_token
 }
 
+resource "aws_ecr_repository" "blockchain" {
+  name = "${var.project_name}-blockchain"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
 output "kms_key_arn" {
   value = aws_kms_key.main.arn
 }
@@ -99,4 +107,8 @@ output "db_credentials_secret_arn" {
 
 output "redis_auth_token_secret_arn" {
   value = aws_secretsmanager_secret.redis_auth_token.arn
+}
+
+output "ecr_repository_url" {
+  value = aws_ecr_repository.blockchain.repository_url
 }

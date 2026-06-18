@@ -1,7 +1,5 @@
 variable "project_name" { type = string }
 variable "env" { type = string }
-variable "vpc_cidr" { type = string }
-variable "azs" { type = list(string) }
 variable "vpc_id" { type = string }
 variable "public_subnet_ids" { type = list(string) }
 variable "private_subnet_ids" { type = list(string) }
@@ -15,8 +13,7 @@ variable "vote_queue_arn" { type = string }
 variable "vote_queue_url" { type = string }
 variable "lambda_node_url_az1" { type = string }
 variable "lambda_node_url_az2" { type = string }
-variable "account_id" { type = string }
-variable "aws_region" { type = string }
+variable "ecr_repository_url" { type = string }
 variable "lambda_zip_path" { type = string }
 
 locals {
@@ -171,11 +168,11 @@ resource "aws_ecs_task_definition" "blockchain" {
 
   container_definitions = jsonencode([{
     name                 = "blockchain-node"
-    image                = "${var.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.project_name}-blockchain:latest"
+    image                = "${var.ecr_repository_url}:latest"
     essential            = true
     privileged           = false
     readonlyRootFilesystem = true
-    portMappings         = [{
+    portMappings = [{
       containerPort = 9944
       hostPort      = 9944
     }]
@@ -199,8 +196,8 @@ resource "aws_ecs_service" "blockchain" {
   desired_count   = 1
 
   network_configuration {
-    subnets          = var.blockchain_subnet_ids
+    subnets          = var.public_subnet_ids
     security_groups  = [var.lambda_security_group_id]
-    assign_public_ip = false
+    assign_public_ip = true
   }
 }
