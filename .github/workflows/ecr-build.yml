@@ -5,13 +5,15 @@ on:
     branches: [ main, develop ]
     paths:
       - 'app/blockchain-core/**'
-      - 'Dockerfile'
+      - 'app/Cargo.toml'
+      - 'app/Cargo.lock'
       - '.github/workflows/ecr-build.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
       - 'app/blockchain-core/**'
-      - 'Dockerfile'
+      - 'app/Cargo.toml'
+      - 'app/Cargo.lock'
       - '.github/workflows/ecr-build.yml'
 
 env:
@@ -46,7 +48,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./app/blockchain-core
+          context: ./app
           file: ./app/blockchain-core/Dockerfile
           push: true
           tags: |
