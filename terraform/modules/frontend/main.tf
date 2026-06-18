@@ -30,11 +30,6 @@ variable "route53_zone_id" {
 
 locals {
   name_prefix = "${var.project_name}-${var.env}"
-  acm_dvo = var.create_acm_certificate ? [for dvo in aws_acm_certificate.frontend[0].domain_validation_options : {
-    name   = dvo.resource_record_name
-    type   = dvo.resource_record_type
-    record = dvo.resource_record_value
-  }] : []
 }
 
 terraform {
@@ -170,17 +165,6 @@ resource "aws_acm_certificate" "frontend" {
   }
 }
 
-resource "aws_route53_record" "acm_validation" {
-  count = var.create_acm_certificate && var.route53_zone_id != "" ? 1 : 0
-  depends_on = [aws_acm_certificate.frontend]
-
-  zone_id = var.route53_zone_id
-  name    = local.acm_dvo[0].name
-  type    = local.acm_dvo[0].type
-  records = [local.acm_dvo[0].record]
-  ttl     = 60
-}
-
 resource "aws_acm_certificate_validation" "frontend" {
   count = var.create_acm_certificate ? 1 : 0
 
@@ -194,7 +178,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   comment             = "Frontend for ${local.name_prefix}"
   default_root_object = "index.html"
 
-  aliases = []
+  aliases = var.ssl_certificate_arn != "" ? [var.domain_name] : []
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
@@ -220,8 +204,20 @@ resource "aws_cloudfront_distribution" "frontend" {
     }
   }
 
-  viewer_certificate {
-    cloudfront_default_certificate = true
+  dynamic "viewer_certificate" {
+    for_each = var.ssl_certificate_arn != "" ? [1] : []
+    content {
+      acm_certificate_arn      = var.ssl_certificate_arn
+      ssl_support_method       = "sni-only"
+      minimum_protocol_version = "TLSv1.2_2021"
+    }
+  }
+
+  dynamic "viewer_certificate" {
+    for_each = var.ssl_certificate_arn == "" ? [1] : []
+    content {
+      cloudfront_default_certificate = true
+    }
   }
 
   origin {

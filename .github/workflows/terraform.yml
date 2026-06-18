@@ -198,6 +198,11 @@ jobs:
         id: plan
         run: |
           cd ${{ steps.env.outputs.env_path }}
+          if [[ "${{ steps.env.outputs.env_name }}" == "prod" ]]; then
+            SSL_CERT="${{ secrets.TF_VAR_SSL_CERTIFICATE_ARN_PROD }}"
+          else
+            SSL_CERT="${{ secrets.TF_VAR_SSL_CERTIFICATE_ARN_DEV }}"
+          fi
           terraform plan \
             -input=false \
             -no-color \
@@ -205,6 +210,7 @@ jobs:
             -var="redis_auth_token=${{ secrets.TF_VAR_REDIS_AUTH_TOKEN }}" \
             -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
             -var="lambda_zip_path=${{ env.TF_VAR_lambda_zip_path }}" \
+            -var="ssl_certificate_arn=$SSL_CERT" \
             -out=tfplan 2>&1 | tee plan_output.txt
 
       - name: Comentar plan en el PR
