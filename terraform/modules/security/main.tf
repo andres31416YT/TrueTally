@@ -65,7 +65,7 @@ resource "aws_secretsmanager_secret" "db_credentials" {
 }
 
 resource "aws_secretsmanager_secret_version" "db_credentials" {
-  secret_id     = aws_secretsmanager_secret.db_credentials.id
+  secret_id = aws_secretsmanager_secret.db_credentials.id
   secret_string = jsonencode({
     username = "truetally"
     password = var.db_password
@@ -102,5 +102,10 @@ output "redis_auth_token_secret_arn" {
 }
 
 output "ecr_repository_url" {
-  value = "${var.project_name}-blockchain"
+  value = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.project_name}-blockchain"
+}
+
+variable "aws_region" {
+  type    = string
+  default = "us-east-1"
 }

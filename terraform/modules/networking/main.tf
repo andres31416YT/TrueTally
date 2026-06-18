@@ -160,9 +160,41 @@ resource "aws_security_group" "database" {
 output "vpc_id" { value = aws_vpc.main.id }
 output "public_subnet_ids" { value = [for s in aws_subnet.public : s.id] }
 output "compute_subnet_ids" { value = [for s in aws_subnet.compute : s.id] }
-output "private_subnet_ids" { value = [for s in aws_subnet.compute : s.id] }
+output "private_subnet_ids" { value = concat([for s in aws_subnet.compute : s.id], [for s in aws_subnet.database : s.id]) }
 output "database_subnet_ids" { value = [for s in aws_subnet.database : s.id] }
 output "blockchain_subnet_ids" { value = [for s in aws_subnet.blockchain : s.id] }
 output "lambda_security_group_id" { value = aws_security_group.lambda.id }
 output "lambda_sg_arn" { value = aws_security_group.lambda.arn }
 output "database_sg_id" { value = aws_security_group.database.id }
+
+# VPC Endpoints
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${var.aws_region}.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = [aws_route_table.public.id]
+
+  tags = { Name = "${local.name_prefix}-s3-endpoint" }
+}
+
+resource "aws_vpc_endpoint" "secretsmanager" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.secretsmanager"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = concat([for s in aws_subnet.compute : s.id], [for s in aws_subnet.database : s.id])
+  security_group_ids  = [aws_security_group.lambda.id]
+  private_dns_enabled = true
+
+  tags = { Name = "${local.name_prefix}-secretsmanager-endpoint" }
+}
+
+resource "aws_vpc_endpoint" "sqs" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.sqs"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = concat([for s in aws_subnet.compute : s.id], [for s in aws_subnet.database : s.id])
+  security_group_ids  = [aws_security_group.lambda.id]
+  private_dns_enabled = true
+
+  tags = { Name = "${local.name_prefix}-sqs-endpoint" }
+}

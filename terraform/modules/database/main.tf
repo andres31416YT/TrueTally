@@ -36,6 +36,18 @@ variable "lambda_security_group_id" {
   type = string
 }
 
+variable "database_sg_id" {
+  type = string
+}
+
+variable "db_credentials_secret_arn" {
+  type = string
+}
+
+variable "redis_auth_token_secret_arn" {
+  type = string
+}
+
 locals {
   name_prefix = "${var.project_name}-${var.env}"
 }
@@ -97,35 +109,122 @@ resource "aws_db_subnet_group" "main" {
   }
 }
 
-resource "aws_db_instance" "main" {
-  identifier             = "${local.name_prefix}-postgres"
-  engine                 = "postgres"
-  engine_version         = "15.7"
-  instance_class         = "db.t3.micro"
-  allocated_storage      = 20
-  db_name                = "truetally"
-  username               = var.db_username
-  password               = var.db_password
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-  vpc_security_group_ids = [var.lambda_security_group_id]
-  storage_encrypted      = true
-  kms_key_id             = var.kms_key_arn
-  skip_final_snapshot    = true
-  publicly_accessible    = false
+resource "aws_security_group" "aurora" {
+  name_prefix = "${local.name_prefix}-aurora-"
+  description = "Security group for Aurora cluster and RDS Proxy"
+  vpc_id      = var.vpc_id
 
-  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [var.lambda_security_group_id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   tags = {
-    Name = "${local.name_prefix}-postgres"
+    Name = "${local.name_prefix}-aurora-sg"
   }
 }
 
+# Aurora Serverless v2 Cluster
+resource "aws_rds_cluster" "main" {
+  cluster_identifier     = "${local.name_prefix}-aurora"
+  engine                 = "aurora-postgresql"
+  engine_version         = "15.7"
+  database_name          = "truetally"
+  master_username        = var.db_username
+  master_password        = var.db_password
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [aws_security_group.aurora.id]
+  storage_encrypted      = true
+  kms_key_id             = var.kms_key_arn
+  skip_final_snapshot    = true
+
+  serverlessv2_scaling_configuration {
+    min_capacity = 0.5
+    max_capacity = 2
+  }
+
+  enabled_cloudwatch_logs_exports = ["postgresql"]
+
+  tags = {
+    Name = "${local.name_prefix}-aurora"
+  }
+}
+
+resource "aws_rds_cluster_instance" "main" {
+  identifier          = "${local.name_prefix}-aurora-instance"
+  cluster_identifier  = aws_rds_cluster.main.id
+  instance_class      = "db.serverless"
+  engine              = aws_rds_cluster.main.engine
+  engine_version      = aws_rds_cluster.main.engine_version
+  publicly_accessible = false
+
+  tags = {
+    Name = "${local.name_prefix}-aurora-instance"
+  }
+}
+
+# IAM role for RDS Proxy
+resource "aws_iam_role" "rds_proxy" {
+  name = "${local.name_prefix}-rds-proxy-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "rds.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "rds_proxy_kms" {
+  role       = aws_iam_role.rds_proxy.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+}
+
+# RDS Proxy
+resource "aws_db_proxy" "main" {
+  name                   = "${local.name_prefix}-rds-proxy"
+  engine_family          = "POSTGRESQL"
+  vpc_subnet_ids         = var.private_subnet_ids
+  vpc_security_group_ids = [aws_security_group.aurora.id]
+  role_arn               = aws_iam_role.rds_proxy.arn
+
+  auth {
+    auth_scheme = "SECRETS"
+    secret_arn  = var.db_credentials_secret_arn
+    iam_auth    = "DISABLE"
+  }
+
+  require_tls         = true
+  idle_client_timeout = 1800
+
+  tags = {
+    Name = "${local.name_prefix}-rds-proxy"
+  }
+}
+
+resource "aws_db_proxy_target" "main" {
+  db_proxy_name         = aws_db_proxy.main.name
+  target_group_name     = "default"
+  db_cluster_identifier = aws_rds_cluster.main.id
+}
+
 output "rds_proxy_endpoint" {
-  value = aws_db_instance.main.endpoint
+  value = aws_db_proxy.main.endpoint
 }
 
 output "rds_endpoint" {
-  value = aws_db_instance.main.endpoint
+  value = aws_rds_cluster.main.endpoint
 }
 
 output "elasticache_address" {

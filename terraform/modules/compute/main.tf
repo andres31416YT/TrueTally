@@ -158,27 +158,32 @@ resource "aws_iam_role_policy_attachment" "ecs_task_ecr" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-resource "aws_ecs_task_definition" "blockchain" {
-  family                   = "${local.name_prefix}-blockchain"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = "512"
-  memory                   = "1024"
-  execution_role_arn       = aws_iam_role.ecs_task.arn
-
-  container_definitions = jsonencode([{
-    name                 = "blockchain-node"
-    image                = "${var.ecr_repository_url}:latest"
-    essential            = true
-    privileged           = false
-    readonlyRootFilesystem = true
-    portMappings = [{
-      containerPort = 9944
-      hostPort      = 9944
-    }]
-  }])
+resource "aws_iam_role_policy_attachment" "ecs_task_ssm" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
+resource "aws_iam_role_policy" "ecs_task_efs" {
+  name = "${local.name_prefix}-ecs-efs"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "elasticfilesystem:ClientMount",
+          "elasticfilesystem:ClientWrite",
+          "elasticfilesystem:ClientRootAccess"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# EFS for Blockchain Node persistence
 resource "aws_efs_file_system" "blockchain" {
   creation_token = "${local.name_prefix}-blockchain-efs"
   encrypted      = true
@@ -189,6 +194,79 @@ resource "aws_efs_file_system" "blockchain" {
   }
 }
 
+resource "aws_security_group_rule" "efs_inbound" {
+  type                     = "ingress"
+  from_port                = 2049
+  to_port                  = 2049
+  protocol                 = "tcp"
+  security_group_id        = var.lambda_security_group_id
+  source_security_group_id = var.lambda_security_group_id
+}
+
+resource "aws_efs_mount_target" "blockchain" {
+  for_each = toset(var.blockchain_subnet_ids)
+
+  file_system_id  = aws_efs_file_system.blockchain.id
+  subnet_id       = each.value
+  security_groups = [var.lambda_security_group_id]
+}
+
+resource "aws_efs_access_point" "blockchain" {
+  file_system_id = aws_efs_file_system.blockchain.id
+  posix_user {
+    gid = 1000
+    uid = 1000
+  }
+  root_directory {
+    path = "/blockchain"
+    creation_info {
+      owner_gid   = 1000
+      owner_uid   = 1000
+      permissions = "755"
+    }
+  }
+}
+
+# ECS Task Definition with EFS volume
+resource "aws_ecs_task_definition" "blockchain" {
+  family                   = "${local.name_prefix}-blockchain"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "512"
+  memory                   = "1024"
+  execution_role_arn       = aws_iam_role.ecs_task.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
+
+  container_definitions = jsonencode([{
+    name                   = "blockchain-node"
+    image                  = "${var.ecr_repository_url}:latest"
+    essential              = true
+    privileged             = false
+    readonlyRootFilesystem = false
+    portMappings = [{
+      containerPort = 9944
+      hostPort      = 9944
+    }]
+    mountPoints = [{
+      sourceVolume  = "blockchain-efs"
+      containerPath = "/data"
+      readOnly      = false
+    }]
+  }])
+
+  volume {
+    name = "blockchain-efs"
+    efs_volume_configuration {
+      file_system_id     = aws_efs_file_system.blockchain.id
+      transit_encryption = "ENABLED"
+      authorization_config {
+        access_point_id = aws_efs_access_point.blockchain.id
+        iam             = "ENABLED"
+      }
+    }
+  }
+}
+
 resource "aws_ecs_service" "blockchain" {
   name            = "${local.name_prefix}-blockchain-service"
   cluster         = aws_ecs_cluster.blockchain.id
@@ -196,8 +274,12 @@ resource "aws_ecs_service" "blockchain" {
   desired_count   = 1
 
   network_configuration {
-    subnets          = var.public_subnet_ids
+    subnets          = var.blockchain_subnet_ids
     security_groups  = [var.lambda_security_group_id]
-    assign_public_ip = true
+    assign_public_ip = false
+  }
+
+  lifecycle {
+    ignore_changes = [task_definition]
   }
 }

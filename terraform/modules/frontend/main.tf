@@ -3,6 +3,10 @@ variable "env" { type = string }
 variable "aws_region" { type = string }
 variable "domain_name" { type = string }
 variable "ssl_certificate_arn" { type = string }
+variable "create_acm_certificate" {
+  type    = bool
+  default = true
+}
 
 locals {
   name_prefix = "${var.project_name}-${var.env}"
@@ -113,12 +117,14 @@ resource "aws_s3_bucket_website_configuration" "frontend" {
   }
 }
 
-# CloudFront Distribution - HTTP only for dev
+# CloudFront Distribution
 resource "aws_cloudfront_distribution" "frontend" {
   enabled             = true
   is_ipv6_enabled     = true
   comment             = "Frontend for ${local.name_prefix}"
   default_root_object = "index.html"
+
+  aliases = var.domain_name != "" ? [var.domain_name] : []
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
@@ -144,8 +150,20 @@ resource "aws_cloudfront_distribution" "frontend" {
     }
   }
 
-  viewer_certificate {
-    cloudfront_default_certificate = true
+  dynamic "viewer_certificate" {
+    for_each = var.domain_name != "" ? [1] : []
+    content {
+      acm_certificate_arn      = var.ssl_certificate_arn != "" ? var.ssl_certificate_arn : aws_acm_certificate.main[0].arn
+      ssl_support_method       = "sni-only"
+      minimum_protocol_version = "TLSv1.2_2021"
+    }
+  }
+
+  dynamic "viewer_certificate" {
+    for_each = var.domain_name == "" ? [1] : []
+    content {
+      cloudfront_default_certificate = true
+    }
   }
 
   origin {
@@ -155,6 +173,62 @@ resource "aws_cloudfront_distribution" "frontend" {
     s3_origin_config {
       origin_access_identity = "origin-access-identity/cloudfront/${aws_cloudfront_origin_access_identity.frontend.id}"
     }
+  }
+
+  web_acl_id = aws_wafv2_web_acl.main.id
+}
+
+# WAF for CloudFront
+resource "aws_wafv2_web_acl" "main" {
+  name  = "${local.name_prefix}-waf"
+  scope = "CLOUDFRONT"
+
+  default_action {
+    allow {}
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "${local.name_prefix}-waf"
+    sampled_requests_enabled   = true
+  }
+
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 1
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "AWSManagedRulesCommonRuleSet"
+      sampled_requests_enabled   = true
+    }
+  }
+}
+
+# ACM Certificate (us-east-1 for CloudFront)
+resource "aws_acm_certificate" "main" {
+  count = var.create_acm_certificate && var.domain_name != "" ? 1 : 0
+
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-acm-cert"
   }
 }
 

@@ -43,6 +43,11 @@ variable "domain_name" {
   type    = string
 }
 
+variable "create_acm_certificate" {
+  type    = bool
+  default = true
+}
+
 variable "ssl_certificate_arn" {
   default = ""
   type    = string

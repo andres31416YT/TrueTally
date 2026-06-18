@@ -17,6 +17,7 @@ module "networking" {
   env          = local.env
   vpc_cidr     = local.vpc_cidr
   azs          = local.azs
+  aws_region   = local.region
 }
 
 module "security" {
@@ -28,16 +29,19 @@ module "security" {
 }
 
 module "database" {
-  source                   = "../../modules/database"
-  project_name             = local.project_name
-  env                      = local.env
-  db_username              = "truetally"
-  db_password              = local.db_password
-  redis_auth_token         = local.redis_auth_token
-  vpc_id                   = module.networking.vpc_id
-  private_subnet_ids       = module.networking.private_subnet_ids
-  kms_key_arn              = module.security.kms_key_arn
-  lambda_security_group_id = module.networking.lambda_security_group_id
+  source                      = "../../modules/database"
+  project_name                = local.project_name
+  env                         = local.env
+  db_username                 = "truetally"
+  db_password                 = local.db_password
+  redis_auth_token            = local.redis_auth_token
+  vpc_id                      = module.networking.vpc_id
+  private_subnet_ids          = concat(module.networking.compute_subnet_ids, module.networking.database_subnet_ids)
+  kms_key_arn                 = module.security.kms_key_arn
+  lambda_security_group_id    = module.networking.lambda_security_group_id
+  database_sg_id              = module.networking.database_sg_id
+  db_credentials_secret_arn   = module.security.db_credentials_secret_arn
+  redis_auth_token_secret_arn = module.security.redis_auth_token_secret_arn
 }
 
 module "messaging" {
@@ -51,8 +55,6 @@ module "compute" {
   source                      = "../../modules/compute"
   project_name                = local.project_name
   env                         = local.env
-  vpc_cidr                    = local.vpc_cidr
-  azs                         = local.azs
   vpc_id                      = module.networking.vpc_id
   public_subnet_ids           = module.networking.public_subnet_ids
   private_subnet_ids          = module.networking.private_subnet_ids
@@ -66,18 +68,18 @@ module "compute" {
   vote_queue_url              = module.messaging.vote_queue_url
   lambda_node_url_az1         = local.lambda_node_url_az1
   lambda_node_url_az2         = local.lambda_node_url_az2
-  account_id                  = local.account_id
-  aws_region                  = local.region
+  ecr_repository_url          = module.security.ecr_repository_url
   lambda_zip_path             = var.lambda_zip_path
 }
 
 module "frontend" {
-  source              = "../../modules/frontend"
-  project_name        = local.project_name
-  env                 = local.env
-  aws_region          = local.region
-  domain_name         = var.domain_name
-  ssl_certificate_arn = var.ssl_certificate_arn
+  source                 = "../../modules/frontend"
+  project_name           = local.project_name
+  env                    = local.env
+  aws_region             = local.region
+  domain_name            = var.domain_name
+  ssl_certificate_arn    = var.ssl_certificate_arn
+  create_acm_certificate = var.create_acm_certificate
 }
 
 module "monitoring" {

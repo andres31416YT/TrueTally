@@ -39,8 +39,13 @@ variable "lambda_node_url_az2" {
 }
 
 variable "domain_name" {
-  default = ""
+  default = "andrespaganroncall.qzz.io"
   type    = string
+}
+
+variable "create_acm_certificate" {
+  type    = bool
+  default = true
 }
 
 variable "ssl_certificate_arn" {
