@@ -20,11 +20,31 @@ variable "ssl_certificate_arn" {
 
 variable "create_acm_certificate" {
   type    = bool
-  default = true
+  default = false
+}
+
+variable "route53_zone_id" {
+  type    = string
+  default = ""
 }
 
 locals {
   name_prefix = "${var.project_name}-${var.env}"
+  acm_dvo = var.create_acm_certificate ? [for dvo in aws_acm_certificate.frontend[0].domain_validation_options : {
+    name   = dvo.resource_record_name
+    type   = dvo.resource_record_type
+    record = dvo.resource_record_value
+  }] : []
+}
+
+terraform {
+  required_providers {
+    aws = {
+      source                = "hashicorp/aws"
+      version               = "~> 5.0"
+      configuration_aliases = [aws.us_east_1]
+    }
+  }
 }
 
 resource "aws_s3_bucket" "logs" {
@@ -134,13 +154,47 @@ resource "aws_s3_bucket_website_configuration" "frontend" {
   }
 }
 
-resource "aws_cloudfront_distribution" "frontend" {
-  enabled               = true
-  is_ipv6_enabled       = true
-  comment               = "Frontend for ${local.name_prefix}"
-  default_root_object   = "index.html"
+resource "aws_acm_certificate" "frontend" {
+  count = var.create_acm_certificate ? 1 : 0
 
-  aliases = var.ssl_certificate_arn != "" ? [var.domain_name] : []
+  provider          = aws.us_east_1
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-acm-cert"
+  }
+}
+
+resource "aws_route53_record" "acm_validation" {
+  count = var.create_acm_certificate && var.route53_zone_id != "" ? 1 : 0
+  depends_on = [aws_acm_certificate.frontend]
+
+  zone_id = var.route53_zone_id
+  name    = local.acm_dvo[0].name
+  type    = local.acm_dvo[0].type
+  records = [local.acm_dvo[0].record]
+  ttl     = 60
+}
+
+resource "aws_acm_certificate_validation" "frontend" {
+  count = var.create_acm_certificate ? 1 : 0
+
+  provider        = aws.us_east_1
+  certificate_arn = aws_acm_certificate.frontend[0].arn
+}
+
+resource "aws_cloudfront_distribution" "frontend" {
+  enabled             = true
+  is_ipv6_enabled     = true
+  comment             = "Frontend for ${local.name_prefix}"
+  default_root_object = "index.html"
+
+  aliases = []
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
@@ -166,20 +220,8 @@ resource "aws_cloudfront_distribution" "frontend" {
     }
   }
 
-  dynamic "viewer_certificate" {
-    for_each = var.domain_name != "" && var.ssl_certificate_arn != "" ? [1] : []
-    content {
-      acm_certificate_arn      = var.ssl_certificate_arn
-      ssl_support_method       = "sni-only"
-      minimum_protocol_version = "TLSv1.2_2021"
-    }
-  }
-
-  dynamic "viewer_certificate" {
-    for_each = var.domain_name == "" || var.ssl_certificate_arn == "" ? [1] : []
-    content {
-      cloudfront_default_certificate = true
-    }
+  viewer_certificate {
+    cloudfront_default_certificate = true
   }
 
   origin {
@@ -202,4 +244,8 @@ output "cloudfront_domain_name" {
 
 output "cloudfront_distribution_id" {
   value = aws_cloudfront_distribution.frontend.id
+}
+
+output "acm_certificate_arn" {
+  value = var.create_acm_certificate && length(aws_acm_certificate.frontend) > 0 ? aws_acm_certificate.frontend[0].arn : ""
 }

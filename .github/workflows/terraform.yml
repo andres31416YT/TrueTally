@@ -289,6 +289,15 @@ jobs:
           cd terraform/environments/dev
           terraform apply -input=false -auto-approve tfplan
 
+      - name: Get ACM Certificate ARN
+        if: always()
+        run: |
+          ARN=$(terraform output -raw acm_certificate_arn 2>/dev/null || echo "")
+          if [[ -n "$ARN" ]]; then
+            echo "ACM_CERTIFICATE_ARN=$ARN" >> $GITHUB_ENV
+            echo "Certificate ARN: $ARN"
+          fi
+
       - name: Deploy Frontend to S3
         run: |
           BUCKET_NAME="truetally-dev-frontend"
@@ -360,6 +369,15 @@ jobs:
         run: |
           cd terraform/environments/prod
           terraform apply -input=false -auto-approve tfplan
+
+      - name: Get ACM Certificate ARN
+        if: always()
+        run: |
+          ARN=$(terraform output -raw acm_certificate_arn 2>/dev/null || echo "")
+          if [[ -n "$ARN" ]]; then
+            echo "ACM_CERTIFICATE_ARN=$ARN" >> $GITHUB_ENV
+            echo "Certificate ARN: $ARN"
+          fi
 
       - name: Deploy Frontend to S3
         run: |

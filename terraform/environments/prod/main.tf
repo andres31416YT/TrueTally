@@ -74,12 +74,14 @@ module "compute" {
 
 module "frontend" {
   source                 = "../../modules/frontend"
+  providers              = { aws.us_east_1 = aws.us_east_1 }
   project_name           = local.project_name
   env                    = local.env
   aws_region             = local.region
   domain_name            = var.domain_name
   ssl_certificate_arn    = var.ssl_certificate_arn
   create_acm_certificate = var.create_acm_certificate
+  route53_zone_id        = var.route53_zone_id
 }
 
 module "monitoring" {

@@ -162,10 +162,6 @@ output "rds_proxy_endpoint" {
   value = ""
 }
 
-output "rds_endpoint" {
-  value = aws_rds_cluster.main.endpoint
-}
-
 output "elasticache_address" {
   value = aws_elasticache_replication_group.main.primary_endpoint_address
 }
