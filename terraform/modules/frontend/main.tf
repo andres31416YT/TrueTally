@@ -1,8 +1,23 @@
-variable "project_name" { type = string }
-variable "env" { type = string }
-variable "aws_region" { type = string }
-variable "domain_name" { type = string }
-variable "ssl_certificate_arn" { type = string }
+variable "project_name" {
+  type = string
+}
+
+variable "env" {
+  type = string
+}
+
+variable "aws_region" {
+  type = string
+}
+
+variable "domain_name" {
+  type = string
+}
+
+variable "ssl_certificate_arn" {
+  type = string
+}
+
 variable "create_acm_certificate" {
   type    = bool
   default = true
@@ -12,13 +27,13 @@ locals {
   name_prefix = "${var.project_name}-${var.env}"
 }
 
-# S3 Bucket for logs
 resource "aws_s3_bucket" "logs" {
   bucket = "${local.name_prefix}-logs"
 }
 
 resource "aws_s3_bucket_versioning" "logs" {
   bucket = aws_s3_bucket.logs.id
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -26,6 +41,7 @@ resource "aws_s3_bucket_versioning" "logs" {
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -33,13 +49,13 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   }
 }
 
-# S3 Bucket for static website
 resource "aws_s3_bucket" "frontend" {
   bucket = "${local.name_prefix}-frontend"
 }
 
 resource "aws_s3_bucket_versioning" "frontend" {
   bucket = aws_s3_bucket.frontend.id
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -47,6 +63,7 @@ resource "aws_s3_bucket_versioning" "frontend" {
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
   bucket = aws_s3_bucket.frontend.id
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -117,12 +134,11 @@ resource "aws_s3_bucket_website_configuration" "frontend" {
   }
 }
 
-# CloudFront Distribution
 resource "aws_cloudfront_distribution" "frontend" {
-  enabled             = true
-  is_ipv6_enabled     = true
-  comment             = "Frontend for ${local.name_prefix}"
-  default_root_object = "index.html"
+  enabled               = true
+  is_ipv6_enabled       = true
+  comment               = "Frontend for ${local.name_prefix}"
+  default_root_object   = "index.html"
 
   aliases = var.domain_name != "" ? [var.domain_name] : []
 
@@ -151,16 +167,16 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   dynamic "viewer_certificate" {
-    for_each = var.domain_name != "" ? [1] : []
+    for_each = var.domain_name != "" && var.ssl_certificate_arn != "" ? [1] : []
     content {
-      acm_certificate_arn            = var.ssl_certificate_arn != "" ? var.ssl_certificate_arn : aws_acm_certificate.main[0].arn
-      ssl_support_method            = "sni-only"
-      minimum_protocol_version      = "TLSv1.2_2021"
+      acm_certificate_arn      = var.ssl_certificate_arn
+      ssl_support_method       = "sni-only"
+      minimum_protocol_version = "TLSv1.2_2021"
     }
   }
 
   dynamic "viewer_certificate" {
-    for_each = var.domain_name == "" ? [1] : []
+    for_each = var.domain_name == "" || var.ssl_certificate_arn == "" ? [1] : []
     content {
       cloudfront_default_certificate = true
     }
@@ -173,22 +189,6 @@ resource "aws_cloudfront_distribution" "frontend" {
     s3_origin_config {
       origin_access_identity = "origin-access-identity/cloudfront/${aws_cloudfront_origin_access_identity.frontend.id}"
     }
-  }
-}
-
-# ACM Certificate (us-east-1 for CloudFront)
-resource "aws_acm_certificate" "main" {
-  count = var.create_acm_certificate && var.domain_name != "" ? 1 : 0
-
-  domain_name       = var.domain_name
-  validation_method = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  tags = {
-    Name = "${local.name_prefix}-acm-cert"
   }
 }
 

@@ -79,19 +79,17 @@ resource "aws_security_group" "elasticache" {
 }
 
 resource "aws_elasticache_replication_group" "main" {
-  replication_group_id          = "${local.name_prefix}-redis"
-  description                   = "Redis cache"
-  engine                        = "redis"
-  engine_version                = "7.1"
-  node_type                     = "cache.t3.micro"
-  port                          = 6379
-  num_cache_clusters            = 1
-  automatic_failover_enabled    = false
-  multi_az_enabled              = false
-  subnet_group_name             = aws_elasticache_subnet_group.main.name
-  security_group_ids            = [aws_security_group.elasticache.id]
-  transit_encryption_enabled    = true
-  
+  replication_group_id       = "${local.name_prefix}-redis"
+  description                = "Redis cache"
+  engine                     = "redis"
+  engine_version             = "7.1"
+  node_type                  = "cache.t3.micro"
+  port                       = 6379
+  num_cache_clusters         = 1
+  automatic_failover_enabled = false
+  multi_az_enabled           = false
+  subnet_group_name          = aws_elasticache_subnet_group.main.name
+  security_group_ids         = [aws_security_group.elasticache.id]
 
   tags = {
     Name = "${local.name_prefix}-redis"
@@ -113,7 +111,7 @@ resource "aws_db_subnet_group" "main" {
 
 resource "aws_security_group" "aurora" {
   name_prefix = "${local.name_prefix}-aurora-"
-  description = "Security group for Aurora cluster"
+  description = "Security group for Aurora"
   vpc_id      = var.vpc_id
 
   ingress {
@@ -136,25 +134,29 @@ resource "aws_security_group" "aurora" {
 }
 
 resource "aws_rds_cluster" "main" {
-  cluster_identifier              = "${local.name_prefix}-aurora"
-  engine                          = "aurora-postgresql"
-  engine_version                  = "15.7"
-  database_name                   = "truetally"
-  master_username                 = var.db_username
-  master_password                 = var.db_password
-  db_subnet_group_name            = aws_db_subnet_group.main.name
-  vpc_security_group_ids          = [aws_security_group.aurora.id]
-  storage_encrypted               = true
-  kms_key_id                      = var.kms_key_arn
-  skip_final_snapshot             = true
+  cluster_identifier     = "${local.name_prefix}-aurora"
+  engine                 = "aurora-postgresql"
+  engine_version         = "15.7"
+  database_name          = "truetally"
+  master_username        = var.db_username
+  master_password        = var.db_password
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [aws_security_group.aurora.id]
+  storage_encrypted      = true
+  kms_key_id             = var.kms_key_arn
+  skip_final_snapshot    = true
+  engine_mode            = "serverless"
+
   scaling_configuration {
-    auto_pause           = true
-    max_capacity         = 2
-    min_capacity         = 1
+    auto_pause               = true
+    max_capacity             = 2
+    min_capacity             = 1
     seconds_until_auto_pause = 300
-    timeout_action       = "ForceApplyCapacityChange"
+    timeout_action           = "ForceApplyCapacityChange"
   }
+
   enabled_cloudwatch_logs_exports = ["postgresql"]
+
   tags = {
     Name = "${local.name_prefix}-aurora"
   }
@@ -167,6 +169,7 @@ resource "aws_rds_cluster_instance" "main" {
   engine              = aws_rds_cluster.main.engine
   engine_version      = aws_rds_cluster.main.engine_version
   publicly_accessible = false
+
   tags = {
     Name = "${local.name_prefix}-aurora-instance"
   }
