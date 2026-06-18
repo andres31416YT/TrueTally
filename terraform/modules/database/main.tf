@@ -202,7 +202,7 @@ resource "aws_db_proxy" "main" {
   auth {
     auth_scheme = "SECRETS"
     secret_arn  = var.db_credentials_secret_arn
-    iam_auth    = "DISABLE"
+    iam_auth    = "DISABLED"
   }
 
   require_tls         = true
