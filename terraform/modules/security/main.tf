@@ -54,6 +54,8 @@ resource "aws_kms_alias" "main" {
 
 data "aws_caller_identity" "current" {}
 
+data "aws_region" "current" {}
+
 resource "aws_secretsmanager_secret" "db_credentials" {
   name        = "${local.name_prefix}/db/credentials"
   description = "DB credentials"
@@ -102,10 +104,5 @@ output "redis_auth_token_secret_arn" {
 }
 
 output "ecr_repository_url" {
-  value = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.project_name}-blockchain"
-}
-
-variable "aws_region" {
-  type    = string
-  default = "us-east-1"
+  value = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/${var.project_name}-blockchain"
 }
