@@ -1,61 +1,56 @@
 variable "project_name" {
-  default = "truetally"
-  type    = string
+  type = string
 }
 
 variable "environment" {
-  default = "dev"
-  type    = string
+  type = string
 }
 
 variable "vpc_cidr" {
-  default = "10.0.0.0/16"
-  type    = string
+  type = string
 }
 
 variable "azs" {
-  default = ["us-east-1a", "us-east-1b"]
-  type    = list(string)
+  type = list(string)
 }
 
 variable "db_password" {
-  sensitive = true
   type      = string
+  sensitive = true
 }
 
 variable "redis_auth_token" {
-  sensitive = true
   type      = string
+  sensitive = true
 }
 
 variable "lambda_node_url_az1" {
-  default = "http://localhost:9944"
   type    = string
+  default = "http://localhost:9944"
 }
 
 variable "lambda_node_url_az2" {
-  default = "http://localhost:9944"
   type    = string
+  default = "http://localhost:9944"
 }
 
 variable "domain_name" {
-  default = "andrespaganroncall.qzz.io"
-  type    = string
+  type = string
 }
 
 variable "create_acm_certificate" {
   type    = bool
-  default = true
+  default = false
 }
 
 variable "ssl_certificate_arn" {
-  default = ""
   type    = string
+  default = ""
 }
 
 variable "route53_zone_id" {
-  default = ""
   type    = string
+  default = ""
 }
 
 variable "aws_region" {
