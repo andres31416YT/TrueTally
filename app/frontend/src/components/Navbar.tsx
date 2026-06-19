@@ -50,7 +50,7 @@ export default function Navbar() {
 
   const navItems = [
     { href: '/', label: 'Votar' },
-    { href: '/blocks', label: 'Bloques' },
+    { href: '/blocks/', label: 'Bloques' },
   ];
 
   return (

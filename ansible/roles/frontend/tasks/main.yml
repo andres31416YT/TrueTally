@@ -1,6 +1,8 @@
 ---
 - name: Build frontend
   command: npm run build:aws
+  environment:
+    NEXT_PUBLIC_API_URL: "{{ api_gateway_url }}"
   args:
     chdir: ../../app/frontend
   run_once: true
@@ -21,5 +23,5 @@
     invalidation:
       paths:
         - "/*"
-      caller_reference: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+    caller_reference: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
   when: s3_sync.changed

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:aws": "next build",
     "start": "next start",
     "lint": "next lint",
     "docker:build": "docker build -t truetally-frontend .",

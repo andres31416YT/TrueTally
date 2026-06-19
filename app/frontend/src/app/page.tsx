@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import { generateKeyPair, signMessage, createVotePayload } from '@/lib/crypto';
 import { api, Election, NewElection, Candidate, AuthResponse } from '@/lib/api';
@@ -157,8 +157,7 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
 
 export default function VotingPage() {
   const pathname = usePathname();
-  const router = useRouter();
-  const isAuthRoute = pathname === '/login' || pathname === '/register';
+  const isAuthRoute = pathname === '/login/' || pathname === '/register/' || pathname === '/login' || pathname === '/register';
   const [step, setStep] = useState<Step>(isAuthRoute ? 'auth' : 'home');
   const [session, setSession] = useState<UserSession | null>(null);
   const [keyPair, setKeyPair] = useState<KeyPair | null>(null);
@@ -172,7 +171,7 @@ export default function VotingPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [authMode, setAuthMode] = useState<'login' | 'register'>(pathname === '/register' ? 'register' : 'login');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>(pathname === '/register/' || pathname === '/register' ? 'register' : 'login');
   const [authData, setAuthData] = useState({
     email: '',
 
@@ -263,16 +262,9 @@ export default function VotingPage() {
 
   // Navegar entre rutas cuando cambie el step o authMode
   useEffect(() => {
-    if (step === 'auth') {
-      if (authMode === 'register' && pathname !== '/register') {
-        router.push('/register');
-      } else if (authMode === 'login' && pathname !== '/login') {
-        router.push('/login');
-      }
-    } else if (step === 'home' && pathname !== '/') {
-      router.push('/');
-    }
-  }, [step, authMode, router, pathname]);
+    // Solo verificar consistencia del estado, sin router.push para static export
+    // Las rutas /login y /register ya renderizan este mismo componente
+  }, [step, authMode, pathname]);
 
   const loadElections = async () => {
     const res = await api.listElections();
@@ -781,13 +773,13 @@ export default function VotingPage() {
           ) : (
             <div className="flex gap-2">
               <button
-                onClick={() => router.push('/login')}
+                onClick={() => window.location.assign('/login/')}
                 className="bg-green-600 px-4 py-2 rounded-lg hover:bg-green-700 text-sm font-medium"
               >
                 Iniciar Sesión
               </button>
               <button
-                onClick={() => router.push('/register')}
+                onClick={() => window.location.assign('/register/')}
                 className="bg-white text-blue-800 px-4 py-2 rounded-lg hover:bg-gray-100 text-sm font-medium"
               >
                 Registrarse
@@ -815,10 +807,10 @@ export default function VotingPage() {
             {!session && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center mb-4">
                 <p className="text-blue-700">
-                  <button onClick={() => { setAuthMode('login'); setStep('auth'); }} className="underline font-medium">
+                  <button onClick={() => window.location.assign('/login/')} className="underline font-medium">
                     Inicia sesión
-                  </button> o
-                  <button onClick={() => router.push('/register')} className="underline font-medium">
+                  </button> o{' '}
+                  <button onClick={() => window.location.assign('/register/')} className="underline font-medium">
                     regístrate
                   </button> para poder votar
                 </p>
@@ -991,14 +983,14 @@ export default function VotingPage() {
                 {authMode === 'login' ? (
                   <>
                     ¿No tienes cuenta?{' '}
-                    <button onClick={() => router.push('/register')} className="underline text-blue-600">
+                    <button onClick={() => window.location.assign('/register/')} className="underline text-blue-600">
                       Regístrate
                     </button>
                   </>
                 ) : (
                   <>
                     ¿Ya tienes cuenta?{' '}
-                    <button onClick={() => router.push('/login')} className="underline text-blue-600">
+                    <button onClick={() => window.location.assign('/login/')} className="underline text-blue-600">
                       Inicia sesión
                     </button>
                   </>
@@ -1006,7 +998,7 @@ export default function VotingPage() {
               </div>
 
               <button
-                onClick={() => setStep('home')}
+                onClick={() => window.location.assign('/')}
                 className="w-full text-gray-500 py-2 text-sm hover:text-gray-700"
               >
                 ← Volver sin iniciar sesión
