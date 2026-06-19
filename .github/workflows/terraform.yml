@@ -144,7 +144,6 @@ jobs:
         run: |
           npm ci
           npm run build
-          echo "FRONTEND_DIR=$(pwd)" >> $GITHUB_ENV
 
       - name: Upload Lambda artifacts
         uses: actions/upload-artifact@v4
@@ -225,7 +224,7 @@ jobs:
             github.rest.issues.createComment({
               ...context.repo,
               issue_number: context.issue.number,
-              body: '### Terraform Plan (${{ steps.env.outputs.env_name }})\n```\n' + truncated + '\n```'
+              body: '### Terraform Plan (${{ steps.env.outputs.env_name }})\\n```\\n' + truncated + '\\n```'
             });
 
       - name: Guardar plan como artefacto
@@ -297,9 +296,6 @@ jobs:
         run: |
           cd terraform/environments/dev
           terraform apply -input=false -auto-approve tfplan
-
-       - name: Create frontend out directory
-         run: mkdir -p app/frontend/out
 
       - name: Deploy Frontend to S3
         run: |
@@ -376,9 +372,6 @@ jobs:
         run: |
           cd terraform/environments/prod
           terraform apply -input=false -auto-approve tfplan
-
-       - name: Create frontend out directory
-         run: mkdir -p app/frontend/out
 
       - name: Deploy Frontend to S3
         run: |
