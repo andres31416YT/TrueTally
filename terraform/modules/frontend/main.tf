@@ -108,14 +108,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "frontend" {
 resource "aws_s3_bucket_public_access_block" "frontend" {
   bucket = aws_s3_bucket.frontend.id
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_cloudfront_origin_access_control" "frontend" {
-  name = "${local.name_prefix}-oac"
+  block_public_acls       = false
+  block_public_policy       = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
 }
 
 resource "aws_s3_bucket_policy" "frontend" {
@@ -125,21 +121,48 @@ resource "aws_s3_bucket_policy" "frontend" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowCloudFrontAccess"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudfront.amazonaws.com"
-        }
-        Action   = "s3:GetObject"
-        Resource = "${aws_s3_bucket.frontend.arn}/*"
-        Condition = {
-          StringEquals = {
-            "AWS:SourceArn" = aws_cloudfront_distribution.frontend.arn
-          }
-        }
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.frontend.arn}/*"
       }
     ]
   })
+}
+
+resource "aws_s3_bucket_website_configuration" "frontend" {
+  bucket = aws_s3_bucket.frontend.id
+
+  index_document {
+    suffix = "index.html"
+  }
+
+  error_document {
+    key = "index.html"
+  }
+}
+
+resource "aws_acm_certificate" "frontend" {
+  count = var.create_acm_certificate ? 1 : 0
+
+  provider          = aws.us_east_1
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-acm-cert"
+  }
+}
+
+resource "aws_acm_certificate_validation" "frontend" {
+  count = var.create_acm_certificate ? 1 : 0
+
+  provider        = aws.us_east_1
+  certificate_arn = aws_acm_certificate.frontend[0].arn
 }
 
 resource "aws_cloudfront_distribution" "frontend" {
@@ -166,6 +189,7 @@ resource "aws_cloudfront_distribution" "frontend" {
     min_ttl                = 0
     default_ttl            = 3600
     max_ttl                = 86400
+    compress               = true
   }
 
   restrictions {
@@ -191,11 +215,16 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   origin {
-    domain_name = aws_s3_bucket.frontend.bucket_regional_domain_name
+    domain_name = "${local.name_prefix}-frontend.s3-website-${var.aws_region}.amazonaws.com"
     origin_id   = "s3-origin"
 
-    s3_origin_config {
-      origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy   = "http-only"
+      origin_ssl_protocols     = ["TLSv1.2"]
+      origin_read_timeout      = 30
+      origin_keepalive_timeout = 5
     }
   }
 }
