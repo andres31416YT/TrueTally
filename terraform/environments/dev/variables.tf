@@ -1,17 +1,21 @@
 variable "project_name" {
-  type = string
+  type    = string
+  default = "truetally"
 }
 
 variable "environment" {
-  type = string
+  type    = string
+  default = "dev"
 }
 
 variable "vpc_cidr" {
-  type = string
+  type    = string
+  default = "10.0.0.0/16"
 }
 
 variable "azs" {
-  type = list(string)
+  type    = list(string)
+  default = ["us-east-1a", "us-east-1b"]
 }
 
 variable "db_password" {
@@ -35,7 +39,8 @@ variable "lambda_node_url_az2" {
 }
 
 variable "domain_name" {
-  type = string
+  type    = string
+  default = "andrespaganroncall.qzz.io"
 }
 
 variable "create_acm_certificate" {
