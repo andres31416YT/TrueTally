@@ -88,6 +88,70 @@ jobs:
             -Dsonar.login="${{ secrets.SONAR_TOKEN }}" \
             -Dsonar.organization=truetally
 
+      - name: Analizar Lambda Acceso
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          docker run --rm \
+            -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
+            -e SONAR_PROJECT_BASE_DIR=/workspace \
+            -v "${{ github.workspace }}/app/lambda-acceso:/workspace" \
+            sonarsource/sonar-scanner-cli:latest \
+            -Dsonar.projectKey=truetally-backend \
+            -Dsonar.sources=src \
+            -Dsonar.branch.name="$BRANCH_NAME" \
+            -Dsonar.sourceEncoding=UTF-8 \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}" \
+            -Dsonar.organization=truetally
+
+      - name: Analizar Lambda Despachador
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          docker run --rm \
+            -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
+            -e SONAR_PROJECT_BASE_DIR=/workspace \
+            -v "${{ github.workspace }}/app/lambda-despachador:/workspace" \
+            sonarsource/sonar-scanner-cli:latest \
+            -Dsonar.projectKey=truetally-backend \
+            -Dsonar.sources=src \
+            -Dsonar.branch.name="$BRANCH_NAME" \
+            -Dsonar.sourceEncoding=UTF-8 \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}" \
+            -Dsonar.organization=truetally
+
+      - name: Analizar Lambda Procesador
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          docker run --rm \
+            -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
+            -e SONAR_PROJECT_BASE_DIR=/workspace \
+            -v "${{ github.workspace }}/app/lambda-procesador:/workspace" \
+            sonarsource/sonar-scanner-cli:latest \
+            -Dsonar.projectKey=truetally-backend \
+            -Dsonar.sources=src \
+            -Dsonar.branch.name="$BRANCH_NAME" \
+            -Dsonar.sourceEncoding=UTF-8 \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}" \
+            -Dsonar.organization=truetally
+
+      - name: Analizar Blockchain Core (Rust)
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          docker run --rm \
+            -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
+            -e SONAR_PROJECT_BASE_DIR=/workspace \
+            -v "${{ github.workspace }}/app/blockchain-core:/workspace" \
+            sonarsource/sonar-scanner-cli:latest \
+            -Dsonar.projectKey=truetally-blockchain \
+            -Dsonar.sources=src \
+            -Dsonar.branch.name="$BRANCH_NAME" \
+            -Dsonar.sourceEncoding=UTF-8 \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}" \
+            -Dsonar.organization=truetally
+
   plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
