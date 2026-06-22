@@ -47,6 +47,8 @@ jobs:
     name: SonarQube Code Analysis
     runs-on: ubuntu-latest
     needs: security
+    env:
+      SONAR_BRANCH: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}
 
     steps:
       - name: Checkout del código
@@ -56,7 +58,7 @@ jobs:
 
       - name: Analizar Frontend (Next.js / TypeScript)
         run: |
-          BRANCH_NAME="${{ github.ref_name }}"
+          BRANCH_NAME="${{ env.SONAR_BRANCH }}"
           docker run --rm \
             -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
             -e SONAR_PROJECT_BASE_DIR=/workspace \
@@ -74,7 +76,7 @@ jobs:
 
       - name: Analizar Lambda Acceso
         run: |
-          BRANCH_NAME="${{ github.ref_name }}"
+          BRANCH_NAME="${{ env.SONAR_BRANCH }}"
           docker run --rm \
             -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
             -e SONAR_PROJECT_BASE_DIR=/workspace \
@@ -122,7 +124,7 @@ jobs:
 
       - name: Analizar Blockchain Core (Rust)
         run: |
-          BRANCH_NAME="${{ github.ref_name }}"
+          BRANCH_NAME="${{ env.SONAR_BRANCH }}"
           docker run --rm \
             -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
             -e SONAR_PROJECT_BASE_DIR=/workspace \
