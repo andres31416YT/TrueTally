@@ -45,6 +45,7 @@ jobs:
 
   sonarqube-security:
     name: SonarQube Code Analysis
+    runs-on: ubuntu-latest
     needs: security
 
     steps:
