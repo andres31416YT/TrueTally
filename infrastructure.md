@@ -1,4 +1,4 @@
-# Infrastructure Architecture — Voting System
+# Infrastructure Architecture — TrueTally
 
 ## Flow Diagram
 
@@ -12,145 +12,105 @@ flowchart TD
         Route53[Route 53]
         CloudFront[CloudFront CDN]
         WAF[AWS WAF]
-        S3[S3 Bucket<br/>Sitio estático]
-        ALB[Application Load Balancer]
+        S3[S3 Bucket<br/>Frontend Estático]
+        ALB[Application Load Balancer<br/>Blockchain Node :9944]
 
         subgraph VPC
             direction TB
 
-            %% ── AZ us-east-1a ──
-            subgraph AZ1[""🟦 Availability Zone us-east-1a""]
-                Subnet1Computo[Subred Privada — Cómputo]
+            subgraph AZ1["🟦 Availability Zone us-east-1a"]
+                Subnet1Public[Subred Pública]
+                Subnet1Compute[Subred Privada — Cómputo]
                 Subnet1DB[Subred Privada — Database]
                 Subnet1Block[Subred Privada — Blockchain]
 
                 subgraph LambdasAZ1
-                    L1Acceso[Lambda Acceso AZ1<br/>max 5 · escala 80%]
-                    L1Desp[Lambda Despachador AZ1<br/>max 5 · escala 80%]
-                    L1Proc[Lambda Procesador AZ1<br/>max 5 · escala 80%]
+                    L1Acceso[Lambda Acceso AZ1<br/>provided.al2]
+                    L1Desp[Lambda Despachador AZ1<br/>provided.al2]
+                    L1Proc[Lambda Procesador AZ1<br/>provided.al2]
                 end
 
                 subgraph DB_AZ1
-                    RDSProxy1[RDS Proxy / Connection Pool]
-                    Aurora1[Aurora Serverless v2<br/>Primaria]
-                    Cache1[ElastiCache Redis]
+                    RDS1[RDS PostgreSQL 15.7<br/>db.t3.micro | 20 GB]
+                    Cache1[ElastiCache Redis 7.1<br/>cache.t3.micro]
                 end
 
                 subgraph Chain1
-                    ECS1[ECS Cluster — Blockchain Cluster]
-                    ECS_Svc1[ECS Service — Blockchain Service]
                     Fargate1[Fargate Task<br/>Blockchain Node]
-                    EFS1["Elastic File System (EFS)"]
                 end
 
-                SQS1[SQS Queue + DLQ<br/>3 reintentos]
-
-                Subnet1Block --- ECS1
+                Subnet1Block --- Fargate1
             end
 
-            %% ── AZ us-east-1b ──
-            subgraph AZ2[""🟩 Availability Zone us-east-1b""]
-                Subnet2Computo[Subred Privada — Cómputo]
+            subgraph AZ2["🟩 Availability Zone us-east-1b"]
+                Subnet2Public[Subred Pública]
+                Subnet2Compute[Subred Privada — Cómputo]
                 Subnet2DB[Subred Privada — Database]
                 Subnet2Block[Subred Privada — Blockchain]
 
                 subgraph LambdasAZ2
-                    L2Acceso[Lambda Acceso AZ2<br/>max 5 · escala 80%]
-                    L2Desp[Lambda Despachador AZ2<br/>max 5 · escala 80%]
-                    L2Proc[Lambda Procesador AZ2<br/>max 5 · escala 80%]
+                    L2Acceso[Lambda Acceso AZ2<br/>provided.al2]
+                    L2Desp[Lambda Despachador AZ2<br/>provided.al2]
+                    L2Proc[Lambda Procesador AZ2<br/>provided.al2]
                 end
 
                 subgraph DB_AZ2
-                    RDSProxy2[RDS Proxy / Connection Pool]
-                    Aurora2[Aurora Serverless v2<br/>Réplica síncrona AZ1]
-                    Cache2[ElastiCache Redis]
+                    RDS2[RDS PostgreSQL 15.7<br/>Instancia Base de Datos]
+                    Cache2[ElastiCache Redis 7.1<br/>cache.t3.micro]
                 end
 
                 subgraph Chain2
-                    ECS2[ECS Cluster — Blockchain Cluster]
-                    ECS_Svc2[ECS Service — Blockchain Service]
                     Fargate2[Fargate Task<br/>Blockchain Node]
-                    EFS2["Elastic File System (EFS)
-compartido entre AZ"]
                 end
 
-                SQS2[SQS Queue + DLQ<br/>3 reintentos]
-
-                Subnet2Block --- ECS2
+                Subnet2Block --- Fargate2
             end
 
-            %% Servicios compartidos
-            API_GW1[API Gateway AZ1]
-            API_GW2[API Gateway AZ2]
-            SES_VPC[VPC Endpoint — SES]
+            SQS[SQS Queue + DLQ<br/>3 reintentos]
+            EFS[Elastic File System (EFS)<br/>Compartido multi-AZ]
             SecretsMgr[Secrets Manager]
-            KMS[AWS KMS<br/>Encriptación]
-
-            subgraph Monitoring
-                CloudWatch[CloudWatch]
-                XRay[X-Ray]
-            end
-
-            IAM[IAM Roles Mínimo Privilegio]
+            KMS[AWS KMS]
+            CloudWatch[CloudWatch]
+            ECR[ECR Repository]
         end
     end
 
-    %% Conexiones externas
     User -->|HTTPS / DNS| Route53
     Route53 -->|Alias| CloudFront
     CloudFront --> WAF
     CloudFront -.->|Contenido estático| S3
     CloudFront -->|Proxy API| ALB
 
-    %% Trafico balanceado
-    ALB -->|Tráfico| API_GW1
-    ALB -->|Tráfico| API_GW2
+    ALB -->|Tráfico| Fargate1
+    ALB -->|Tráfico| Fargate2
 
-    %% Acceso Lambda flujo
-    L1Acceso --> API_GW1
-    L2Acceso --> API_GW2
-    L1Acceso -->|Email (SES)| SES_VPC
-    L2Acceso -->|Email (SES)| SES_VPC
     L1Acceso -->|Credenciales| SecretsMgr
     L2Acceso -->|Credenciales| SecretsMgr
+    L1Acceso -->|Email| SES_VPC
+    L2Acceso -->|Email| SES_VPC
 
-    %% Despachador flujo
-    L1Desp --> API_GW1 -->|Emite voto| SQS1
-    L2Desp --> API_GW2 -->|Emite voto| SQS2
+    L1Desp -->|Emite voto| SQS
+    L2Desp -->|Emite voto| SQS
 
-    %% Procesador flujo
-    SQS1 -->|Recibe voto| L1Proc
-    SQS2 -->|Recibe voto| L2Proc
+    SQS -->|Recibe voto| L1Proc
+    SQS -->|Recibe voto| L2Proc
 
     L1Proc -->|Envío voto| Fargate1
     L2Proc -->|Envío voto| Fargate2
 
-    %% Blockchain Node ↔ DB
-    Fargate1 -->|Lee escribe| EFS1
-    Fargate2 -->|Lee escribe| EFS2
-    Fargate1 -->|Leer/Escribir| RDSProxy1
-    Fargate2 -->|Leer/Escribir| RDSProxy2
-
-    %% Blockchain P2P entre AZ
     Fargate1 <==>|P2P Sync| Fargate2
+    Fargate1 -->|Lectura/Escritura| RDS1
+    Fargate2 -->|Lectura/Escritura| RDS2
 
-    %% Replicación BD entre AZ
-    Aurora1 <==>|Replicación Síncrona Intra-AZ| Aurora2
+    Fargate1 --- EFS
+    Fargate2 --- EFS
 
-    %% Cache
-    Cache1 <==>|Cache| Aurora1
-    Cache2 <==>|Cache| Aurora2
+    Cache1 -.->|Cache| RDS1
+    Cache2 -.->|Cache| RDS2
 
-    %% Seguridad / Apoyo transversal
-    SecretsMgr -->|Credenciales sensibles| L1Acceso & L2Acceso & L1Desp, L2Desp & L1Proc & L2Proc & Fargate1 & Fargate2
-    KMS -->|Encriptación en reposo| Aurora1 & Aurora2 & EFS1 & EFS2 & S3 & SQS1 & SQS2
-    IAM -->|Roles| L1Acceso & L2Acceso & L1Desp, L2Desp & L1Proc & L2Proc & Fargate1 & Fargate2
-    CloudWatch -.->|Métricas / Logs| L1Acceso & L2Acceso & L1Desp, L2Desp & L1Proc & L2Proc & Fargate1 & Fargate2 & ALB & SQS1 & SQS2 & Aurora1 & Aurora2
-    XRay -.->|Trazabilidad| L1Acceso & L2Acceso & L1Desp, L2Desp & L1Proc & L2Proc & Fargate1 & Fargate2
-
-    %% DLQ
-    SQS1 -.->|Max 3 reintentos fallidos| DLQ1[Dead Letter Queue AZ1]
-    SQS2 -.->|Max 3 reintentos fallidos| DLQ2[Dead Letter Queue AZ2]
+    KMS -->|Encriptación| RDS1 & RDS2 & EFS & S3 & SQS
+    SecretsMgr -->|Credenciales| L1Acceso & L2Acceso & L1Desp & L2Desp & L1Proc & L2Proc & Fargate1 & Fargate2
+    CloudWatch -.->|Métricas/Logs| Lambdas & Fargate1 & Fargate2 & SQS & RDS & ECS
 ```
 
 ---
@@ -161,40 +121,44 @@ compartido entre AZ"]
 |-------------|-------------|
 | **Route 53** | DNS administrado. Recibe la solicitud del usuario hacia el dominio del sistema. |
 | **CloudFront CDN** | Distribución de contenido. Sirve assets estáticos desde S3 y redirige las peticiones de API hacia el ALB. |
-| **S3 Bucket** | Almacena el sitio web estático (frontend) servido a través de CloudFront. |
+| **S3 Bucket** | Almacena el frontend estático (Next.js export) servido a través de CloudFront. |
 | **AWS WAF** | Firewall de aplicaciones web asociado a CloudFront. Protege contra SQL injection, XSS, bots y ataques comunes (OWASP Top 10). |
-| **Application Load Balancer (ALB)** | Balanceador de carga regional. Distribuye el tráfico entrante entre las dos AZs (us-east-1a, us-east-1b). |
+| **Application Load Balancer (ALB)** | Balanceador de carga regional. Expone el servicio blockchain (ECS Fargate) sobre el puerto 9944. |
 
 ---
 
 ## 2. Red (VPC)
 
-Topología por zona de disponibilidad, cada una contiene tres subredes privadas:
+Topología por zona de disponibilidad, cada una contiene tres subredes privadas y una pública:
 
 | Subred | Contenido por AZ |
 |---------|-------------------|
-| **Cómputo** | API Gateway, Lambdas (Acceso, Despachador, Procesador) |
-| **Database** | RDS Proxy, Aurora Serverless v2, ElastiCache (Redis) |
+| **Pública** | Recursos con acceso a Internet (NAT Gateway, ALB). |
+| **Cómputo** | Lambdas (Acceso, Despachador, Procesador) |
+| **Database** | RDS PostgreSQL, ElastiCache (Redis) |
 | **Blockchain** | ECS Cluster → ECS Service → Fargate Task (Blockchain Node) |
 
-- Las subredes son **privadas**; no tienen acceso directo a Internet.
-- La conectividad hacia servicios AWS gestionados (S3, SES, Secrets Manager, SQS, etc.) se realiza por **VPC Gateway Endpoints** o **VPC Interface Endpoints**, sin NAT Gateway.
+- Las subredes de cómputo, base de datos y blockchain son **privadas**.
+- Conectividad a servicios AWS gestionados (S3, Secrets Manager, SQS) por **VPC Gateway / Interface Endpoints**.
+- **VPC Flow Logs** en CloudWatch para auditoría de tráfico de red.
 
 ---
 
 ## 3. Servicio de Cómputo (Lambdas)
 
-Por cada AZ existen **tres Lambdas**. Máximo **5 instancias por Lambda**. Política de auto-scaling: se escala cuando la utilización alcanza el **80%**.
+Por cada AZ existen **tres Lambdas** funcionales (Acceso, Despachador, Procesador). En el despliegue operativo se instancian por zona (`-az1`, `-az2`), totalizando **6 Lambdas** en ejecución.
 
 | Lambda | Función | Acciones |
 |---------|----------|---------|
-| **Acceso** | Autenticación y gestión de cuentas | Registro, login, validación de identidad. Se conecta a SES a través de un **VPC Endpoint** para envío de correos. |
+| **Acceso** | Autenticación y gestión de cuentas | Registro, login, validación de identidad. Se conecta a **SES** a través de VPC Endpoint para envío de correos. |
 | **Despachador** | Orquestación del voto | Recibe la solicitud de voto, la valida y la deposita en **SQS Queue**. |
-| **Procesador** | Ejecutor del voto en blockchain | Recibe mensajes desde SQS y envía el voto a la blockchain node por gRPC/REST. |
+| **Procesador** | Ejecutor del voto en blockchain | Recibe mensajes desde SQS y envía el voto al nodo blockchain por gRPC/REST. |
 
+- Runtime: `provided.al2` (Rust compilado como binary).
 - Cada Lambda tiene su propio **IAM Role con mínimo privilegio**.
 - Usan **Secrets Manager** para obtener credenciales de base de datos y servicios.
-- Toda la comunicación entre Lambdas se realiza por API Gateway o SQS. No hay invocación directa cross-Lambda.
+- Política de reserva: `reserved_concurrency: 5` por función.
+- Escalonan dentro de las subredes privadas de cómputo.
 
 ---
 
@@ -202,8 +166,8 @@ Por cada AZ existen **tres Lambdas**. Máximo **5 instancias por Lambda**. Polí
 
 | Componente | Descripción |
 |-------------|-------------|
-| **SQS Queue (x2)** | Cola estándar entre Lambda Despachador y Lambda Procesador. Una cola por AZ. Desacopla la emisión del voto de su procesamiento. |
-| **DLQ (x2)** | Cola de mensajes muertos asociada a cada SQS Queue. Máximo **3 reintentos** antes de enviar el mensaje fallido a la DLQ. |
+| **SQS Queue** | Cola estándar entre Lambda Despachador y Lambda Procesador. Desacopla la emisión del voto de su procesamiento. |
+| **DLQ** | Cola de mensajes muertos asociada. Máximo **3 reintentos** antes de enviar el mensaje fallido a la DLQ. |
 
 ---
 
@@ -211,12 +175,12 @@ Por cada AZ existen **tres Lambdas**. Máximo **5 instancias por Lambda**. Polí
 
 | Componente | Descripción |
 |-------------|-------------|
-| **Aurora Serverless v2** | Motor de base de datos. Instancia primaria en us-east-1a, réplica síncrona en us-east-1b para alta disponibilidad inmediata. |
-| **RDS Proxy** | Pool de conexiones frente a Aurora. Reduce la cantidad de conexiones abiertas y mejora la escalabilidad de Lambdas. |
-| **ElastiCache (Redis)** | Caché de lectura frente a Aurora para reducir la latencia en consultas repetitivas. |
-| **** | Sistema de archivos elástico compartido. Utilizado por los nodos blockchain para persistir datos estructurados. |
-| **Replicación BD** | Replicación **síncrona** (intra-región) entre instancias de Aurora en us-east-1a y us-east-1b. Replicación **asíncrona** hacia región de respaldo fuera de us-east-1 para protección contra pérdida de datos. |
+| **RDS PostgreSQL 15.7** | Motor de base de datos principal. Instancia `db.t3.micro`, 20 GB, almacenamiento SSD (gp2 por defecto). Cifrado en reposo mediante **KMS**. Base de datos: `truetally`. |
+| **ElastiCache Redis 7.1** | Caché de lectura frente a PostgreSQL para reducir la latencia en consultas repetitivas. Nodo `cache.t3.micro`. |
+| **Elastic File System (EFS)** | Sistema de archivos elástico compartido entre AZs. Cada Fargate Task monta el volumen EFS para persistir datos locales del nodo blockchain. |
 | **Encriptación** | Todos los datos en reposo son encriptados mediante **AWS KMS**. |
+
+> **Nota:** No se utiliza RDS Proxy ni Aurora Serverless v2 en la versión actual del código Terraform. La base de datos se accede directamente desde las Lambdas y ECS mediante credenciales obtenidas de Secrets Manager.
 
 ---
 
@@ -224,10 +188,10 @@ Por cada AZ existen **tres Lambdas**. Máximo **5 instancias por Lambda**. Polí
 
 | Componente | Descripción |
 |-------------|-------------|
-| **ECS Cluster** | Cluster denominado *Blockchain Cluster* por AZ. Administra la capacidad de cómputo blockchain. |
-| **ECS Service** | Servicio *Blockchain Service*. Mantiene la tarea deseada en ejecución continua. |
-| **Fargate Task** | Tarea *Blockchain Node*. Ejecuta la imagen Docker del nodo blockchain (peer). Sin gestión de servidores. |
-| **EFS** | Cada task Fargate monta un volumen EFS para persistir datos locales del nodo. |
+| **ECS Cluster** | Cluster denominado `truetally-dev-blockchain-cluster` / `truetally-prod-blockchain-cluster`. Administra la capacidad de cómputo blockchain. |
+| **ECS Service** | Servicio `truetally-dev-blockchain-service` / `truetally-prod-blockchain-service`. Mantiene la tarea deseada en ejecución continua. |
+| **Fargate Task** | Tarea `Blockchain Node`. Ejecuta la imagen Docker del nodo blockchain (peer) desde **ECR**. Sin gestión de servidores. CPU 512 / Memoria 1024. |
+| **EFS** | Cada task Fargate monta el volumen EFS (`/data`) para persistir datos locales del nodo. |
 | **Comunicación** | Los nodos blockchain de us-east-1a y us-east-1b se sincronizan mediante protocolo **P2P síncrono**. Si un nodo cae, el otro mantiene la continuidad y capacidad de consenso. |
 
 ---
@@ -236,21 +200,20 @@ Por cada AZ existen **tres Lambdas**. Máximo **5 instancias por Lambda**. Polí
 
 | Capa | Mecanismo |
 |-------|-----------|
-| **Red** | Subredes privadas, VPC Endpoints (SES, S3, SQS, Secrets Manager, etc.), sin NAT Gateway. |
+| **Red** | Subredes privadas, VPC Endpoints (S3, SQS, Secrets Manager), sin NAT Gateway para tráfico gestionado. |
 | **Identidad** | IAM Roles con mínimo privilegio por componente. No se usan accesos estáticos. |
-| **Encriptación** | KMS para encriptación en tránsito y en reposo (Aurora, EFS, S3, SQS). |
-| **Credenciales** | AWS Secrets Manager almacena contraseñas, claves API y conexiones a base de datos. Rotación automática recomendada. |
+| **Encriptación** | KMS para encriptación en tránsito y en reposo (RDS, EFS, S3, SQS). |
+| **Credenciales** | AWS Secrets Manager almacena contraseñas, claves API y conexiones a base de datos. |
 | **WAF** | Reglas managed para protección OWASP Top 10 y rate limiting contra abuso. |
-| **Auditoría** | X-Ray para trazabilidad de peticiones entre Lambdas, ALB y blockchain node. CloudWatch Logs con retención configurada. |
+| **Auditoría** | CloudWatch Logs con retención configurada. VPC Flow Logs habilitados. |
 
 ---
 
 ## 8. Escalabilidad y Disponibilidad
 
 - **2 Availability Zones** en **us-east-1**. Todo el tráfico de usuarios se balancea entre ambas AZs.
-- **Lambdas**: Cada una soporta hasta **5 instancias**. Escala al 80% de utilización.
-- **Aurora Serverless v2**: Escala capacidad de cómputo y memoria automáticamente según la demanda.
-- **ECS Fargate**: Escalado automático por service. La task se replica según métricas de CPU y memoria.
+- **Lambdas**: Hasta **5 instancias reservadas** por función. Escalonamiento automático según demanda.
+- **ECS Fargate**: Escalado automático por service según métricas de CPU y memoria.
 - **P2P Blockchain**: Sincronización síncrona entre nodos de ambas AZs — alta disponibilidad y consenso resiliente.
 
 ---
@@ -259,8 +222,10 @@ Por cada AZ existen **tres Lambdas**. Máximo **5 instancias por Lambda**. Polí
 
 | Servicio | Uso |
 |----------|-----|
-| **Amazon CloudWatch** | Métricas, alarmas y logs de Lambdas, ALB, RDS, ECS, SQS. Dashboards por componente. |
-| **AWS X-Ray** | Trazabilidad distribuida de extremo a extremo: desde la petición del usuario hasta el registro en blockchain. |
+| **Amazon CloudWatch** | Métricas, alarmas y logs de Lambdas, ECS, RDS, SQS, VPC. Dashboards por componente. |
+| **AWS X-Ray** | Trazabilidad distribuida de extremo a extremo (configurado en la arquitectura). |
+| **SonarQube (Cloud)** | Análisis estático de código en pipeline. |
+| **Checkov** | Escaneo de seguridad en infraestructura Terraform en pipeline. |
 
 ---
 
@@ -268,3 +233,13 @@ Por cada AZ existen **tres Lambdas**. Máximo **5 instancias por Lambda**. Polí
 
 - **Región principal**: `us-east-1`
 - **Zonas de disponibilidad**: `us-east-1a`, `us-east-1b`
+
+---
+
+## 11. Pipeline CI/CD
+
+- **Infraestructura**: Terraform 1.9.0 con back-end remoto en S3 (`truetally-terraform-state`). Plan en PRs a `main` y `develop`; Apply automático en push a ramas correspondientes.
+- **Contenedores**: ECR con escaneo automático en push.
+- **Lambdas**: Compilación cruzada Rust ARM64 (`aarch64-unknown-linux-musl`). ZIPs generados en pipeline y publicados como artefactos.
+- **Frontend**: Build Next.js en pipeline. Deploy a S3 + invalidación CloudFront post-deploy.
+- **Orquestación**: Ansible (inventario dinámico `aws_ec2`) para despliegue operativo de ECS, Lambdas, Database y Frontend.
