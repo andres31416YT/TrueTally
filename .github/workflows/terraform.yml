@@ -72,22 +72,6 @@ jobs:
             -Dsonar.login="${{ secrets.SONAR_TOKEN }}" \
             -Dsonar.organization=truetally
 
-      - name: Analizar Backend (Rust)
-        run: |
-          BRANCH_NAME="${{ github.ref_name }}"
-          docker run --rm \
-            -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
-            -e SONAR_PROJECT_BASE_DIR=/workspace \
-            -v "${{ github.workspace }}/app/api-rust:/workspace" \
-            sonarsource/sonar-scanner-cli:latest \
-            -Dsonar.projectKey=truetally-backend \
-            -Dsonar.sources=src \
-            -Dsonar.branch.name="$BRANCH_NAME" \
-            -Dsonar.sourceEncoding=UTF-8 \
-            -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.login="${{ secrets.SONAR_TOKEN }}" \
-            -Dsonar.organization=truetally
-
       - name: Analizar Lambda Acceso
         run: |
           BRANCH_NAME="${{ github.ref_name }}"
@@ -96,7 +80,7 @@ jobs:
             -e SONAR_PROJECT_BASE_DIR=/workspace \
             -v "${{ github.workspace }}/app/lambda-acceso:/workspace" \
             sonarsource/sonar-scanner-cli:latest \
-            -Dsonar.projectKey=truetally-backend \
+            -Dsonar.projectKey=truetally-lambda-acceso \
             -Dsonar.sources=src \
             -Dsonar.branch.name="$BRANCH_NAME" \
             -Dsonar.sourceEncoding=UTF-8 \
@@ -112,7 +96,7 @@ jobs:
             -e SONAR_PROJECT_BASE_DIR=/workspace \
             -v "${{ github.workspace }}/app/lambda-despachador:/workspace" \
             sonarsource/sonar-scanner-cli:latest \
-            -Dsonar.projectKey=truetally-backend \
+            -Dsonar.projectKey=truetally-lambda-despachador \
             -Dsonar.sources=src \
             -Dsonar.branch.name="$BRANCH_NAME" \
             -Dsonar.sourceEncoding=UTF-8 \
@@ -128,7 +112,7 @@ jobs:
             -e SONAR_PROJECT_BASE_DIR=/workspace \
             -v "${{ github.workspace }}/app/lambda-procesador:/workspace" \
             sonarsource/sonar-scanner-cli:latest \
-            -Dsonar.projectKey=truetally-backend \
+            -Dsonar.projectKey=truetally-lambda-procesador \
             -Dsonar.sources=src \
             -Dsonar.branch.name="$BRANCH_NAME" \
             -Dsonar.sourceEncoding=UTF-8 \
