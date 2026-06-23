@@ -1,4 +1,5 @@
 use lambda_runtime::{service_fn, Error, LambdaEvent};
+use reqwest::Client;
 use serde_json::json;
 use std::sync::Arc;
 use tracing::error;
@@ -48,10 +49,10 @@ fn error_response(status: i32, msg: &str) -> ApiGatewayResponse {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     shared::logging::init_logging("lambda-acceso");
-    
+
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://user:pass@localhost:5432/voting_db".to_string());
-    
+
     let mut retries = 5;
     let db_pool = loop {
         match shared::init_db(&database_url).await {
@@ -78,8 +79,11 @@ async fn main() -> Result<(), Error> {
             }
         }
     };
-    
-    let shared_state = Arc::new(SharedState { db_pool });
+
+    let blockchain_node_url = std::env::var("BLOCKCHAIN_NODE_URL")
+        .unwrap_or_else(|_| "http://localhost:9944".to_string());
+
+    let shared_state = Arc::new(SharedState { db_pool, blockchain_node_url, http_client: Client::new() });
 
     lambda_runtime::run(service_fn(move |event| {
         let state = shared_state.clone();
@@ -91,6 +95,8 @@ async fn main() -> Result<(), Error> {
 
 struct SharedState {
     db_pool: sqlx::PgPool,
+    blockchain_node_url: String,
+    http_client: Client,
 }
 
 async fn handle_request(
@@ -100,10 +106,10 @@ async fn handle_request(
     let path = event.payload.get("path").and_then(|v| v.as_str()).unwrap_or("");
     let method = event.payload.get("httpMethod").and_then(|v| v.as_str()).unwrap_or("GET");
     let body = event.payload.get("body").and_then(|v| v.as_str()).unwrap_or("{}");
-    
+
     match (method, path) {
         ("GET", "/health") => Ok(success_response("OK")),
-        
+
         // Auth & Users
         ("POST", "/auth") => {
             let payload: shared::AuthRequest = serde_json::from_str(body)?;
@@ -121,7 +127,7 @@ async fn handle_request(
             let payload: shared::ListUsersRequest = serde_json::from_str(body)?;
             Ok(list_users_handler(&state.db_pool, &payload).await)
         }
-        
+
         // Elections
         ("POST", "/elections") => {
             let payload: shared::NewElection = serde_json::from_str(body)?;
@@ -174,7 +180,7 @@ async fn handle_request(
                 Err(e) => Ok(error_response(500, &format!("Database error: {}", e))),
             }
         }
-        
+
         // Candidates
         ("POST", "/candidates") => {
             let payload: shared::NewCandidate = serde_json::from_str(body)?;
@@ -205,7 +211,7 @@ async fn handle_request(
             let candidate_id = payload.get("candidate_id").and_then(|v| v.as_i64()).unwrap_or(0) as i64;
             Ok(delete_candidate_handler(&state.db_pool, candidate_id).await)
         }
-        
+
         // Voters
         ("POST", "/register") => {
             let payload: shared::RegistrationRequest = serde_json::from_str(body)?;
@@ -217,7 +223,12 @@ async fn handle_request(
             let public_key = payload.get("public_key").and_then(|v| v.as_str()).unwrap_or("");
             Ok(get_voter_handler(&state.db_pool, election_id, public_key).await)
         }
-        
+
+        // Blockchain proxy
+        ("GET", "/blocks") => {
+            Ok(proxy_to_blockchain(&state).await)
+        }
+
         _ => Ok(error_response(404, "Not found")),
     }
 }
@@ -284,7 +295,7 @@ async fn update_role(
     payload: &shared::RoleUpdateRequest,
 ) -> ApiGatewayResponse {
     let is_sudo = payload.admin_email == "admin@truetally.com";
-    
+
     if !is_sudo {
         match shared::authenticate_user(pool, &payload.admin_email, None).await {
             Ok(Some((role, _, _))) => {
@@ -310,7 +321,7 @@ async fn list_users_handler(
     payload: &shared::ListUsersRequest,
 ) -> ApiGatewayResponse {
     let is_sudo = payload.admin_email == "admin@truetally.com";
-    
+
     if !is_sudo {
         match shared::authenticate_user(pool, &payload.admin_email, None).await {
             Ok(Some((role, _, _))) => {
@@ -334,7 +345,7 @@ async fn create_election_handler(
     payload: &shared::NewElection,
 ) -> ApiGatewayResponse {
     let election_id = uuid::Uuid::new_v4().to_string()[..8].to_string();
-    
+
     match shared::create_election(
         pool,
         &election_id,
@@ -379,7 +390,7 @@ async fn update_election_handler(
         Ok(None) => return error_response(404, "Elección no encontrada"),
         Err(e) => return error_response(500, &format!("Error: {}", e)),
     }
-    
+
     match shared::update_election(
         pool,
         &payload.election_id,
@@ -413,7 +424,7 @@ async fn delete_election_handler(
         Ok(None) => return error_response(404, "Elección no encontrada"),
         Err(e) => return error_response(500, &format!("Error: {}", e)),
     }
-    
+
     match shared::hard_delete_election(pool, &payload.election_id).await {
         Ok(_) => {
             let _ = shared::log_audit(pool, "election_deleted", &format!("election: {} (hard delete)", payload.election_id)).await;
@@ -519,5 +530,29 @@ async fn get_voter_handler(
         Ok(Some((name, has_voted))) => success_response(json!({"name": name, "has_voted": has_voted})),
         Ok(None) => error_response(404, "Voter not found"),
         Err(e) => error_response(500, &format!("Database error: {}", e)),
+    }
+}
+
+async fn proxy_to_blockchain(state: &Arc<SharedState>) -> ApiGatewayResponse {
+    let url = format!("{}/blocks", state.blockchain_node_url);
+
+    match state.http_client.get(&url).timeout(std::time::Duration::from_secs(3)).send().await {
+        Ok(resp) => {
+            let status = resp.status().as_u16() as i32;
+            match resp.text().await {
+                Ok(body) => {
+                    let mut headers = std::collections::HashMap::new();
+                    headers.insert("Content-Type".to_string(), "application/json".to_string());
+                    ApiGatewayResponse {
+                        status_code: status,
+                        headers,
+                        body,
+                        is_base64_encoded: false,
+                    }
+                }
+                Err(e) => error_response(502, &format!("Error reading blockchain response: {}", e)),
+            }
+        }
+        Err(e) => error_response(502, &format!("Error connecting to blockchain: {}", e)),
     }
 }

@@ -18,6 +18,18 @@
   set_fact:
     api_id: "{{ api_id_result.stdout }}"
 
+- name: Limpiar APIs duplicadas (mantener solo el API principal)
+  shell: |
+    API_IDS=$(aws apigatewayv2 get-apis --query "Items[?Name=='{{ name_prefix }}-api'].ApiId" --output text --region "{{ aws_region }}")
+    PRIMARY_API="{{ api_id }}"
+    for API_ID in $API_IDS; do
+      if [ "$API_ID" != "$PRIMARY_API" ] && [ "$API_ID" != "None" ]; then
+        echo "Eliminando API duplicada: $API_ID"
+        aws apigatewayv2 delete-api --api-id "$API_ID" --region "{{ aws_region }}" 2>/dev/null || true
+      fi
+    done
+  ignore_errors: true
+
 - name: Crear o obtener integración Lambda para acceso
   shell: |
     INTEGRATION_ID=$(aws apigatewayv2 get-integrations --api-id "{{ api_id }}" --query "Items[?IntegrationUri=='arn:aws:apigateway:{{ aws_region }}:lambda:path/2015-03-31/functions/arn:aws:lambda:{{ aws_region }}:{{ aws_account_id }}:function:{{ name_prefix }}-acceso/invocations'].IntegrationId | [0]" --output text --region "{{ aws_region }}")

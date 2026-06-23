@@ -160,36 +160,36 @@ jobs:
             echo "db_password=${{ secrets.TF_VAR_DB_PASSWORD_DEV }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Instalar Rust ARM64 toolchain
+      - name: Instalar Rust x86_64 toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-unknown-linux-musl
+          targets: x86_64-unknown-linux-musl
 
-      - name: Instalar toolchain cruzado ARM64 musl
+      - name: Instalar toolchain cruzado x86_64 musl
         uses: taiki-e/setup-cross-toolchain-action@v1
         with:
-          target: aarch64-unknown-linux-musl
+          target: x86_64-unknown-linux-musl
 
       - name: Instalar herramientas de Linkers y ZIP
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools zip unzip gcc-aarch64-linux-gnu
+          sudo apt-get install -y musl-tools zip unzip gcc-x86-64-linux-gnu
 
       - name: Generar empaquetados ZIP de Lambdas
         working-directory: app
         run: |
           mkdir -p "${{ github.workspace }}/terraform/artifacts"
           . "$HOME/.cargo/env"
-          cargo build --release --target aarch64-unknown-linux-musl -p lambda-acceso
-          cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
+          cargo build --release --target x86_64-unknown-linux-musl -p lambda-acceso
+          cp target/x86_64-unknown-linux-musl/release/bootstrap ./bootstrap
           zip -j "${{ github.workspace }}/terraform/artifacts/lambda-acceso.zip" ./bootstrap
           rm ./bootstrap
-          cargo build --release --target aarch64-unknown-linux-musl -p lambda-despachador
-          cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
+          cargo build --release --target x86_64-unknown-linux-musl -p lambda-despachador
+          cp target/x86_64-unknown-linux-musl/release/bootstrap ./bootstrap
           zip -j "${{ github.workspace }}/terraform/artifacts/lambda-despachador.zip" ./bootstrap
           rm ./bootstrap
-          cargo build --release --target aarch64-unknown-linux-musl -p lambda-procesador
-          cp target/aarch64-unknown-linux-musl/release/bootstrap ./bootstrap
+          cargo build --release --target x86_64-unknown-linux-musl -p lambda-procesador
+          cp target/x86_64-unknown-linux-musl/release/bootstrap ./bootstrap
           zip -j "${{ github.workspace }}/terraform/artifacts/lambda-procesador.zip" ./bootstrap
           rm ./bootstrap
 
