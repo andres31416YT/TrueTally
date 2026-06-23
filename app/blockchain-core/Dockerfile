@@ -7,7 +7,15 @@ WORKDIR /app
 
 COPY Cargo.toml ./
 COPY shared ./shared
+COPY lambda-acceso/Cargo.toml ./lambda-acceso/Cargo.toml
+COPY lambda-despachador/Cargo.toml ./lambda-despachador/Cargo.toml
+COPY lambda-procesador/Cargo.toml ./lambda-procesador/Cargo.toml
+COPY api-rust/Cargo.toml ./api-rust/Cargo.toml
 COPY blockchain-core/Cargo.toml ./blockchain-core/Cargo.toml
+COPY lambda-acceso/src ./lambda-acceso/src
+COPY lambda-despachador/src ./lambda-despachador/src
+COPY lambda-procesador/src ./lambda-procesador/src
+COPY api-rust/src ./api-rust/src
 COPY blockchain-core/src ./blockchain-core/src
 
 RUN cargo build --release -p blockchain-core --bin blockchain-node
