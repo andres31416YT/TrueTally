@@ -247,6 +247,11 @@ jobs:
           cd ${{ steps.env.outputs.env_path }}
           terraform validate
 
+      - name: Limpiar state del módulo frontend
+        run: |
+          cd ${{ steps.env.outputs.env_path }}
+          terraform state list 2>/dev/null | awk '/^module\.frontend\./ {print $1}' | xargs -r -n1 terraform state rm
+
       - name: Terraform Plan
         id: plan
         run: |
