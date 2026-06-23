@@ -60,6 +60,7 @@ module "compute" {
   public_subnet_ids           = module.networking.public_subnet_ids
   private_subnet_ids          = module.networking.private_subnet_ids
   blockchain_subnet_ids       = module.networking.blockchain_subnet_ids
+  azs                         = local.azs
   kms_key_arn                 = module.security.kms_key_arn
   lambda_security_group_id    = module.networking.lambda_security_group_id
   lambda_sg_arn               = module.networking.lambda_sg_arn

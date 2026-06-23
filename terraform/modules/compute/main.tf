@@ -3,7 +3,13 @@ variable "env" { type = string }
 variable "vpc_id" { type = string }
 variable "public_subnet_ids" { type = list(string) }
 variable "private_subnet_ids" { type = list(string) }
-variable "blockchain_subnet_ids" { type = list(string) }
+variable "azs" {
+  type = list(string)
+}
+
+variable "blockchain_subnet_ids" {
+  type = list(string)
+}
 variable "kms_key_arn" { type = string }
 variable "lambda_security_group_id" { type = string }
 variable "lambda_sg_arn" { type = string }
@@ -18,6 +24,11 @@ variable "lambda_zip_path" { type = string }
 
 locals {
   name_prefix = "${var.project_name}-${var.env}"
+
+  blockchain_mount_targets = {
+    for i, az in var.azs :
+    az => var.blockchain_subnet_ids[i]
+  }
 }
 
 # IAM Role for Lambda
@@ -219,10 +230,10 @@ resource "aws_security_group_rule" "efs_inbound" {
 }
 
 resource "aws_efs_mount_target" "blockchain" {
-  count = length(var.blockchain_subnet_ids)
+  for_each = local.blockchain_mount_targets
 
   file_system_id  = aws_efs_file_system.blockchain.id
-  subnet_id       = var.blockchain_subnet_ids[count.index]
+  subnet_id       = each.value
   security_groups = [var.lambda_security_group_id]
 }
 
