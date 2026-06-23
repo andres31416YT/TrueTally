@@ -6,7 +6,9 @@ RUN apk add --no-cache musl-dev openssl-dev pkgconfig
 WORKDIR /app
 
 COPY Cargo.toml ./
-COPY blockchain-core/src ./src
+COPY shared ./shared
+COPY blockchain-core/Cargo.toml ./blockchain-core/Cargo.toml
+COPY blockchain-core/src ./blockchain-core/src
 
 RUN cargo build --release -p blockchain-core --bin blockchain-node
 
