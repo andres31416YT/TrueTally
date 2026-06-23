@@ -28,6 +28,11 @@ variable "route53_zone_id" {
   default = ""
 }
 
+variable "enabled" {
+  type    = bool
+  default = true
+}
+
 locals {
   name_prefix = "${var.project_name}-${var.env}"
 }
@@ -43,11 +48,13 @@ terraform {
 }
 
 resource "aws_s3_bucket" "logs" {
+  count  = var.enabled ? 1 : 0
   bucket = "${local.name_prefix}-logs"
 }
 
 resource "aws_s3_bucket_versioning" "logs" {
-  bucket = aws_s3_bucket.logs.id
+  count   = var.enabled ? 1 : 0
+  bucket  = aws_s3_bucket.logs[0].id
 
   versioning_configuration {
     status = "Enabled"
@@ -55,7 +62,8 @@ resource "aws_s3_bucket_versioning" "logs" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
-  bucket = aws_s3_bucket.logs.id
+  count  = var.enabled ? 1 : 0
+  bucket = aws_s3_bucket.logs[0].id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -65,11 +73,13 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
 }
 
 resource "aws_s3_bucket" "frontend" {
+  count  = var.enabled ? 1 : 0
   bucket = "${local.name_prefix}-frontend"
 }
 
 resource "aws_s3_bucket_versioning" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
+  count   = var.enabled ? 1 : 0
+  bucket  = aws_s3_bucket.frontend[0].id
 
   versioning_configuration {
     status = "Enabled"
@@ -77,7 +87,8 @@ resource "aws_s3_bucket_versioning" "frontend" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
+  count   = var.enabled ? 1 : 0
+  bucket  = aws_s3_bucket.frontend[0].id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -87,13 +98,15 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
 }
 
 resource "aws_s3_bucket_logging" "frontend" {
-  bucket        = aws_s3_bucket.frontend.id
-  target_bucket = aws_s3_bucket.logs.id
+  count        = var.enabled ? 1 : 0
+  bucket       = aws_s3_bucket.frontend[0].id
+  target_bucket = aws_s3_bucket.logs[0].id
   target_prefix = "frontend-access-logs/"
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
+  count  = var.enabled ? 1 : 0
+  bucket = aws_s3_bucket.frontend[0].id
 
   rule {
     id     = "cleanup-old-versions"
@@ -106,16 +119,18 @@ resource "aws_s3_bucket_lifecycle_configuration" "frontend" {
 }
 
 resource "aws_s3_bucket_public_access_block" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
+  count  = var.enabled ? 1 : 0
+  bucket = aws_s3_bucket.frontend[0].id
 
   block_public_acls       = false
-  block_public_policy       = false
+  block_public_policy     = false
   ignore_public_acls      = false
   restrict_public_buckets = false
 }
 
 resource "aws_s3_bucket_policy" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
+  count  = var.enabled ? 1 : 0
+  bucket = aws_s3_bucket.frontend[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -124,14 +139,15 @@ resource "aws_s3_bucket_policy" "frontend" {
         Effect    = "Allow"
         Principal = "*"
         Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.frontend.arn}/*"
+        Resource  = "${aws_s3_bucket.frontend[0].arn}/*"
       }
     ]
   })
 }
 
 resource "aws_s3_bucket_website_configuration" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
+  count  = var.enabled ? 1 : 0
+  bucket = aws_s3_bucket.frontend[0].id
 
   index_document {
     suffix = "index.html"
@@ -143,7 +159,7 @@ resource "aws_s3_bucket_website_configuration" "frontend" {
 }
 
 resource "aws_acm_certificate" "frontend" {
-  count = var.create_acm_certificate ? 1 : 0
+  count = var.enabled && var.create_acm_certificate ? 1 : 0
 
   provider          = aws.us_east_1
   domain_name       = var.domain_name
@@ -159,14 +175,15 @@ resource "aws_acm_certificate" "frontend" {
 }
 
 resource "aws_acm_certificate_validation" "frontend" {
-  count = var.create_acm_certificate ? 1 : 0
+  count = var.enabled && var.create_acm_certificate ? 1 : 0
 
   provider        = aws.us_east_1
   certificate_arn = aws_acm_certificate.frontend[0].arn
 }
 
 resource "aws_cloudfront_distribution" "frontend" {
-  enabled             = true
+  count   = var.enabled ? 1 : 0
+  enabled = true
   is_ipv6_enabled     = true
   comment             = "Frontend for ${local.name_prefix}"
   default_root_object = "index.html"
@@ -230,17 +247,17 @@ resource "aws_cloudfront_distribution" "frontend" {
 }
 
 output "s3_bucket_name" {
-  value = aws_s3_bucket.frontend.id
+  value = var.enabled ? aws_s3_bucket.frontend[0].id : ""
 }
 
 output "cloudfront_domain_name" {
-  value = aws_cloudfront_distribution.frontend.domain_name
+  value = var.enabled ? aws_cloudfront_distribution.frontend[0].domain_name : ""
 }
 
 output "cloudfront_distribution_id" {
-  value = aws_cloudfront_distribution.frontend.id
+  value = var.enabled ? aws_cloudfront_distribution.frontend[0].id : ""
 }
 
 output "acm_certificate_arn" {
-  value = var.create_acm_certificate && length(aws_acm_certificate.frontend) > 0 ? aws_acm_certificate.frontend[0].arn : ""
+  value = var.enabled && var.create_acm_certificate && length(aws_acm_certificate.frontend) > 0 ? aws_acm_certificate.frontend[0].arn : ""
 }
