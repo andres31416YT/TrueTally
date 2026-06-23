@@ -10,6 +10,11 @@ variable "db_username" {
   type = string
 }
 
+variable "skip_final_snapshot" {
+  type    = bool
+  default = true
+}
+
 variable "db_password" {
   type      = string
   sensitive = true
@@ -134,20 +139,22 @@ resource "aws_security_group" "aurora" {
 }
 
 resource "aws_db_instance" "main" {
-  identifier         = "${local.name_prefix}-postgres"
-  engine             = "postgres"
-  engine_version     = "15.7"
-  instance_class     = "db.t3.micro"
-  allocated_storage  = 20
-  storage_encrypted  = true
-  kms_key_id         = var.kms_key_arn
-  username           = var.db_username
-  password           = var.db_password
-  db_name            = "truetally"
-  skip_final_snapshot = true
+  identifier          = "${local.name_prefix}-postgres"
+  engine              = "postgres"
+  engine_version      = "15.7"
+  instance_class      = "db.t3.micro"
+  allocated_storage   = 20
+  storage_encrypted   = true
+  kms_key_id          = var.kms_key_arn
+  username            = var.db_username
+  password            = var.db_password
+  db_name             = "truetally"
+  skip_final_snapshot = var.skip_final_snapshot
+
+  final_snapshot_identifier = var.skip_final_snapshot ? null : "${local.name_prefix}-postgres-final"
 
   vpc_security_group_ids = [aws_security_group.aurora.id]
-  db_subnet_group_name  = aws_db_subnet_group.main.name
+  db_subnet_group_name   = aws_db_subnet_group.main.name
 
   tags = {
     Name = "${local.name_prefix}-postgres"

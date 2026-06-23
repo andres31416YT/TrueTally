@@ -60,13 +60,28 @@ resource "aws_iam_role_policy" "lambda_ssm" {
         Action = [
           "ssm:DescribeInstanceInformation",
           "ssm:StartSession",
-          "ssm:SendCommand",
-          "secretsmanager:GetSecretValue",
+          "ssm:SendCommand"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = [
+          var.db_credentials_secret_arn,
+          var.redis_auth_token_secret_arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "sqs:ReceiveMessage",
           "sqs:DeleteMessage",
           "sqs:GetQueueAttributes"
         ]
-        Resource = "*"
+        Resource = var.vote_queue_arn
       }
     ]
   })
@@ -158,9 +173,9 @@ resource "aws_iam_role_policy_attachment" "ecs_task_ecr" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-resource "aws_iam_role_policy_attachment" "ecs_task_ssm" {
+resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   role       = aws_iam_role.ecs_task.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
 resource "aws_iam_role_policy" "ecs_task_efs" {
@@ -177,7 +192,7 @@ resource "aws_iam_role_policy" "ecs_task_efs" {
           "elasticfilesystem:ClientWrite",
           "elasticfilesystem:ClientRootAccess"
         ]
-        Resource = "*"
+        Resource = aws_efs_file_system.blockchain.arn
       }
     ]
   })
@@ -204,10 +219,10 @@ resource "aws_security_group_rule" "efs_inbound" {
 }
 
 resource "aws_efs_mount_target" "blockchain" {
-  for_each = toset(var.blockchain_subnet_ids)
+  count = length(var.blockchain_subnet_ids)
 
   file_system_id  = aws_efs_file_system.blockchain.id
-  subnet_id       = each.value
+  subnet_id       = var.blockchain_subnet_ids[count.index]
   security_groups = [var.lambda_security_group_id]
 }
 
@@ -279,7 +294,12 @@ resource "aws_ecs_service" "blockchain" {
     assign_public_ip = false
   }
 
-  lifecycle {
-    ignore_changes = [task_definition]
+  deployment_controller {
+    type = "ECS"
+  }
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
   }
 }

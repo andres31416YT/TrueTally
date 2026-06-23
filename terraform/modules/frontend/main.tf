@@ -53,8 +53,8 @@ resource "aws_s3_bucket" "logs" {
 }
 
 resource "aws_s3_bucket_versioning" "logs" {
-  count   = var.enabled ? 1 : 0
-  bucket  = aws_s3_bucket.logs[0].id
+  count  = var.enabled ? 1 : 0
+  bucket = aws_s3_bucket.logs[0].id
 
   versioning_configuration {
     status = "Enabled"
@@ -78,8 +78,8 @@ resource "aws_s3_bucket" "frontend" {
 }
 
 resource "aws_s3_bucket_versioning" "frontend" {
-  count   = var.enabled ? 1 : 0
-  bucket  = aws_s3_bucket.frontend[0].id
+  count  = var.enabled ? 1 : 0
+  bucket = aws_s3_bucket.frontend[0].id
 
   versioning_configuration {
     status = "Enabled"
@@ -87,8 +87,8 @@ resource "aws_s3_bucket_versioning" "frontend" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
-  count   = var.enabled ? 1 : 0
-  bucket  = aws_s3_bucket.frontend[0].id
+  count  = var.enabled ? 1 : 0
+  bucket = aws_s3_bucket.frontend[0].id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -98,8 +98,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
 }
 
 resource "aws_s3_bucket_logging" "frontend" {
-  count        = var.enabled ? 1 : 0
-  bucket       = aws_s3_bucket.frontend[0].id
+  count         = var.enabled ? 1 : 0
+  bucket        = aws_s3_bucket.frontend[0].id
   target_bucket = aws_s3_bucket.logs[0].id
   target_prefix = "frontend-access-logs/"
 }
@@ -182,8 +182,8 @@ resource "aws_acm_certificate_validation" "frontend" {
 }
 
 resource "aws_cloudfront_distribution" "frontend" {
-  count   = var.enabled ? 1 : 0
-  enabled = true
+  count               = var.enabled ? 1 : 0
+  enabled             = true
   is_ipv6_enabled     = true
   comment             = "Frontend for ${local.name_prefix}"
   default_root_object = "index.html"
@@ -236,8 +236,8 @@ resource "aws_cloudfront_distribution" "frontend" {
     origin_id   = "s3-origin"
 
     custom_origin_config {
-      http_port              = 80
-      https_port             = 443
+      http_port                = 80
+      https_port               = 443
       origin_protocol_policy   = "http-only"
       origin_ssl_protocols     = ["TLSv1.2"]
       origin_read_timeout      = 30

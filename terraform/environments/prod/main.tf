@@ -42,6 +42,7 @@ module "database" {
   database_sg_id              = module.networking.database_sg_id
   db_credentials_secret_arn   = module.security.db_credentials_secret_arn
   redis_auth_token_secret_arn = module.security.redis_auth_token_secret_arn
+  skip_final_snapshot         = false
 }
 
 module "messaging" {
