@@ -1,4 +1,4 @@
-name: Ansible Deploy via SSM
+name: Ansible Deploy
 
 on:
   workflow_run:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   configure:
-    name: Configurar servidores con Ansible
+    name: Configurar infraestructura con Ansible
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
 
@@ -34,37 +34,27 @@ jobs:
           pip install ansible boto3 botocore
           ansible-galaxy collection install amazon.aws community.general
 
-      - name: Instalar plugin SSM
-        run: |
-          curl -s 'https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb' \
-            -o ssm-plugin.deb
-          sudo dpkg -i ssm-plugin.deb || true
-
-      - name: Determinar ambiente y tag
+      - name: Determinar ambiente
         id: env
         run: |
           if [[ "${{ github.event.workflow_run.head_branch }}" == "main" ]]; then
-            echo "env=prod" >> $GITHUB_OUTPUT
-            echo "tag=Environment:prod" >> $GITHUB_OUTPUT
+            echo "truetally_env=prod" >> $GITHUB_OUTPUT
           else
-            echo "env=dev" >> $GITHUB_OUTPUT
-            echo "tag=Environment:dev" >> $GITHUB_OUTPUT
+            echo "truetally_env=dev" >> $GITHUB_OUTPUT
           fi
-
-      - name: Verificar conectividad SSM
-        run: |
-          aws ssm describe-instance-information \
-            --query 'InstanceInformationList[*].[InstanceId,PingStatus]' \
-            --output table
 
       - name: Ejecutar playbook de Ansible
         run: |
           ansible-playbook \
-            -i ansible/inventory/aws_ec2.yml \
-            --connection=aws_ssm \
             ansible/playbooks/site.yml \
+            --roles-path ansible/roles \
             -v \
-            --extra-vars "aws_environment_tag=${{ steps.env.outputs.tag }}"
+            --extra-vars "truetally_env=${{ steps.env.outputs.truetally_env }}"
         env:
           ANSIBLE_HOST_KEY_CHECKING: 'false'
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          SUDOADMIN_EMAIL: ${{ secrets.SUDOADMIN_EMAIL }}
+          SUDOADMIN_PASSWORD: ${{ secrets.SUDOADMIN_PASSWORD }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}

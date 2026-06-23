@@ -1,93 +1,146 @@
 ---
-- name: Desplegar Lambdas en AWS
-  amazon.aws.lambda_function:
-    name: "{{ name_prefix }}-{{ item.name }}"
-    state: present
-    runtime: "{{ lambda.runtime }}"
-    handler: "{{ lambda.handler }}"
-    role: "{{ item.role }}"
-    timeout: "{{ item.timeout }}"
-    memory_size: "{{ item.memory_size }}"
-    filename: "{{ item.filename }}"
-    vpc_subnet_ids: "{{ private_subnet_ids }}"
-    vpc_security_group_ids: ["{{ lambda_security_group_id }}"]
-    environment_variables: "{{ item.environment_variables | default({}) }}"
-    tags: "{{ common_tags }}"
-  loop:
-    - name: acceso-az1
-      role: "{{ lambda_acceso_role_arn }}"
-      timeout: "{{ lambda_acceso.timeout }}"
-      memory_size: "{{ lambda_acceso.memory_size }}"
-      filename: "../../app/lambda-acceso/target/release/bootstrap"
-      environment_variables:
-        DATABASE_URL: "{{ rds_proxy_endpoint }}"
-        BLOCKCHAIN_NODE_URL: "{{ blockchain_node_url_az1 }}"
-        REDIS_URL: "rediss://:{{ redis_auth_token }}@{{ redis_endpoint }}:{{ redis_port }}"
-        SQS_QUEUE_URL: "{{ sqs_queue_url }}"
-        SQS_DLQ_URL: "{{ sqs_dlq_url }}"
+- name: Obtener credenciales de DB desde Secrets Manager
+  shell: |
+    aws secretsmanager get-secret-value \
+      --secret-id "{{ name_prefix }}/db/credentials" \
+      --query 'SecretString' \
+      --output text \
+      --region "{{ aws_region }}"
+  register: db_secret_raw
 
-    - name: acceso-az2
-      role: "{{ lambda_acceso_role_arn }}"
-      timeout: "{{ lambda_acceso.timeout }}"
-      memory_size: "{{ lambda_acceso.memory_size }}"
-      filename: "../../app/lambda-acceso/target/release/bootstrap"
-      environment_variables:
-        DATABASE_URL: "{{ rds_proxy_endpoint }}"
-        BLOCKCHAIN_NODE_URL: "{{ blockchain_node_url_az2 }}"
-        REDIS_URL: "rediss://:{{ redis_auth_token }}@{{ redis_endpoint }}:{{ redis_port }}"
-        SQS_QUEUE_URL: "{{ sqs_queue_url }}"
-        SQS_DLQ_URL: "{{ sqs_dlq_url }}"
+- name: Obtener endpoint de RDS
+  shell: |
+    aws rds describe-db-instances --db-instance-identifier "{{ name_prefix }}-postgres" --query 'DBInstances[0].endpoint' --output json --region "{{ aws_region }}"
+  register: rds_endpoint_raw
 
-    - name: despachador-az1
-      role: "{{ lambda_despachador_role_arn }}"
-      timeout: "{{ lambda_despachador.timeout }}"
-      memory_size: "{{ lambda_despachador.memory_size }}"
-      filename: "../../app/lambda-despachador/target/release/bootstrap"
-      environment_variables:
-        VOTE_QUEUE_URL: "{{ sqs_queue_url }}"
-        SQS_DLQ_URL: "{{ sqs_dlq_url }}"
+- name: Parsear credenciales de DB
+  set_fact:
+    db_username: "{{ db_secret_raw.stdout | from_json | json_query('username') }}"
+    db_password: "{{ db_secret_raw.stdout | from_json | json_query('password') }}"
+    db_endpoint: "{{ rds_endpoint_raw.stdout | from_json | json_query('address') }}"
+    db_port: "{{ rds_endpoint_raw.stdout | from_json | json_query('port') }}"
 
-    - name: despachador-az2
-      role: "{{ lambda_despachador_role_arn }}"
-      timeout: "{{ lambda_despachador.timeout }}"
-      memory_size: "{{ lambda_despachador.memory_size }}"
-      filename: "../../app/lambda-despachador/target/release/bootstrap"
-      environment_variables:
-        VOTE_QUEUE_URL: "{{ sqs_queue_url }}"
-        SQS_DLQ_URL: "{{ sqs_dlq_url }}"
+- name: Construir DATABASE_URL
+  shell: |
+    python3 -c "from urllib.parse import quote; print('postgres://{{ db_username }}:' + quote('{{ db_password }}', safe='') + '@{{ db_endpoint }}:{{ db_port }}/truetally')"
+  register: database_url_result
 
-    - name: procesador-az1
-      role: "{{ lambda_procesador_role_arn }}"
-      timeout: "{{ lambda_procesador.timeout }}"
-      memory_size: "{{ lambda_procesador.memory_size }}"
-      filename: "../../app/lambda-procesador/target/release/bootstrap"
-      environment_variables:
-        BLOCKCHAIN_NODE_URL: "{{ blockchain_node_url_az1 }}"
-        SQS_QUEUE_URL: "{{ sqs_queue_url }}"
-        SQS_DLQ_URL: "{{ sqs_dlq_url }}"
+- name: Obtener variables actuales de lambda-acceso
+  shell: |
+    aws lambda get-function-configuration \
+      --function-name "{{ name_prefix }}-acceso" \
+      --region "{{ aws_region }}" \
+      --query 'Environment.Variables' \
+      --output json
+  register: lambda_acceso_env_raw
 
-    - name: procesador-az2
-      role: "{{ lambda_procesador_role_arn }}"
-      timeout: "{{ lambda_procesador.timeout }}"
-      memory_size: "{{ lambda_procesador.memory_size }}"
-      filename: "../../app/lambda-procesador/target/release/bootstrap"
-      environment_variables:
-        BLOCKCHAIN_NODE_URL: "{{ blockchain_node_url_az2 }}"
-        SQS_QUEUE_URL: "{{ sqs_queue_url }}"
-        SQS_DLQ_URL: "{{ sqs_dlq_url }}"
+- name: Obtener variables actuales de lambda-procesador
+  shell: |
+    aws lambda get-function-configuration \
+      --function-name "{{ name_prefix }}-procesador" \
+      --region "{{ aws_region }}" \
+      --query 'Environment.Variables' \
+      --output json
+  register: lambda_procesador_env_raw
 
-  register: lambda_result
+- name: Obtener variables actuales de lambda-despachador
+  shell: |
+    aws lambda get-function-configuration \
+      --function-name "{{ name_prefix }}-despachador" \
+      --region "{{ aws_region }}" \
+      --query 'Environment.Variables' \
+      --output json
+  register: lambda_despachador_env_raw
 
-- name: Configurar event source mapping SQS -> Procesador AZ1
-  amazon.aws.lambda_event_source_mapping:
-    event_source_arn: "{{ sqs_queue_url }}"
-    function_name: "{{ name_prefix }}-procesador-az1"
-    batch_size: 10
-    enabled: true
+- name: Calcular variables fusionadas para lambda-acceso
+  set_fact:
+    lambda_acceso_new_env: >-
+      {{ (lambda_acceso_env_raw.stdout | from_json | combine({
+        'DATABASE_URL': database_url_result.stdout,
+        'SUDOADMIN_EMAIL': sudoadmin_email,
+        'SUDOADMIN_PASSWORD': sudoadmin_password,
+        'ADMIN_EMAIL': admin_email,
+        'ADMIN_PASSWORD': admin_password
+      })) | to_json }}
 
-- name: Configurar event source mapping SQS -> Procesador AZ2
-  amazon.aws.lambda_event_source_mapping:
-    event_source_arn: "{{ sqs_queue_url }}"
-    function_name: "{{ name_prefix }}-procesador-az2"
-    batch_size: 10
-    enabled: true
+- name: Calcular variables fusionadas para lambda-procesador
+  set_fact:
+    lambda_procesador_new_env: >-
+      {{ (lambda_procesador_env_raw.stdout | from_json | combine({
+        'BLOCKCHAIN_NODE_URL': 'http://localhost:9944',
+        'SUDOADMIN_EMAIL': sudoadmin_email,
+        'SUDOADMIN_PASSWORD': sudoadmin_password,
+        'ADMIN_EMAIL': admin_email,
+        'ADMIN_PASSWORD': admin_password
+      })) | to_json }}
+
+- name: Calcular variables fusionadas para lambda-despachador
+  set_fact:
+    lambda_despachador_new_env: >-
+      {{ (lambda_despachador_env_raw.stdout | from_json | combine({
+        'VOTE_QUEUE_URL': 'https://sqs.{{ aws_region }}.amazonaws.com/{{ aws_account_id }}/{{ name_prefix }}-vote-queue',
+        'SUDOADMIN_EMAIL': sudoadmin_email,
+        'SUDOADMIN_PASSWORD': sudoadmin_password,
+        'ADMIN_EMAIL': admin_email,
+        'ADMIN_PASSWORD': admin_password
+      })) | to_json }}
+
+- name: Escribir variables fusionadas para lambda-acceso
+  copy:
+    content: "{{ lambda_acceso_new_env }}"
+    dest: /tmp/lambda_acceso_vars.json
+
+- name: Escribir variables fusionadas para lambda-procesador
+  copy:
+    content: "{{ lambda_procesador_new_env }}"
+    dest: /tmp/lambda_procesador_vars.json
+
+- name: Escribir variables fusionadas para lambda-despachador
+  copy:
+    content: "{{ lambda_despachador_new_env }}"
+    dest: /tmp/lambda_despachador_vars.json
+
+- name: Crear script de actualización Lambda
+  copy:
+    content: |
+      import json
+      import subprocess
+      import sys
+
+      function_name = sys.argv[1]
+      region = sys.argv[2]
+      variables_file = sys.argv[3]
+
+      with open(variables_file, 'r') as f:
+          variables = json.load(f)
+
+      config = {
+          'FunctionName': function_name,
+          'Environment': {
+              'Variables': variables
+          }
+      }
+
+      with open('/tmp/lambda_config.json', 'w') as f:
+          json.dump(config, f)
+
+      result = subprocess.run([
+          'aws', 'lambda', 'update-function-configuration',
+          '--cli-input-json', 'file:///tmp/lambda_config.json',
+          '--region', region
+      ], capture_output=True, text=True)
+
+      print(result.stdout)
+      if result.returncode != 0:
+          print(result.stderr, file=sys.stderr)
+          sys.exit(1)
+    dest: /tmp/update_lambda.py
+
+- name: Actualizar lambda-acceso
+  shell: python3 /tmp/update_lambda.py "{{ name_prefix }}-acceso" "{{ aws_region }}" /tmp/lambda_acceso_vars.json
+
+- name: Actualizar lambda-procesador
+  shell: python3 /tmp/update_lambda.py "{{ name_prefix }}-procesador" "{{ aws_region }}" /tmp/lambda_procesador_vars.json
+
+- name: Actualizar lambda-despachador
+  shell: python3 /tmp/update_lambda.py "{{ name_prefix }}-despachador" "{{ aws_region }}" /tmp/lambda_despachador_vars.json
