@@ -1,10 +1,8 @@
 name: Ansible Deploy
 
 on:
-  workflow_run:
-    workflows: ['Terraform CI/CD']
-    types: [completed]
-    branches: [main, develop]
+  push:
+    branches: [ main, develop ]
   workflow_dispatch:
 
 permissions:
