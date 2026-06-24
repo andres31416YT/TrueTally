@@ -1,4 +1,6 @@
-# workflow-sync-trigger: ansible-deploy registration test
+# Pipeline principal de Terraform
+# Se ejecuta automáticamente en push a las ramas main y develop
+# Encargado del aprovisionamiento de infraestructura (VPC, ECS, RDS, Lambda, S3, etc.)
 name: Terraform CI/CD
 
 on:
@@ -8,6 +10,10 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+# Permisos del workflow:
+# - id-token: write: necesario para autenticación OIDC con AWS
+# - contents: read: leer el código del repositorio
+# - pull-requests: write: comentar el plan de Terraform en PRs
 permissions:
   id-token: write
   contents: read
@@ -24,6 +30,12 @@ concurrency:
   group: terraform-${{ github.ref }}
   cancel-in-progress: true
 
+# Jobs del pipeline:
+# - security: escaneo de seguridad con Checkov
+# - sonarqube-security: análisis de código con SonarQube
+# - plan: planificación de Terraform
+# - apply-dev: aplicación en entorno de desarrollo
+# - apply-prod: aplicación en entorno de producción
 jobs:
   security:
     name: Security Scan (Checkov)

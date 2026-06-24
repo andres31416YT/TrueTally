@@ -1,5 +1,10 @@
+# Workflow de Ansible
+# Se ejecuta automáticamente después que Terraform CI/CD termine exitosamente
+# Encargado de configurar la infraestructura aprovisionada por Terraform
 name: Ansible Deploy
 
+# Trigger: se dispara cuando el workflow 'Terraform CI/CD' completa exitosamente
+# También puede ejecutarse manualmente con workflow_dispatch
 on:
   workflow_run:
     workflows: ['Terraform CI/CD']
@@ -7,11 +12,17 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+# Permisos necesarios:
+# - id-token: write: autenticación OIDC con AWS
+# - contents: read: leer el código del repositorio
+# - actions: read: leer el estado de otros workflows (workflow_run)
 permissions:
   id-token: write
   contents: read
   actions: read
 
+# Job principal: configura toda la infraestructura con Ansible
+# Ejecuta el playbook site.yml con los roles definidos en ansible/roles
 jobs:
   configure:
     name: Configurar infraestructura con Ansible
@@ -19,9 +30,11 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
 
     steps:
+      # Paso 1: descargar el código del repositorio
       - name: Checkout del código
         uses: actions/checkout@v4
 
+      # Paso 2: autenticarse con AWS usando OIDC (sin credenciales estáticas)
       - name: Autenticación con AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -29,12 +42,14 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
           mask-aws-account-id: true
 
+      # Paso 3: instalar Ansible y las colecciones de AWS necesarias
       - name: Instalar Ansible y dependencias
         run: |
           python -m pip install --upgrade pip
           pip install ansible boto3 botocore
           ansible-galaxy collection install amazon.aws community.general
 
+      # Paso 4: detectar si estamos en main (prod) o develop (dev)
       - name: Determinar ambiente
         id: env
         run: |
@@ -44,6 +59,10 @@ jobs:
             echo "truetally_env=dev" >> $GITHUB_OUTPUT
           fi
 
+      # Paso 5: ejecutar el playbook principal de Ansible
+      # - ANSIBLE_ROLES_PATH: ruta donde están los roles personalizados
+      # - inventario: hosts.ini (servidores EC2, ECS, Lambda, etc.)
+      # - extra-vars: variable truetally_env (dev o prod)
       - name: Ejecutar playbook de Ansible
         run: |
           ansible-playbook \
