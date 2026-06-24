@@ -1,0 +1,62 @@
+name: Ansible Deploy
+
+on:
+  workflow_run:
+    workflows: ['Terraform CI/CD']
+    types: [completed]
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+
+jobs:
+  configure:
+    name: Configurar infraestructura con Ansible
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Autenticación con AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Instalar Ansible y dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible boto3 botocore
+          ansible-galaxy collection install amazon.aws community.general
+
+      - name: Determinar ambiente
+        id: env
+        run: |
+          if [[ "${{ github.event.workflow_run.head_branch }}" == "main" ]] || [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "truetally_env=prod" >> $GITHUB_OUTPUT
+          else
+            echo "truetally_env=dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Ejecutar playbook de Ansible
+        run: |
+          ansible-playbook \
+            ansible/playbooks/site.yml \
+            --roles-path ansible/roles \
+            -v \
+            --extra-vars "truetally_env=${{ steps.env.outputs.truetally_env }}"
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: 'false'
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          SUDOADMIN_EMAIL: ${{ secrets.SUDOADMIN_EMAIL }}
+          SUDOADMIN_PASSWORD: ${{ secrets.SUDOADMIN_PASSWORD }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
