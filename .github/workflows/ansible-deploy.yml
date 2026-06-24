@@ -47,13 +47,13 @@ jobs:
       - name: Ejecutar playbook de Ansible
         run: |
           ansible-playbook \
-            --roles-path ansible/roles \
             -i ansible/inventory/hosts.ini \
             ansible/playbooks/site.yml \
             -v \
             --extra-vars "truetally_env=${{ steps.env.outputs.truetally_env }}"
         env:
           ANSIBLE_HOST_KEY_CHECKING: 'false'
+          ANSIBLE_ROLES_PATH: ansible/roles
           AWS_REGION: ${{ secrets.AWS_REGION }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
