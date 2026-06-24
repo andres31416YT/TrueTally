@@ -1,0 +1,36 @@
+truetally_env: "{{ lookup('env', 'ENVIRONMENT') | default('dev') }}"
+aws_region: "{{ lookup('env', 'AWS_REGION', default='us-east-1') }}"
+
+aws_account_id: "{{ lookup('env', 'AWS_ACCOUNT_ID', default='294960493570') }}"
+
+project_name: truetally
+name_prefix: "{{ project_name }}-{{ truetally_env }}"
+
+sudoadmin_email: "{{ lookup('env', 'SUDOADMIN_EMAIL', default='sudoadmin@sudoadmin.com') }}"
+sudoadmin_password: "{{ lookup('env', 'SUDOADMIN_PASSWORD', default='changeme_sudo') }}"
+admin_email: "{{ lookup('env', 'ADMIN_EMAIL', default='admin@admin.com') }}"
+admin_password: "{{ lookup('env', 'ADMIN_PASSWORD', default='changeme_admin') }}"
+
+database:
+  db_name: truetally
+  db_username: truetally
+
+ecs:
+  cluster_name: "{{ name_prefix }}-blockchain-cluster"
+  service_name: "{{ name_prefix }}-blockchain-service"
+  task_family: "{{ name_prefix }}-blockchain"
+  desired_count: 1
+
+frontend:
+  s3_bucket: "{{ name_prefix }}-frontend"
+  build_command: npm run build
+  dist_directory: out
+
+monitoring:
+  log_retention_days: 7
+  cloudwatch_namespace: "TrueTally/{{ truetally_env }}"
+
+common_tags:
+  Project: "{{ project_name }}"
+  Environment: "{{ truetally_env }}"
+  ManagedBy: "ansible"

@@ -1,0 +1,35 @@
+---
+- name: Obtener información de RDS
+  amazon.aws.rds_instance_info:
+    db_instance_identifier: "{{ name_prefix }}-postgres"
+  register: rds_info
+
+- name: Obtener credenciales de DB desde Secrets Manager
+  shell: |
+    aws secretsmanager get-secret-value \
+      --secret-id "{{ name_prefix }}/db/credentials" \
+      --query 'SecretString' \
+      --output text \
+      --region "{{ aws_region }}"
+  register: db_secret_raw
+
+- name: Parsear credenciales de DB
+  set_fact:
+    db_username: "{{ db_secret_raw.stdout | from_json | json_query('username') }}"
+    db_password: "{{ db_secret_raw.stdout | from_json | json_query('password') }}"
+    db_endpoint: "{{ rds_info.instances[0].endpoint.address }}"
+    db_port: "{{ rds_info.instances[0].endpoint.port }}"
+
+- name: Arrancar RDS si está stopped
+  amazon.aws.rds_instance:
+    db_instance_identifier: "{{ name_prefix }}-postgres"
+    state: started
+  when: rds_info.instances[0].db_instance_status == 'stopped'
+
+- name: Esperar a que RDS esté available
+  amazon.aws.rds_instance_info:
+    db_instance_identifier: "{{ name_prefix }}-postgres"
+  register: rds_status
+  until: rds_status.instances[0].db_instance_status == 'available'
+  retries: 30
+  delay: 10

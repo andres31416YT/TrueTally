@@ -1,0 +1,163 @@
+---
+- name: Crear o obtener API Gateway HTTP API
+  shell: |
+    API_ID=$(aws apigatewayv2 get-apis --query "Items[?Name=='{{ name_prefix }}-api'].ApiId | [0]" --output text --region "{{ aws_region }}")
+    if [ "$API_ID" = "None" ] || [ -z "$API_ID" ]; then
+      aws apigatewayv2 create-api \
+        --name "{{ name_prefix }}-api" \
+        --protocol-type HTTP \
+        --region "{{ aws_region }}" \
+        --query 'ApiId' \
+        --output text
+    else
+      echo "$API_ID"
+    fi
+  register: api_id_result
+
+- name: Obtener API ID
+  set_fact:
+    api_id: "{{ api_id_result.stdout }}"
+
+- name: Limpiar APIs duplicadas (mantener solo el API principal)
+  shell: |
+    API_IDS=$(aws apigatewayv2 get-apis --query "Items[?Name=='{{ name_prefix }}-api'].ApiId" --output text --region "{{ aws_region }}")
+    PRIMARY_API="{{ api_id }}"
+    for API_ID in $API_IDS; do
+      if [ "$API_ID" != "$PRIMARY_API" ] && [ "$API_ID" != "None" ]; then
+        echo "Eliminando API duplicada: $API_ID"
+        aws apigatewayv2 delete-api --api-id "$API_ID" --region "{{ aws_region }}" 2>/dev/null || true
+      fi
+    done
+  ignore_errors: true
+
+- name: Crear o obtener integración Lambda para acceso
+  shell: |
+    INTEGRATION_ID=$(aws apigatewayv2 get-integrations --api-id "{{ api_id }}" --query "Items[?IntegrationUri=='arn:aws:apigateway:{{ aws_region }}:lambda:path/2015-03-31/functions/arn:aws:lambda:{{ aws_region }}:{{ aws_account_id }}:function:{{ name_prefix }}-acceso/invocations'].IntegrationId | [0]" --output text --region "{{ aws_region }}")
+    if [ "$INTEGRATION_ID" = "None" ] || [ -z "$INTEGRATION_ID" ]; then
+      aws apigatewayv2 create-integration \
+        --api-id "{{ api_id }}" \
+        --integration-type AWS_PROXY \
+        --integration-uri "arn:aws:apigateway:{{ aws_region }}:lambda:path/2015-03-31/functions/arn:aws:lambda:{{ aws_region }}:{{ aws_account_id }}:function:{{ name_prefix }}-acceso/invocations" \
+        --payload-format-version "2.0" \
+        --region "{{ aws_region }}" \
+        --query 'IntegrationId' \
+        --output text
+    else
+      echo "$INTEGRATION_ID"
+    fi
+  register: integration_acceso
+
+- name: Crear o obtener integración Lambda para despachador
+  shell: |
+    INTEGRATION_ID=$(aws apigatewayv2 get-integrations --api-id "{{ api_id }}" --query "Items[?IntegrationUri=='arn:aws:apigateway:{{ aws_region }}:lambda:path/2015-03-31/functions/arn:aws:lambda:{{ aws_region }}:{{ aws_account_id }}:function:{{ name_prefix }}-despachador/invocations'].IntegrationId | [0]" --output text --region "{{ aws_region }}")
+    if [ "$INTEGRATION_ID" = "None" ] || [ -z "$INTEGRATION_ID" ]; then
+      aws apigatewayv2 create-integration \
+        --api-id "{{ api_id }}" \
+        --integration-type AWS_PROXY \
+        --integration-uri "arn:aws:apigateway:{{ aws_region }}:lambda:path/2015-03-31/functions/arn:aws:lambda:{{ aws_region }}:{{ aws_account_id }}:function:{{ name_prefix }}-despachador/invocations" \
+        --payload-format-version "2.0" \
+        --region "{{ aws_region }}" \
+        --query 'IntegrationId' \
+        --output text
+    else
+      echo "$INTEGRATION_ID"
+    fi
+  register: integration_despachador
+
+- name: Dar permiso a API Gateway para invocar lambda-acceso
+  shell: |
+    aws lambda add-permission \
+      --function-name "{{ name_prefix }}-acceso" \
+      --statement-id "api-gateway-access-acceso" \
+      --action "lambda:InvokeFunction" \
+      --principal "apigateway.amazonaws.com" \
+      --source-arn "arn:aws:execute-api:{{ aws_region }}:{{ aws_account_id }}:{{ api_id }}/*/*/*" \
+      --region "{{ aws_region }}"
+  ignore_errors: true
+
+- name: Dar permiso a API Gateway para invocar lambda-despachador
+  shell: |
+    aws lambda add-permission \
+      --function-name "{{ name_prefix }}-despachador" \
+      --statement-id "api-gateway-access-despachador" \
+      --action "lambda:InvokeFunction" \
+      --principal "apigateway.amazonaws.com" \
+      --source-arn "arn:aws:execute-api:{{ aws_region }}:{{ aws_account_id }}:{{ api_id }}/*/*/*" \
+      --region "{{ aws_region }}"
+  ignore_errors: true
+
+- name: Crear o actualizar ruta POST /vote
+  shell: |
+    ROUTE_ID=$(aws apigatewayv2 get-routes --api-id "{{ api_id }}" --query "Items[?RouteKey=='POST /vote'].RouteId | [0]" --output text --region "{{ aws_region }}")
+    if [ "$ROUTE_ID" = "None" ] || [ -z "$ROUTE_ID" ]; then
+      aws apigatewayv2 create-route \
+        --api-id "{{ api_id }}" \
+        --route-key "POST /vote" \
+        --target "integrations/{{ integration_despachador.stdout }}" \
+        --region "{{ aws_region }}"
+    else
+      aws apigatewayv2 update-route \
+        --api-id "{{ api_id }}" \
+        --route-id "$ROUTE_ID" \
+        --target "integrations/{{ integration_despachador.stdout }}" \
+        --region "{{ aws_region }}"
+    fi
+  ignore_errors: true
+
+- name: Crear o actualizar ruta catch-all POST
+  shell: |
+    ROUTE_ID=$(aws apigatewayv2 get-routes --api-id "{{ api_id }}" --query "Items[?RouteKey=='POST /{proxy+}'].RouteId | [0]" --output text --region "{{ aws_region }}")
+    if [ "$ROUTE_ID" = "None" ] || [ -z "$ROUTE_ID" ]; then
+      aws apigatewayv2 create-route \
+        --api-id "{{ api_id }}" \
+        --route-key "POST /{proxy+}" \
+        --target "integrations/{{ integration_acceso.stdout }}" \
+        --region "{{ aws_region }}"
+    else
+      aws apigatewayv2 update-route \
+        --api-id "{{ api_id }}" \
+        --route-id "$ROUTE_ID" \
+        --target "integrations/{{ integration_acceso.stdout }}" \
+        --region "{{ aws_region }}"
+    fi
+  ignore_errors: true
+
+- name: Crear o actualizar ruta catch-all GET
+  shell: |
+    ROUTE_ID=$(aws apigatewayv2 get-routes --api-id "{{ api_id }}" --query "Items[?RouteKey=='GET /{proxy+}'].RouteId | [0]" --output text --region "{{ aws_region }}")
+    if [ "$ROUTE_ID" = "None" ] || [ -z "$ROUTE_ID" ]; then
+      aws apigatewayv2 create-route \
+        --api-id "{{ api_id }}" \
+        --route-key "GET /{proxy+}" \
+        --target "integrations/{{ integration_acceso.stdout }}" \
+        --region "{{ aws_region }}"
+    else
+      aws apigatewayv2 update-route \
+        --api-id "{{ api_id }}" \
+        --route-id "$ROUTE_ID" \
+        --target "integrations/{{ integration_acceso.stdout }}" \
+        --region "{{ aws_region }}"
+    fi
+  ignore_errors: true
+
+- name: Crear o actualizar stage con auto-deploy
+  shell: |
+    aws apigatewayv2 create-stage \
+      --api-id "{{ api_id }}" \
+      --stage-name "\$default" \
+      --auto-deploy \
+      --region "{{ aws_region }}" 2>/dev/null || \
+    aws apigatewayv2 update-stage \
+      --api-id "{{ api_id }}" \
+      --stage-name "\$default" \
+      --auto-deploy \
+      --region "{{ aws_region }}"
+  ignore_errors: true
+
+- name: Obtener URL del API Gateway
+  set_fact:
+    api_gateway_url: "https://{{ api_id }}.execute-api.{{ aws_region }}.amazonaws.com"
+
+- name: Mostrar URL del API Gateway
+  debug:
+    msg: "API Gateway URL: {{ api_gateway_url }}"

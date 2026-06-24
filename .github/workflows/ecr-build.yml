@@ -1,0 +1,58 @@
+name: Build & Push ECR Images
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'app/blockchain-core/**'
+      - 'app/Cargo.toml'
+      - 'app/Cargo.lock'
+      - '.github/workflows/ecr-build.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'app/blockchain-core/**'
+      - 'app/Cargo.toml'
+      - 'app/Cargo.lock'
+      - '.github/workflows/ecr-build.yml'
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+
+    permissions:
+      id-token: write
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app
+          file: ./app/blockchain-core/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ github.ref == 'refs/heads/main' && 'truetally-prod-blockchain' || 'truetally-dev-blockchain' }}:${{ github.sha }}
+
+      - name: Image pushed
+        run: echo "Image pushed"

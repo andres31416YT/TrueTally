@@ -1,0 +1,14 @@
+---
+# Inventario dinámico de AWS para Ansible
+# Nota: como los playbooks corren en localhost (CI/CD), este inventario
+# provee un grupo "localhost" apuntando a la máquina del runner.
+plugin: amazon.aws.aws_ec2
+regions:
+  - us-east-1
+filters:
+  instance-state-name: running
+keyed_groups:
+  - key: tags.Role
+    prefix: role
+compose:
+  ansible_host: instance_id

@@ -1,0 +1,60 @@
+---
+- name: Configurar infraestructura TrueTally
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all.yml
+
+  pre_tasks:
+    - name: Validar variables de ambiente
+      tags: [database]
+      assert:
+        that:
+          - truetally_env is defined
+          - aws_region is defined
+        fail_msg: "Faltan variables: truetally_env={{ truetally_env }} aws_region={{ aws_region }}"
+
+    - name: Obtener VPC ID desde AWS
+      tags: [database]
+      shell: |
+        aws ec2 describe-vpcs --filters "Name=tag:Name,Values={{ name_prefix }}-vpc" --query 'Vpcs[0].VpcId' --output text --region "{{ aws_region }}"
+      register: vpc_id_result
+
+    - name: Obtener subnets privadas (compute + database)
+      tags: [database]
+      shell: |
+        aws ec2 describe-subnets --filters "Name=vpc-id,Values={{ vpc_id_result.stdout }}" "Name=tag:Name,Values={{ name_prefix }}-compute-*,{{ name_prefix }}-database-*" --query 'Subnets[].SubnetId' --output json --region "{{ aws_region }}"
+      register: private_subnets_result
+
+    - name: Obtener subnets de blockchain
+      tags: [database]
+      shell: |
+        aws ec2 describe-subnets --filters "Name=vpc-id,Values={{ vpc_id_result.stdout }}" "Name=tag:Name,Values={{ name_prefix }}-blockchain-*" --query 'Subnets[].SubnetId' --output json --region "{{ aws_region }}"
+      register: blockchain_subnets_result
+
+    - name: Obtener security group de Lambda
+      tags: [database]
+      shell: |
+        aws ec2 describe-security-groups --filters "Name=vpc-id,Values={{ vpc_id_result.stdout }}" "Name=group-name,Values={{ name_prefix }}-lambda-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}"
+      register: lambda_sg_result
+
+    - name: Establecer variables dinámicas
+      tags: [database]
+      set_fact:
+        vpc_id: "{{ vpc_id_result.stdout }}"
+        private_subnet_ids: "{{ private_subnets_result.stdout | from_json }}"
+        blockchain_subnet_ids: "{{ blockchain_subnets_result.stdout | from_json }}"
+        lambda_security_group_id: "{{ lambda_sg_result.stdout }}"
+
+  roles:
+    - role: database
+      tags: [database]
+    - role: ecs
+      tags: [ecs]
+    - role: api_gateway
+      tags: [api_gateway]
+    - role: lambda
+      tags: [lambda]
+    - role: frontend
+      tags: [frontend]

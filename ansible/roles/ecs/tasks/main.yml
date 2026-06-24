@@ -1,0 +1,51 @@
+---
+- name: Habilitar acceso HTTPS desde el security group de Lambda hacia endpoints VPC
+  shell: |
+    SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-lambda-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
+    aws ec2 authorize-security-group-ingress \
+      --group-id "$SG_ID" \
+      --protocol tcp \
+      --port 443 \
+      --source-group "$SG_ID" \
+      --region "{{ aws_region }}" 2>/dev/null || true
+
+- name: Corregir imagen y registrar nuevo task definition
+  shell: |
+    python3 "{{ role_path }}/files/fix_task_def.py" "{{ name_prefix }}-blockchain" "{{ aws_region }}" "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ name_prefix }}-blockchain:latest"
+  register: register_task
+
+- name: Obtener ARN del nuevo task definition
+  set_fact:
+    new_task_arn: "{{ register_task.stdout | from_json | json_query('taskDefinition.taskDefinitionArn') }}"
+
+- name: Actualizar ECS service
+  shell: |
+    aws ecs update-service \
+      --cluster "{{ name_prefix }}-blockchain-cluster" \
+      --service "{{ name_prefix }}-blockchain-service" \
+      --task-definition "{{ new_task_arn }}" \
+      --region "{{ aws_region }}"
+
+- name: Esperar a que ECS service intente arrancar (no bloquear si falta imagen)
+  shell: |
+    aws ecs describe-services \
+      --cluster "{{ name_prefix }}-blockchain-cluster" \
+      --services "{{ name_prefix }}-blockchain-service" \
+      --region "{{ aws_region }}" \
+      --query 'services[0].{Running:runningCount,Desired:desiredCount,Status:status}' \
+      --output json
+  register: ecs_status
+  until: ecs_status.stdout | from_json | json_query('Running') | int == (ecs_status.stdout | from_json | json_query('Desired') | int)
+  retries: 10
+  delay: 15
+  ignore_errors: true
+
+- name: Estado final del servicio ECS
+  shell: |
+    aws ecs describe-services \
+      --cluster "{{ name_prefix }}-blockchain-cluster" \
+      --services "{{ name_prefix }}-blockchain-service" \
+      --region "{{ aws_region }}" \
+      --query 'services[0].{Running:runningCount,Desired:desiredCount,Status:status}' \
+      --output json
+  register: ecs_status_final

@@ -1,0 +1,466 @@
+# workflow-sync-trigger: ansible-deploy registration test
+name: Terraform CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  TF_INPUT: "0"
+  AWS_REGION: us-east-1
+  TF_VAR_redis_auth_token: ${{ secrets.TF_VAR_REDIS_AUTH_TOKEN }}
+  TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
+  TF_VAR_lambda_zip_path: ${{ github.workspace }}/terraform/artifacts
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    name: Security Scan (Checkov)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Ejecutar Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: terraform
+          soft_fail: true
+          output_file_path: checkov_results.xml
+          output_format: junitxml
+          skip_check: CKV2_AWS_62,CKV_AWS_129,CKV_AWS_16,CKV_AWS_42,CKV_AWS_33,CKV2_AWS_50,CKV_AWS_184,CKV_AWS_133,CKV2_AWS_32,CKV_AWS_97
+
+      - name: Upload Checkov results
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-results
+          path: checkov_results.xml
+
+  sonarqube-security:
+    name: SonarQube Code Analysis
+    runs-on: ubuntu-latest
+    needs: security
+    env:
+      SONAR_BRANCH_NAME: "master"
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Analizar Frontend (Next.js / TypeScript)
+        run: |
+          BRANCH_NAME="${{ env.SONAR_BRANCH_NAME }}"
+          docker run --rm \
+            -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
+            -e SONAR_PROJECT_BASE_DIR=/workspace \
+            -v "${{ github.workspace }}/app/frontend:/workspace" \
+            sonarsource/sonar-scanner-cli:latest \
+            -Dsonar.projectKey=truetally-frontend \
+            -Dsonar.sources=src \
+            -Dsonar.tests=src \
+            -Dsonar.test.inclusions=**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx \
+            -Dsonar.branch.name="$BRANCH_NAME" \
+            -Dsonar.sourceEncoding=UTF-8 \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}" \
+            -Dsonar.organization=truetally
+
+      - name: Analizar Lambda Acceso
+        run: |
+          BRANCH_NAME="${{ env.SONAR_BRANCH_NAME }}"
+          docker run --rm \
+            -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
+            -e SONAR_PROJECT_BASE_DIR=/workspace \
+            -v "${{ github.workspace }}/app/lambda-acceso:/workspace" \
+            sonarsource/sonar-scanner-cli:latest \
+            -Dsonar.projectKey=truetally-lambda-acceso \
+            -Dsonar.sources=src \
+            -Dsonar.branch.name="$BRANCH_NAME" \
+            -Dsonar.sourceEncoding=UTF-8 \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}" \
+            -Dsonar.organization=truetally
+
+      - name: Analizar Lambda Despachador
+        run: |
+          BRANCH_NAME="${{ env.SONAR_BRANCH_NAME }}"
+          docker run --rm \
+            -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
+            -e SONAR_PROJECT_BASE_DIR=/workspace \
+            -v "${{ github.workspace }}/app/lambda-despachador:/workspace" \
+            sonarsource/sonar-scanner-cli:latest \
+            -Dsonar.projectKey=truetally-lambda-despachador \
+            -Dsonar.sources=src \
+            -Dsonar.branch.name="$BRANCH_NAME" \
+            -Dsonar.sourceEncoding=UTF-8 \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}" \
+            -Dsonar.organization=truetally
+
+      - name: Analizar Lambda Procesador
+        run: |
+          BRANCH_NAME="${{ env.SONAR_BRANCH_NAME }}"
+          docker run --rm \
+            -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
+            -e SONAR_PROJECT_BASE_DIR=/workspace \
+            -v "${{ github.workspace }}/app/lambda-procesador:/workspace" \
+            sonarsource/sonar-scanner-cli:latest \
+            -Dsonar.projectKey=truetally-lambda-procesador \
+            -Dsonar.sources=src \
+            -Dsonar.branch.name="$BRANCH_NAME" \
+            -Dsonar.sourceEncoding=UTF-8 \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}" \
+            -Dsonar.organization=truetally
+
+      - name: Analizar Blockchain Core (Rust)
+        run: |
+          BRANCH_NAME="${{ env.SONAR_BRANCH_NAME }}"
+          docker run --rm \
+            -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
+            -e SONAR_PROJECT_BASE_DIR=/workspace \
+            -v "${{ github.workspace }}/app/blockchain-core:/workspace" \
+            sonarsource/sonar-scanner-cli:latest \
+            -Dsonar.projectKey=truetally-blockchain \
+            -Dsonar.sources=src \
+            -Dsonar.branch.name="$BRANCH_NAME" \
+            -Dsonar.sourceEncoding=UTF-8 \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}" \
+            -Dsonar.organization=truetally
+
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    needs: [security, sonarqube-security]
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Detectar ambiente
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "env_name=prod" >> $GITHUB_OUTPUT
+            echo "env_path=terraform/environments/prod" >> $GITHUB_OUTPUT
+            echo "db_password=${{ secrets.TF_VAR_DB_PASSWORD_PROD }}" >> $GITHUB_OUTPUT
+          else
+            echo "env_name=dev" >> $GITHUB_OUTPUT
+            echo "env_path=terraform/environments/dev" >> $GITHUB_OUTPUT
+            echo "db_password=${{ secrets.TF_VAR_DB_PASSWORD_DEV }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Instalar Rust x86_64 toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Instalar toolchain cruzado x86_64 musl
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: x86_64-unknown-linux-musl
+
+      - name: Instalar herramientas de Linkers y ZIP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools zip unzip gcc-x86-64-linux-gnu
+
+      - name: Generar empaquetados ZIP de Lambdas
+        working-directory: app
+        run: |
+          mkdir -p "${{ github.workspace }}/terraform/artifacts"
+          . "$HOME/.cargo/env"
+          cargo build --release --target x86_64-unknown-linux-musl -p lambda-acceso
+          cp target/x86_64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j "${{ github.workspace }}/terraform/artifacts/lambda-acceso.zip" ./bootstrap
+          rm ./bootstrap
+          cargo build --release --target x86_64-unknown-linux-musl -p lambda-despachador
+          cp target/x86_64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j "${{ github.workspace }}/terraform/artifacts/lambda-despachador.zip" ./bootstrap
+          rm ./bootstrap
+          cargo build --release --target x86_64-unknown-linux-musl -p lambda-procesador
+          cp target/x86_64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j "${{ github.workspace }}/terraform/artifacts/lambda-procesador.zip" ./bootstrap
+          rm ./bootstrap
+
+      - name: Build Frontend
+        working-directory: app/frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Upload Lambda artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-artifacts
+          path: terraform/artifacts/*.zip
+          retention-days: 7
+
+      - name: Upload Frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: app/frontend/out/**
+          retention-days: 7
+
+      - name: Autenticación con AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Terraform Init
+        run: |
+          cd ${{ steps.env.outputs.env_path }}
+          terraform init -input=false \
+            -backend-config="bucket=truetally-terraform-state" \
+            -backend-config="key=${{ steps.env.outputs.env_name }}/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}"
+
+      - name: Terraform Workspace
+        run: |
+          cd ${{ steps.env.outputs.env_path }}
+          terraform workspace select -or-create ${{ steps.env.outputs.env_name }}
+
+      - name: Terraform FMT (auto-corrige formato)
+        run: |
+          cd ${{ steps.env.outputs.env_path }}
+          terraform fmt
+
+      - name: Terraform Validate
+        run: |
+          cd ${{ steps.env.outputs.env_path }}
+          terraform validate
+
+      - name: Limpiar state del módulo frontend
+        run: |
+          cd ${{ steps.env.outputs.env_path }}
+          terraform state list 2>/dev/null | awk '/^module\.frontend\./ {print $1}' | xargs -r -n1 terraform state rm
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          cd ${{ steps.env.outputs.env_path }}
+          if [[ "${{ steps.env.outputs.env_name }}" == "prod" ]]; then
+            SSL_CERT="${{ secrets.TF_VAR_SSL_CERTIFICATE_ARN_PROD }}"
+          else
+            SSL_CERT="${{ secrets.TF_VAR_SSL_CERTIFICATE_ARN_DEV }}"
+          fi
+          terraform plan \
+            -input=false \
+            -no-color \
+            -var="db_password=${{ steps.env.outputs.db_password }}" \
+            -var="redis_auth_token=${{ secrets.TF_VAR_REDIS_AUTH_TOKEN }}" \
+            -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
+            -var="lambda_zip_path=${{ env.TF_VAR_lambda_zip_path }}" \
+            -var="ssl_certificate_arn=$SSL_CERT" \
+            -out=tfplan 2>&1 | tee plan_output.txt
+
+      - name: Comentar plan en el PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = '${{ steps.env.outputs.env_path }}';
+            const plan = fs.readFileSync(`${path}/plan_output.txt`, 'utf8');
+            const truncated = plan.length > 60000 ? plan.substring(0,60000) + '...(truncado)' : plan;
+            github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: '### Terraform Plan (${{ steps.env.outputs.env_name }})\\n```\\n' + truncated + '\\n```'
+            });
+
+      - name: Guardar plan como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-${{ steps.env.outputs.env_name }}-artifacts
+          path: ${{ steps.env.outputs.env_path }}/tfplan
+          retention-days: 7
+
+  apply-dev:
+    name: Terraform Apply (Dev)
+    needs: plan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: development
+    env:
+      TF_VAR_lambda_zip_path: ${{ github.workspace }}/terraform/artifacts
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Descargar Lambda artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-artifacts
+          path: terraform/artifacts
+
+      - name: Create frontend out directory
+        run: mkdir -p app/frontend/out
+
+      - name: Descargar Frontend artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: app/frontend/out
+
+      - name: Descargar plan de dev
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-dev-artifacts
+          path: terraform/environments/dev
+
+      - name: Autenticación con AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Terraform Init
+        run: |
+          cd terraform/environments/dev
+          terraform init -input=false \
+            -backend-config="bucket=truetally-terraform-state" \
+            -backend-config="key=dev/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}"
+
+      - name: Terraform Workspace
+        run: |
+          cd terraform/environments/dev
+          terraform workspace select dev || terraform workspace select -or-create dev
+
+      - name: Terraform Apply
+        run: |
+          cd terraform/environments/dev
+          terraform apply -input=false -auto-approve tfplan
+
+      - name: Deploy Frontend to S3
+        run: |
+          BUCKET_NAME="truetally-dev-frontend"
+          aws s3 sync app/frontend/out s3://$BUCKET_NAME --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
+          echo "Frontend deployed to s3://$BUCKET_NAME"
+
+      - name: Restore S3 Bucket Public Access
+        run: |
+          BUCKET_NAME="truetally-dev-frontend"
+          aws s3api put-public-access-block --bucket "$BUCKET_NAME" --public-access-block-configuration '{"BlockPublicAcls":false,"IgnorePublicAcls":false,"BlockPublicPolicy":false,"RestrictPublicBuckets":false}'
+          aws s3api put-bucket-policy --bucket "$BUCKET_NAME" --policy '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::'$BUCKET_NAME'/*"}]}'
+          echo "Public access restored for $BUCKET_NAME"
+
+      - name: Invalidate CloudFront
+        run: |
+          DIST_ID=$(aws cloudfront list-distributions --query 'DistributionList.Items[?contains(Aliases.Items, `andrespaganroncall.qzz.io`)].Id | [0]' --output text)
+          if [[ -n "$DIST_ID" && "$DIST_ID" != "None" ]]; then
+            aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*"
+          fi
+
+  apply-prod:
+    name: Terraform Apply (Prod)
+    needs: plan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    env:
+      TF_VAR_lambda_zip_path: ${{ github.workspace }}/terraform/artifacts
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Descargar Lambda artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-artifacts
+          path: terraform/artifacts
+
+      - name: Create frontend out directory
+        run: mkdir -p app/frontend/out
+
+      - name: Descargar Frontend artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: app/frontend/out
+
+      - name: Descargar plan de prod
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-prod-artifacts
+          path: terraform/environments/prod
+
+      - name: Autenticación con AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Terraform Init
+        run: |
+          cd terraform/environments/prod
+          terraform init -input=false \
+            -backend-config="bucket=truetally-terraform-state" \
+            -backend-config="key=prod/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}"
+
+      - name: Terraform Workspace
+        run: |
+          cd terraform/environments/prod
+          terraform workspace select prod || terraform workspace select -or-create prod
+
+      - name: Terraform Apply
+        run: |
+          cd terraform/environments/prod
+          terraform apply -input=false -auto-approve tfplan
+
+      - name: Deploy Frontend to S3
+        run: |
+          BUCKET_NAME="truetally-prod-frontend"
+          aws s3 sync app/frontend/out s3://$BUCKET_NAME --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
+          echo "Frontend deployed to s3://$BUCKET_NAME"
+
+      - name: Restore S3 Bucket Public Access
+        run: |
+          BUCKET_NAME="truetally-prod-frontend"
+          aws s3api put-public-access-block --bucket "$BUCKET_NAME" --public-access-block-configuration '{"BlockPublicAcls":false,"IgnorePublicAcls":false,"BlockPublicPolicy":false,"RestrictPublicBuckets":false}'
+          aws s3api put-bucket-policy --bucket "$BUCKET_NAME" --policy '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::'$BUCKET_NAME'/*"}]}'
+          echo "Public access restored for $BUCKET_NAME"
+
+      - name: Invalidate CloudFront
+        run: |
+          DIST_ID=$(aws cloudfront list-distributions --query 'DistributionList.Items[?contains(Aliases.Items, `andrespaganroncall.qzz.io`)].Id | [0]' --output text)
+          if [[ -n "$DIST_ID" && "$DIST_ID" != "None" ]]; then
+            aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*"
+          fi
+# CI/CD test 1782269909
