@@ -19,6 +19,10 @@ env:
   TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
   TF_VAR_lambda_zip_path: ${{ github.workspace }}/terraform/artifacts
 
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   security:
     name: Security Scan (Checkov)
