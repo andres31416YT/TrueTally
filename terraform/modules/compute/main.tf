@@ -25,6 +25,7 @@ variable "lambda_zip_path" { type = string }
 locals {
   name_prefix = "${var.project_name}-${var.env}"
 
+  # Mapa de AZs a IDs de subredes blockchain para EFS mount targets
   blockchain_mount_targets = {
     for i, az in var.azs :
     az => var.blockchain_subnet_ids[i]
