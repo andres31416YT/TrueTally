@@ -60,3 +60,4 @@ jobs:
           SUDOADMIN_PASSWORD: ${{ secrets.SUDOADMIN_PASSWORD }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+# v2
