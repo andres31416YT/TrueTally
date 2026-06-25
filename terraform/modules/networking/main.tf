@@ -169,6 +169,37 @@ resource "aws_security_group" "database" {
   tags = { Name = "${local.name_prefix}-database-sg" }
 }
 
+resource "aws_security_group" "blockchain" {
+  name        = "${local.name_prefix}-blockchain-sg"
+  description = "Security group for blockchain ECS nodes"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 9944
+    to_port         = 9944
+    protocol        = "tcp"
+    security_groups = [aws_security_group.blockchain.id]
+  }
+
+  ingress {
+    from_port       = 2049
+    to_port         = 2049
+    protocol        = "tcp"
+    security_groups = [aws_security_group.blockchain.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-blockchain-sg"
+  }
+}
+
 output "vpc_id" { value = aws_vpc.main.id }
 output "public_subnet_ids" { value = [for s in aws_subnet.public : s.id] }
 output "compute_subnet_ids" { value = [for s in aws_subnet.compute : s.id] }
