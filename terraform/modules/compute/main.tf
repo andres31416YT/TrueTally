@@ -71,13 +71,6 @@ resource "aws_iam_role_policy" "lambda_ssm" {
       {
         Effect = "Allow"
         Action = [
-          "ssm:DescribeInstanceInformation"
-        ]
-        Resource = "*" #checkov:skip=CKV_AWS_355:DescribeInstanceInformation requires wildcard access for instance discovery
-      },
-      {
-        Effect = "Allow"
-        Action = [
           "ssm:StartSession"
         ]
         Resource = "arn:aws:ssm:*:*:managed-instance/*"
