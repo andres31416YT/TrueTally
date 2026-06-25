@@ -119,6 +119,10 @@ resource "aws_lambda_function" "acceso" {
     security_group_ids = [var.lambda_security_group_id]
   }
 
+  dead_letter_config {
+    target_arn = var.dlq_arn
+  }
+
   environment {
     variables = {
       DB_CREDENTIALS_ARN = var.db_credentials_secret_arn
