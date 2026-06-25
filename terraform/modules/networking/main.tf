@@ -175,17 +175,17 @@ resource "aws_security_group" "blockchain" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port       = 9944
-    to_port         = 9944
-    protocol        = "tcp"
-    security_groups = [aws_security_group.blockchain.id]
+    from_port = 9944
+    to_port   = 9944
+    protocol  = "tcp"
+    self      = true
   }
 
   ingress {
-    from_port       = 2049
-    to_port         = 2049
-    protocol        = "tcp"
-    security_groups = [aws_security_group.blockchain.id]
+    from_port = 2049
+    to_port   = 2049
+    protocol  = "tcp"
+    self      = true
   }
 
   egress {
