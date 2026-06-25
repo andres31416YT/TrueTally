@@ -31,10 +31,11 @@ jobs:
 
     steps:
       # Paso 1: descargar el código del repositorio
-      - name: Checkout del código (último commit de la rama)
+      - name: Checkout del código (commit exacto que disparó Terraform)
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_branch }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
 
       # Paso 2: autenticarse con AWS usando OIDC (sin credenciales estáticas)
       - name: Autenticación con AWS via OIDC
@@ -67,6 +68,15 @@ jobs:
       # - ANSIBLE_ROLES_PATH: ruta donde están los roles personalizados
       # - inventario: hosts.ini (servidores EC2, ECS, Lambda, etc.)
       # - extra-vars: variable truetally_env (dev o prod)
+      - name: Verificar archivo hosts.ini (debug)
+        run: |
+          echo "=== hosts.ini ==="
+          cat ansible/inventory/hosts.ini
+          echo "=== python3 version ==="
+          python3 --version
+          echo "=== python3 path ==="
+          which python3
+
       - name: Ejecutar playbook de Ansible
         run: |
           ansible-playbook \
