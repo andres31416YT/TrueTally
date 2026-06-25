@@ -161,6 +161,10 @@ resource "aws_lambda_function" "procesador" {
     security_group_ids = [var.lambda_security_group_id]
   }
 
+  dead_letter_config {
+    target_arn = var.dlq_arn
+  }
+
   environment {
     variables = {
       NODE_URL_AZ1 = var.lambda_node_url_az1
