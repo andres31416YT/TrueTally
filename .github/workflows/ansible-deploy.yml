@@ -70,8 +70,10 @@ jobs:
       # - extra-vars: variable truetally_env (dev o prod)
       - name: Corregir hosts.ini con valores correctos
         run: |
-          cat > ansible/inventory/hosts.ini << 'EOF'
-[local:children]
+          python3 -c "
+import pathlib
+hosts = pathlib.Path('ansible/inventory/hosts.ini')
+hosts.write_text('''[local:children]
 ci
 local_tools
 
@@ -112,12 +114,11 @@ ansible_aws_region = us-east-1
 
 [all:vars]
 ansible_python_interpreter = /usr/bin/python3
-deploy_env = "{{ lookup('env', 'ENVIRONMENT') | default('dev') }}"
-aws_region  = "{{ lookup('env', 'AWS_REGION') | default('us-east-1') }}"
-EOF
-          echo "hosts.ini corregido correctamente"
-          python3 --version
-          which python3
+deploy_env = {{ lookup('env', 'ENVIRONMENT') | default('dev') }}
+aws_region  = {{ lookup('env', 'AWS_REGION') | default('us-east-1') }}
+''')
+print('hosts.ini corregido')
+" 
 
       - name: Ejecutar playbook de Ansible
         run: |
