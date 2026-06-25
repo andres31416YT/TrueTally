@@ -73,6 +73,7 @@ module "compute" {
   lambda_node_url_az2         = local.lambda_node_url_az2
   ecr_repository_url          = module.security.ecr_repository_url
   lambda_zip_path             = var.lambda_zip_path
+  dlq_arn                     = module.messaging.dlq_arn
 }
 
 module "frontend" {

@@ -22,6 +22,7 @@ variable "lambda_node_url_az1" { type = string }
 variable "lambda_node_url_az2" { type = string }
 variable "ecr_repository_url" { type = string }
 variable "lambda_zip_path" { type = string }
+variable "dlq_arn" { type = string }
 
 locals {
   name_prefix = "${var.project_name}-${var.env}"
@@ -135,6 +136,10 @@ resource "aws_lambda_function" "despachador" {
   vpc_config {
     subnet_ids         = var.private_subnet_ids
     security_group_ids = [var.lambda_security_group_id]
+  }
+
+  dead_letter_config {
+    target_arn = var.dlq_arn
   }
 
   environment {

@@ -28,3 +28,7 @@ output "vote_queue_url" {
 output "vote_queue_arn" {
   value = aws_sqs_queue.vote_queue.arn
 }
+
+output "dlq_arn" {
+  value = aws_sqs_queue.dlq.arn
+}
