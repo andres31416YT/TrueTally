@@ -71,11 +71,16 @@ resource "aws_iam_role_policy" "lambda_ssm" {
       {
         Effect = "Allow"
         Action = [
-          "ssm:DescribeInstanceInformation",
-          "ssm:StartSession",
+          "ssm:StartSession"
+        ]
+        Resource = "arn:aws:ssm:*:*:managed-instance/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "ssm:SendCommand"
         ]
-        Resource = "*"
+        Resource = "arn:aws:ssm:*:*:document/*"
       },
       {
         Effect = "Allow"
