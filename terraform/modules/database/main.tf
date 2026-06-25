@@ -62,7 +62,7 @@ resource "aws_elasticache_subnet_group" "main" {
   subnet_ids = var.private_subnet_ids
 
   lifecycle {
-    ignore_changes = all
+    ignore_changes = all # Luego de crearlo, ignora cualquier cambio futuro
   }
 }
 

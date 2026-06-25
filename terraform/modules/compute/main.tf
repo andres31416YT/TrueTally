@@ -104,8 +104,8 @@ resource "aws_lambda_function" "acceso" {
   function_name = "${local.name_prefix}-acceso"
   filename      = "${var.lambda_zip_path}/lambda-acceso.zip"
   role          = aws_iam_role.lambda.arn
-  handler       = "bootstrap"
-  runtime       = "provided.al2"
+  handler       = "bootstrap" #Manejamos RUST
+  runtime       = "provided.al2" #Ejecutar lenguaje RUST compilado de forma nativa
 
   vpc_config {
     subnet_ids         = var.private_subnet_ids
@@ -230,26 +230,28 @@ resource "aws_security_group_rule" "efs_inbound" {
   source_security_group_id = var.lambda_security_group_id
 }
 
+# Crear un punto de acceso Mount Target para que se puedan conectar al disco EFS
 resource "aws_efs_mount_target" "blockchain" {
-  for_each = local.blockchain_mount_targets
+  for_each = local.blockchain_mount_targets # Repite este bloque de código para cada una de las subredes
 
-  file_system_id  = aws_efs_file_system.blockchain.id
-  subnet_id       = each.value
-  security_groups = [var.lambda_security_group_id]
+  file_system_id  = aws_efs_file_system.blockchain.id   # Le dice al punto de acceso a que disco duro en red (EFS) específico debe conectarse
+  subnet_id       = each.value # Asigna este punto de acceso a la subred actual del bucle (bucle 1, bucle 2, etc.).
+  security_groups = [var.lambda_security_group_id] # Permitir que solo las funciones Lambda configuradas puedan entrar al disco
 }
 
+# Crear el punto de acceso EFS para que el contenedor ECS pueda montar el disco EFS
 resource "aws_efs_access_point" "blockchain" {
-  file_system_id = aws_efs_file_system.blockchain.id
+  file_system_id = aws_efs_file_system.blockchain.id #Conexion al disco de red especifico
   posix_user {
-    gid = 1000
-    uid = 1000
+    gid = 1000 # Es el número de grupo estándar para aplicaciones
+    uid = 1000 # ID= 1000 para saber quién está escribiendo los archivos.
   }
   root_directory {
     path = "/blockchain"
     creation_info {
-      owner_gid   = 1000
-      owner_uid   = 1000
-      permissions = "755"
+      owner_gid   = 1000 # El grupo dueño de la nueva carpeta
+      owner_uid   = 1000 # El usuario dueño de la nueva carpeta
+      permissions = "755" # Permisos de seguridad: El dueño puede hacer todo
     }
   }
 }
