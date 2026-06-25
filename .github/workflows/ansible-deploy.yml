@@ -31,8 +31,10 @@ jobs:
 
     steps:
       # Paso 1: descargar el código del repositorio
-      - name: Checkout del código
+      - name: Checkout del código (último commit de la rama)
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
 
       # Paso 2: autenticarse con AWS usando OIDC (sin credenciales estáticas)
       - name: Autenticación con AWS via OIDC
