@@ -63,6 +63,7 @@ module "compute" {
   azs                         = local.azs
   kms_key_arn                 = module.security.kms_key_arn
   lambda_security_group_id    = module.networking.lambda_security_group_id
+  blockchain_security_group_id = module.networking.blockchain_sg_id
   lambda_sg_arn               = module.networking.lambda_sg_arn
   db_credentials_secret_arn   = module.security.db_credentials_secret_arn
   redis_auth_token_secret_arn = module.security.redis_auth_token_secret_arn

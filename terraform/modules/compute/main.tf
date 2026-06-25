@@ -12,6 +12,7 @@ variable "blockchain_subnet_ids" {
 }
 variable "kms_key_arn" { type = string }
 variable "lambda_security_group_id" { type = string }
+variable "blockchain_security_group_id" { type = string }
 variable "lambda_sg_arn" { type = string }
 variable "db_credentials_secret_arn" { type = string }
 variable "redis_auth_token_secret_arn" { type = string }
@@ -221,22 +222,13 @@ resource "aws_efs_file_system" "blockchain" {
   }
 }
 
-resource "aws_security_group_rule" "efs_inbound" {
-  type                     = "ingress"
-  from_port                = 2049
-  to_port                  = 2049
-  protocol                 = "tcp"
-  security_group_id        = var.lambda_security_group_id
-  source_security_group_id = var.lambda_security_group_id
-}
-
 # Crear un punto de acceso Mount Target para que se puedan conectar al disco EFS
 resource "aws_efs_mount_target" "blockchain" {
   for_each = local.blockchain_mount_targets # Repite este bloque de código para cada una de las subredes
 
   file_system_id  = aws_efs_file_system.blockchain.id   # Le dice al punto de acceso a que disco duro en red (EFS) específico debe conectarse
   subnet_id       = each.value # Asigna este punto de acceso a la subred actual del bucle (bucle 1, bucle 2, etc.).
-  security_groups = [var.lambda_security_group_id] # Permitir que solo las funciones Lambda configuradas puedan entrar al disco
+  security_groups = [var.blockchain_security_group_id] # Permitir que solo los nodos blockchain puedan entrar al disco EFS
 }
 
 # Crear el punto de acceso EFS para que el contenedor ECS pueda montar el disco EFS
@@ -304,7 +296,7 @@ resource "aws_ecs_service" "blockchain" {
 
   network_configuration {
     subnets          = var.blockchain_subnet_ids
-    security_groups  = [var.lambda_security_group_id]
+    security_groups  = [var.blockchain_security_group_id]
     assign_public_ip = false
   }
 
