@@ -70,55 +70,12 @@ jobs:
       # - extra-vars: variable truetally_env (dev o prod)
       - name: Corregir hosts.ini con valores correctos
         run: |
-          python3 -c "
-import pathlib
-hosts = pathlib.Path('ansible/inventory/hosts.ini')
-hosts.write_text('''[local:children]
-ci
-local_tools
-
-[ci]
-localhost ansible_connection=local
-
-[local_tools]
-localhost ansible_connection=local
-
-[lambda:children]
-lambda_acceso
-lambda_despachador
-lambda_procesador
-
-[lambda_acceso]
-lambda-acceso-az1
-lambda-acceso-az2
-
-[lambda_despachador]
-lambda-despachador-az1
-lambda-despachador-az2
-
-[lambda_procesador]
-lambda-procesador-az1
-lambda-procesador-az2
-
-[ecs_blockchain]
-blockchain-node-az1
-blockchain-node-az2
-
-[lambda:vars]
-ansible_connection = aws_lambda
-ansible_aws_region = us-east-1
-
-[ecs_blockchain:vars]
-ansible_connection = local
-ansible_aws_region = us-east-1
-
-[all:vars]
-ansible_python_interpreter = /usr/bin/python3
-deploy_env = {{ lookup('env', 'ENVIRONMENT') | default('dev') }}
-aws_region  = {{ lookup('env', 'AWS_REGION') | default('us-east-1') }}
-''')
-print('hosts.ini corregido')
-" 
+          sed -i 's|ansible_python_interpreter = .*|ansible_python_interpreter = /usr/bin/python3|' ansible/inventory/hosts.ini
+          sed -i 's|^environment = .*|deploy_env = "{{ lookup('"'"'env'"'"', '"'"'ENVIRONMENT'"'"') | default('"'"'dev'"'"') }}"|' ansible/inventory/hosts.ini
+          echo "hosts.ini corregido:"
+          cat ansible/inventory/hosts.ini
+          python3 --version
+          which python3
 
       - name: Ejecutar playbook de Ansible
         run: |
