@@ -101,6 +101,13 @@ resource "aws_iam_role_policy" "lambda_ssm" {
           "sqs:GetQueueAttributes"
         ]
         Resource = var.vote_queue_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage"
+        ]
+        Resource = var.dlq_arn
       }
     ]
   })
