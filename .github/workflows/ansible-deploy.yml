@@ -31,11 +31,10 @@ jobs:
 
     steps:
       # Paso 1: descargar el código del repositorio
-      - name: Checkout del código (commit exacto que disparó Terraform)
+      - name: Checkout del código (último commit de la rama)
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_branch }}
 
       # Paso 2: autenticarse con AWS usando OIDC (sin credenciales estáticas)
       - name: Autenticación con AWS via OIDC
@@ -70,8 +69,7 @@ jobs:
       # - extra-vars: variable truetally_env (dev o prod)
       - name: Corregir hosts.ini con valores correctos
         run: |
-          sed -i 's|ansible_python_interpreter = .*|ansible_python_interpreter = /usr/bin/python3|' ansible/inventory/hosts.ini
-          sed -i 's|^environment = .*|deploy_env = "{{ lookup('"'"'env'"'"', '"'"'ENVIRONMENT'"'"') | default('"'"'dev'"'"') }}"|' ansible/inventory/hosts.ini
+          echo 'W2xvY2FsOmNoaWxkcmVuXQpjaQpsb2NhbF90b29scwoKW2NpXQpsb2NhbGhvc3QgYW5zaWJsZV9jb25uZWN0aW9uPWxvY2FsCgpbbG9jYWxfdG9vbHNdCmxvY2FsaG9zdCBhbnNpYmxlX2Nvbm5lY3Rpb249bG9jYWwKCltsYW1iZGE6Y2hpbGRyZW5dCmxhbWJkYV9hY2Nlc28KbGFtYmRhX2Rlc3BhY2hhZG9yCmxhbWJkYV9wcm9jZXNhZG9yCgpbbGFtYmRhX2FjY2Vzb10KbGFtYmRhLWFjY2Vzby1hejEKbGFtYmRhLWFjY2Vzby1hejIKCltsYW1iZGFfZGVzcGFjaGFkb3JdCmxhbWJkYS1kZXNwYWNoYWRvci1hejEKbGFtYmRhLWRlc3BhY2hhZG9yLWF6MgoKW2xhbWJkYV9wcm9jZXNhZG9yXQpsYW1iZGEtcHJvY2VzYWRvci1hejEKbGFtYmRhLXByb2Nlc2Fkb3ItYXoyCgpbZWNzX2Jsb2NrY2hhaW5dCmJsb2NrY2hhaW4tbm9kZS1hejEKYmxvY2tjaGFpbi1ub2RlLWF6MgoKW2xhbWJkYTp2YXJzXQphbnNpYmxlX2Nvbm5lY3Rpb24gPSBhd3NfbGFtYmRhCmFuc2libGVfYXdzX3JlZ2lvbiA9IHVzLWVhc3QtMQoKW2Vjc19ibG9ja2NoYWluOnZhcnNdCmFuc2libGVfY29ubmVjdGlvbiA9IGxvY2FsCmFuc2libGVfYXdzX3JlZ2lvbiA9IHVzLWVhc3QtMQoKW2FsbDp2YXJzXQphbnNpYmxlX3B5dGhvbl9pbnRlcnByZXRlciA9IC91c3IvYmluL3B5dGhvbjMKZGVwbG95X2VudiA9ICJ7eyBsb29rdXAoJ2VudicsICdFTlZJUk9OTUVOVCcpIHwgZGVmYXVsdCgnZGV2JykgfX0iCmF3c19yZWdpb24gID0gInt7IGxvb2t1cCgnZW52JywgJ0FXU19SRUdJT04nKSB8IGRlZmF1bHQoJ3VzLWVhc3QtMScpIH19Igo=' | base64 -d > ansible/inventory/hosts.ini
           echo "hosts.ini corregido:"
           cat ansible/inventory/hosts.ini
           python3 --version
