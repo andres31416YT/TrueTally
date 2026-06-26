@@ -135,6 +135,7 @@ resource "aws_security_group" "lambda" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
   }
 
   tags = { Name = "${local.name_prefix}-lambda-sg" }
@@ -159,12 +160,14 @@ resource "aws_security_group" "database" {
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.lambda.id]
+    description     = "Allow PostgreSQL access from Lambda"
   }
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
   }
   tags = { Name = "${local.name_prefix}-database-sg" }
 }
@@ -179,6 +182,7 @@ resource "aws_security_group" "blockchain" {
     to_port   = 9944
     protocol  = "tcp"
     self      = true
+    description = "Allow blockchain node communication"
   }
 
   ingress {
@@ -186,6 +190,7 @@ resource "aws_security_group" "blockchain" {
     to_port   = 2049
     protocol  = "tcp"
     self      = true
+    description = "Allow NFS communication for blockchain"
   }
 
   egress {
@@ -193,6 +198,7 @@ resource "aws_security_group" "blockchain" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
   }
 
   tags = {
