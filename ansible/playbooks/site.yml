@@ -1,16 +1,43 @@
 ---
+# =============================================================================
+# PLAYBOOK PRINCIPAL DE ANSIBLE - TrueTally
+# =============================================================================
+# Configura toda la infraestructura aprovisionada por Terraform:
+# - Base de datos (RDS PostgreSQL + ElastiCache Redis)
+# - Nodo blockchain (ECS Fargate)
+# - API Gateway (integraciones Lambda)
+# - Lambdas (acceso, despachador, procesador)
+# - Frontend (Next.js desplegado en S3 + CloudFront)
+# =============================================================================
+
 - name: Configurar infraestructura TrueTally
+  # Todos los roles se ejecutan en localhost porque las tareas usan AWS CLI
+  # No hay hosts remotos SSH; la conexión es local
   hosts: localhost
   connection: local
   gather_facts: false
+
+  # Cargar variables de grupo desde archivos dedicados
+  # all.yml: variables compartidas (nombre proyecto, región, etc.)
+  # lambda.yml: configuración específica de Lambdas (timeout, memory, credenciales)
+  # ecs_blockchain.yml: configuración del nodo blockchain (imagen ECR, puertos)
   vars_files:
     - ../group_vars/all.yml
     - ../group_vars/lambda.yml
     - ../group_vars/ecs_blockchain.yml
 
+  # =========================================================================
+  # TAREAS PREVIAS: descubrimiento de recursos AWS existentes
+  # =========================================================================
+  # Se ejecutan antes que cualquier rol para obtener IDs dinámicos
+  # (VPC, subnets, security groups) que los roles necesitan como parámetros
+  # =========================================================================
+
   pre_tasks:
     - name: Validar variables de ambiente
       tags: [database]
+      # Verifica que truetally_env (dev/prod) y aws_region estén definidos
+      # Estas variables se pasan desde el workflow de GitHub Actions
       assert:
         that:
           - truetally_env is defined
@@ -19,44 +46,70 @@
 
     - name: Obtener VPC ID desde AWS
       tags: [database]
+      # Busca la VPC por tag Name = <project>-<env>-vpc
+      # Ejemplo: truetally-dev-vpc
       shell: |
         aws ec2 describe-vpcs --filters "Name=tag:Name,Values={{ name_prefix }}-vpc" --query 'Vpcs[0].VpcId' --output text --region "{{ aws_region }}"
       register: vpc_id_result
 
     - name: Obtener subnets privadas (compute + database)
       tags: [database]
+      # Obtiene las subnets privadas donde corren las Lambdas y RDS
+      # Filtra por tag Name con prefijo <project>-<env>-compute o database
       shell: |
         aws ec2 describe-subnets --filters "Name=vpc-id,Values={{ vpc_id_result.stdout }}" "Name=tag:Name,Values={{ name_prefix }}-compute-*,{{ name_prefix }}-database-*" --query 'Subnets[].SubnetId' --output json --region "{{ aws_region }}"
       register: private_subnets_result
 
     - name: Obtener subnets de blockchain
       tags: [database]
+      # Obtiene las subnets dedicadas para el nodo blockchain en ECS Fargate
+      # Filtra por tag Name con prefijo <project>-<env>-blockchain
       shell: |
         aws ec2 describe-subnets --filters "Name=vpc-id,Values={{ vpc_id_result.stdout }}" "Name=tag:Name,Values={{ name_prefix }}-blockchain-*" --query 'Subnets[].SubnetId' --output json --region "{{ aws_region }}"
       register: blockchain_subnets_result
 
     - name: Obtener security group de Lambda
       tags: [database]
+      # Obtiene el SG de las Lambdas para asignarlo como variable a los roles
+      # Este SG controla el acceso de salida de las Lambdas (a RDS, SQS, ECS)
       shell: |
         aws ec2 describe-security-groups --filters "Name=vpc-id,Values={{ vpc_id_result.stdout }}" "Name=group-name,Values={{ name_prefix }}-lambda-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}"
       register: lambda_sg_result
 
     - name: Establecer variables dinámicas
       tags: [database]
+      # Convierte los resultados de las consultas AWS en variables para los roles
       set_fact:
         vpc_id: "{{ vpc_id_result.stdout }}"
         private_subnet_ids: "{{ private_subnets_result.stdout | from_json }}"
         blockchain_subnet_ids: "{{ blockchain_subnets_result.stdout | from_json }}"
         lambda_security_group_id: "{{ lambda_sg_result.stdout }}"
 
+  # =========================================================================
+  # ROLES: ejecutan la configuración real de cada componente
+  # =========================================================================
+  # Cada role recibe las variables dinámicas obtenidas en pre_tasks
+  # y las variables de group_vars cargadas en vars_files
+  # =========================================================================
+
   roles:
     - role: database
       tags: [database]
+      # Configura RDS PostgreSQL, ElastiCache Redis, credenciales en Secrets Manager
+
     - role: ecs
       tags: [ecs]
+      # Despliega el nodo blockchain en ECS Fargate con la imagen de ECR
+
     - role: api_gateway
       tags: [api_gateway]
+      # Crea/actualiza API Gateway HTTP API con integraciones a Lambdas
+
     - role: lambda
       tags: [lambda]
+      # Actualiza configuración de las 3 Lambdas (env vars, timeout, memory)
+      # Corrige variables legacy (NODE_URL_AZ1/AZ2) en lambda-procesador
+
     - role: frontend
       tags: [frontend]
+      # Build del frontend Next.js, deploy a S3, invalidación CloudFront

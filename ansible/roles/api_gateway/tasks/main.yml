@@ -1,5 +1,18 @@
 ---
+# =============================================================================
+# ROLE: api_gateway
+# =============================================================================
+# Responsabilidades:
+# - Crear/obtener API Gateway HTTP API (punto de entrada público)
+# - Crear integraciones Lambda para acceso y despachador
+# - Configurar permisos para que API Gateway pueda invocar las Lambdas
+# - Crear rutas: POST /vote (despachador) y catch-all (acceso)
+# - Configurar stage con auto-deploy
+# =============================================================================
+
 - name: Crear o obtener API Gateway HTTP API
+  # Crea la API si no existe, o devuelve el ID de la existente
+  # La API es HTTP (no REST) y se llama <prefix>-api
   shell: |
     API_ID=$(aws apigatewayv2 get-apis --query "Items[?Name=='{{ name_prefix }}-api'].ApiId | [0]" --output text --region "{{ aws_region }}")
     if [ "$API_ID" = "None" ] || [ -z "$API_ID" ]; then
@@ -19,6 +32,8 @@
     api_id: "{{ api_id_result.stdout }}"
 
 - name: Limpiar APIs duplicadas (mantener solo el API principal)
+  # Elimina APIs huérfanas con el mismo nombre (pueden quedar de despliegues previos)
+  # Solo mantiene la API principal devuelta por la tarea anterior
   shell: |
     API_IDS=$(aws apigatewayv2 get-apis --query "Items[?Name=='{{ name_prefix }}-api'].ApiId" --output text --region "{{ aws_region }}")
     PRIMARY_API="{{ api_id }}"
@@ -31,6 +46,8 @@
   ignore_errors: true
 
 - name: Crear o obtener integración Lambda para acceso
+  # Crea la integración AWS_PROXY entre API Gateway y lambda-acceso
+  # Si ya existe, devuelve el IntegrationId existente (idempotente)
   shell: |
     INTEGRATION_ID=$(aws apigatewayv2 get-integrations --api-id "{{ api_id }}" --query "Items[?IntegrationUri=='arn:aws:apigateway:{{ aws_region }}:lambda:path/2015-03-31/functions/arn:aws:lambda:{{ aws_region }}:{{ aws_account_id }}:function:{{ name_prefix }}-acceso/invocations'].IntegrationId | [0]" --output text --region "{{ aws_region }}")
     if [ "$INTEGRATION_ID" = "None" ] || [ -z "$INTEGRATION_ID" ]; then
@@ -48,6 +65,8 @@
   register: integration_acceso
 
 - name: Crear o obtener integración Lambda para despachador
+  # Crea la integración AWS_PROXY entre API Gateway y lambda-despachador
+  # Esta lambda recibe los votos desde el frontend vía POST /vote
   shell: |
     INTEGRATION_ID=$(aws apigatewayv2 get-integrations --api-id "{{ api_id }}" --query "Items[?IntegrationUri=='arn:aws:apigateway:{{ aws_region }}:lambda:path/2015-03-31/functions/arn:aws:lambda:{{ aws_region }}:{{ aws_account_id }}:function:{{ name_prefix }}-despachador/invocations'].IntegrationId | [0]" --output text --region "{{ aws_region }}")
     if [ "$INTEGRATION_ID" = "None" ] || [ -z "$INTEGRATION_ID" ]; then
@@ -65,6 +84,9 @@
   register: integration_despachador
 
 - name: Garantizar permiso a API Gateway para invocar lambda-acceso
+  # Agrega el permiso lambda:InvokeFunction a la policy de lambda-acceso
+  # Solo lo agrega si no existe (idempotente, no falla en re-ejecuciones)
+  # El statement ID único 'api-gateway-access-acceso' evita duplicados
   shell: |
     STATEMENT_ID="api-gateway-access-acceso"
     FUNCTION_NAME="{{ name_prefix }}-acceso"
@@ -86,6 +108,8 @@
     fi
 
 - name: Garantizar permiso a API Gateway para invocar lambda-despachador
+  # Agrega el permiso lambda:InvokeFunction a la policy de lambda-despachador
+  # Solo lo agrega si no existe (idempotente)
   shell: |
     STATEMENT_ID="api-gateway-access-despachador"
     FUNCTION_NAME="{{ name_prefix }}-despachador"
@@ -107,6 +131,8 @@
     fi
 
 - name: Crear o actualizar ruta POST /vote
+  # Ruta principal que recibe votos desde el frontend
+  # Apunta a la integración de lambda-despachador
   shell: |
     ROUTE_ID=$(aws apigatewayv2 get-routes --api-id "{{ api_id }}" --query "Items[?RouteKey=='POST /vote'].RouteId | [0]" --output text --region "{{ aws_region }}")
     if [ "$ROUTE_ID" = "None" ] || [ -z "$ROUTE_ID" ]; then
@@ -125,6 +151,8 @@
   ignore_errors: true
 
 - name: Crear o actualizar ruta catch-all POST
+  # Ruta comodín para cualquier otro POST (registro, login, etc.)
+  # Apunta a la integración de lambda-acceso
   shell: |
     ROUTE_ID=$(aws apigatewayv2 get-routes --api-id "{{ api_id }}" --query "Items[?RouteKey=='POST /{proxy+}'].RouteId | [0]" --output text --region "{{ aws_region }}")
     if [ "$ROUTE_ID" = "None" ] || [ -z "$ROUTE_ID" ]; then
@@ -143,6 +171,8 @@
   ignore_errors: true
 
 - name: Crear o actualizar ruta catch-all GET
+  # Ruta comodín para cualquier GET (bloques, health check, etc.)
+  # Apunta a la integración de lambda-acceso
   shell: |
     ROUTE_ID=$(aws apigatewayv2 get-routes --api-id "{{ api_id }}" --query "Items[?RouteKey=='GET /{proxy+}'].RouteId | [0]" --output text --region "{{ aws_region }}")
     if [ "$ROUTE_ID" = "None" ] || [ -z "$ROUTE_ID" ]; then
@@ -161,6 +191,8 @@
   ignore_errors: true
 
 - name: Crear o actualizar stage con auto-deploy
+  # Configura el stage $default con auto-deploy activado
+  # Cualquier cambio en rutas/integraciones se despliega automáticamente
   shell: |
     aws apigatewayv2 create-stage \
       --api-id "{{ api_id }}" \
@@ -175,6 +207,7 @@
   ignore_errors: true
 
 - name: Obtener URL del API Gateway
+  # Construye la URL pública de la API para que el frontend la use
   set_fact:
     api_gateway_url: "https://{{ api_id }}.execute-api.{{ aws_region }}.amazonaws.com"
 

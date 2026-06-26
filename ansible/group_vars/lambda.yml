@@ -1,15 +1,29 @@
 ---
-# Variables específicas para Lambda Acceso
+# =============================================================================
+# VARIABLES DE LAMBDAS - TrueTally
+# =============================================================================
+# Configuración de timeout (segundos) y memoria (MB) para cada Lambda
+# Estos valores sobrescriben lo que Terraform haya configurado
+# Se pueden ajustar sin modificar el código de Terraform
+# =============================================================================
+
+# Lambda de acceso: maneja registro y login de usuarios
+# Timeout: 30s es suficiente para consultas a RDS y respuesta HTTP
+# Memory: 512MB para manejar picos de concurrencia en registro
 lambda_acceso_timeout: 30
 lambda_acceso_memory_size: 512
 lambda_acceso_reserved_concurrency: 5
 
-# Variables específicas para Lambda Despachador
+# Lambda despachador: recibe votos del frontend y los encola en SQS
+# Timeout: 30s porque solo valida y encola (no procesa la blockchain)
+# Memory: 256MB es suficiente para validación JSON y llamada a SQS
 lambda_despachador_timeout: 30
 lambda_despachador_memory_size: 256
 lambda_despachador_reserved_concurrency: 5
 
-# Variables específicas para Lambda Procesador
+# Lambda procesador: consume votos de SQS y los escribe en la blockchain
+# Timeout: 300s (5 min) porque interactuar con la blockchain puede ser lento
+# Memory: 1024MB porque el payload de la blockchain puede ser grande
 lambda_procesador_timeout: 300
 lambda_procesador_memory_size: 1024
 lambda_procesador_reserved_concurrency: 5

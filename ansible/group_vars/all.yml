@@ -1,19 +1,51 @@
+# =============================================================================
+# VARIABLES GLOBALES DE ANSIBLE - TrueTally
+# =============================================================================
+# Estas variables se heredan a todos los roles y hosts del inventario
+# Se cargan en site.yml via vars_files antes de ejecutar cualquier tarea
+# =============================================================================
+
+# Ambiente: dev (develop) o prod (main)
+# Se lee de la variable de entorno ENVIRONMENT, default=dev
+# En GitHub Actions se pasa como extra-var: truetally_env=dev
 truetally_env: "{{ lookup('env', 'ENVIRONMENT') | default('dev') }}"
+
+# Región de AWS donde se despliega la infraestructura
+# Se lee de AWS_REGION, default=us-east-1
 aws_region: "{{ lookup('env', 'AWS_REGION', default='us-east-1') }}"
 
+# ID de la cuenta AWS (útil para construir ARNs)
+# En GitHub Actions se pasa como AWS_ACCOUNT_ID
 aws_account_id: "{{ lookup('env', 'AWS_ACCOUNT_ID', default='294960493570') }}"
 
+# Nombre base del proyecto (se usa como prefijo en todos los recursos)
 project_name: truetally
+# Prefijo compuesto: <project_name>-<env> → truetally-dev, truetally-prod
 name_prefix: "{{ project_name }}-{{ truetally_env }}"
+
+# =============================================================================
+# CREDENCIALES DE ADMIN
+# =============================================================================
+# IMPORTANTE: en producción usar Secrets Manager, no variables de entorno
+# En GitHub Actions se pasan como secrets: ADMIN_EMAIL, ADMIN_PASSWORD, etc.
+# =============================================================================
 
 sudoadmin_email: "{{ lookup('env', 'SUDOADMIN_EMAIL', default='sudoadmin@sudoadmin.com') }}"
 sudoadmin_password: "{{ lookup('env', 'SUDOADMIN_PASSWORD', default='changeme_sudo') }}"
 admin_email: "{{ lookup('env', 'ADMIN_EMAIL', default='admin@admin.com') }}"
 admin_password: "{{ lookup('env', 'ADMIN_PASSWORD', default='changeme_admin') }}"
 
+# =============================================================================
+# CONFIGURACIÓN DE BASE DE DATOS
+# =============================================================================
+
 database:
   db_name: truetally
   db_username: truetally
+
+# =============================================================================
+# CONFIGURACIÓN DE ECS BLOCKCHAIN
+# =============================================================================
 
 ecs:
   cluster_name: "{{ name_prefix }}-blockchain-cluster"
@@ -21,14 +53,28 @@ ecs:
   task_family: "{{ name_prefix }}-blockchain"
   desired_count: 1
 
+# =============================================================================
+# CONFIGURACIÓN DE FRONTEND
+# =============================================================================
+
 frontend:
   s3_bucket: "{{ name_prefix }}-frontend"
   build_command: npm run build
   dist_directory: out
 
+# =============================================================================
+# CONFIGURACIÓN DE MONITOREO
+# =============================================================================
+
 monitoring:
   log_retention_days: 7
   cloudwatch_namespace: "TrueTally/{{ truetally_env }}"
+
+# =============================================================================
+# TAGS COMUNES
+# =============================================================================
+# Se aplican a todos los recursos AWS que Ansible crea/modifica
+# Ayudan a identificar recursos por proyecto, ambiente y herramienta
 
 common_tags:
   Project: "{{ project_name }}"

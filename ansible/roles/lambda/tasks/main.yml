@@ -1,5 +1,20 @@
 ---
+# =============================================================================
+# ROLE: lambda
+# =============================================================================
+# Responsabilidades:
+# - Obtener credenciales de BD desde Secrets Manager
+# - Obtener endpoint de RDS para construir DATABASE_URL
+# - Obtener IP del nodo blockchain desde ECS para BLOCKCHAIN_NODE_URL
+# - Obtener URL de la cola SQS para VOTE_QUEUE_URL
+# - Actualizar configuración de las 3 Lambdas (acceso, procesador, despachador)
+# - Corregir variables legacy (NODE_URL_AZ1/AZ2 → BLOCKCHAIN_NODE_URL)
+# - Ajustar timeout y memory size según variables de group_vars
+# =============================================================================
+
 - name: Obtener credenciales de DB desde Secrets Manager
+  # Lee el secreto que Terraform creó con usuario/contraseña de PostgreSQL
+  # No se hardcodean credenciales, siempre se leen de AWS Secrets Manager
   shell: |
     aws secretsmanager get-secret-value \
       --secret-id "{{ name_prefix }}/db/credentials" \
@@ -9,11 +24,14 @@
   register: db_secret_raw
 
 - name: Obtener endpoint de RDS
+  # Consulta el endpoint de la instancia RDS para armar la URL de conexión
   shell: |
     aws rds describe-db-instances --db-instance-identifier "{{ name_prefix }}-postgres" --query 'DBInstances[0].Endpoint.Address' --output text --region "{{ aws_region }}"
   register: rds_endpoint_raw
 
 - name: Parsear credenciales de DB
+  # Extrae usuario, contraseña, endpoint y puerto del JSON de Secrets Manager
+  # Estas variables se usan para construir DATABASE_URL
   set_fact:
     db_username: "{{ db_secret_raw.stdout | from_json | json_query('username') }}"
     db_password: "{{ db_secret_raw.stdout | from_json | json_query('password') }}"
@@ -21,11 +39,16 @@
     db_port: 5432
 
 - name: Construir DATABASE_URL
+  # Construye la URL de conexión PostgreSQL con password URL-encoded
+  # Ejemplo: postgres://truetally:password@host:5432/truetally
   shell: |
     python3 -c "from urllib.parse import quote; print('postgres://{{ db_username }}:' + quote('{{ db_password }}', safe='') + '@{{ db_endpoint }}:{{ db_port }}/truetally')"
   register: database_url_result
 
 - name: Obtener IP del nodo blockchain desde ECS
+  # Obtiene la IP privada de la tarea ECS que corre el nodo blockchain
+  # Necesario porque en Fargate la IP cambia en cada despliegue
+  # Si no hay tarea corriendo, devuelve "unknown"
   shell: |
     TASK_ARN=$(aws ecs list-tasks --cluster "{{ name_prefix }}-blockchain-cluster" --service-name "{{ name_prefix }}-blockchain-service" --query 'taskArns[0]' --output text --region "{{ aws_region }}")
     if [ "$TASK_ARN" != "None" ] && [ -n "$TASK_ARN" ]; then
@@ -36,6 +59,8 @@
   register: blockchain_ip_result
 
 - name: Establecer URL del nodo blockchain
+  # Construye la URL del nodo blockchain solo si se pudo obtener la IP
+  # Si no hay IP, blockchain_node_url queda vacío (las Lambdas lo manejan)
   set_fact:
     blockchain_node_url: >-
       {% if blockchain_ip_result.stdout and blockchain_ip_result.stdout != '' and blockchain_ip_result.stdout != 'None' %}
@@ -43,11 +68,19 @@
       {% endif %}
 
 - name: Obtener URL de la cola SQS
+  # Obtiene la URL de la cola SQS donde lambda-despachador encola votos
   shell: |
     aws sqs get-queue-url --queue-name "{{ name_prefix }}-vote-queue" --query 'QueueUrl' --output text --region "{{ aws_region }}"
   register: sqs_queue_url_result
 
 - name: Actualizar lambda-acceso
+  # Genera el JSON de configuración para lambda-acceso y lo guarda en /tmp
+  # Variables que se actualizan:
+  # - DATABASE_URL: conexión a PostgreSQL
+  # - Credenciales de admin desde secrets de GitHub Actions
+  # - BLOCKCHAIN_NODE_URL: IP del nodo blockchain (si está disponible)
+  # - DB_CREDENTIALS_ARN: ARN del secreto en Secrets Manager
+  # Timeout y Memory vienen de group_vars/lambda.yml
   shell: |
     python3 -c "
     import json
@@ -74,12 +107,19 @@
   register: lambda_acceso_update
 
 - name: Aplicar configuración a lambda-acceso
+  # Aplica la configuración generada a la función Lambda via AWS CLI
+  # Usa cli-input-json para enviar todo el bloque de configuración de una vez
   shell: |
     aws lambda update-function-configuration \
       --cli-input-json file:///tmp/lambda_acceso_config.json \
       --region "{{ aws_region }}"
 
 - name: Actualizar lambda-procesador
+  # Genera configuración para lambda-procesador
+  # IMPORTANTE: corrige variables legacy (NODE_URL_AZ1/AZ2)
+  # que el código Rust aún espera, además de BLOCKCHAIN_NODE_URL
+  # Timeout: 300s (5 min) porque procesa votos de la blockchain
+  # Memory: 1024MB por el volumen de datos de la blockchain
   shell: |
     python3 -c "
     import json
@@ -112,6 +152,9 @@
       --region "{{ aws_region }}"
 
 - name: Actualizar lambda-despachador
+  # Genera configuración para lambda-despachador
+  # Esta lambda recibe votos del frontend y los envía a SQS
+  # Variables clave: VOTE_QUEUE_URL (cola SQS), credenciales de admin
   shell: |
     python3 -c "
     import json
