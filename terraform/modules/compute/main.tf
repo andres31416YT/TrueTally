@@ -178,6 +178,11 @@ resource "aws_lambda_function" "procesador" {
 # ECS Cluster for Blockchain
 resource "aws_ecs_cluster" "blockchain" {
   name = "${local.name_prefix}-blockchain-cluster"
+
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
 }
 
 resource "aws_iam_role" "ecs_task" {
