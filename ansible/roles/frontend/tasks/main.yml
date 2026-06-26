@@ -25,9 +25,9 @@
     aws s3api put-public-access-block --bucket "{{ frontend.s3_bucket }}" --public-access-block-configuration '{"BlockPublicAcls":false,"IgnorePublicAcls":false,"BlockPublicPolicy":false,"RestrictPublicBuckets":false}'
     aws s3api put-bucket-policy --bucket "{{ frontend.s3_bucket }}" --policy '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::{{ frontend.s3_bucket }}/*"}]}'
 
-- name: Invalidar CloudFront
+- name: Invalidar CloudFront asociado al bucket frontend
   shell: |
-    DIST_ID=$(aws cloudfront list-distributions --query 'DistributionList.Items[?contains(Aliases.Items, `andrespaganroncall.qzz.io`)].Id | [0]' --output text --region "{{ aws_region }}")
-    if [[ -n "$DIST_ID" && "$DIST_ID" != "None" ]]; then
+    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[].DomainName, \`{{ frontend.s3_bucket }}.s3.\`)].Id | [0]" --output text --region "{{ aws_region }}")
+    if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
       aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" --region "{{ aws_region }}"
     fi

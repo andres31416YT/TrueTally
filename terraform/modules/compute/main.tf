@@ -1,30 +1,7 @@
-variable "project_name" { type = string }
-variable "env" { type = string }
-variable "vpc_id" { type = string }
-variable "public_subnet_ids" { type = list(string) }
-variable "private_subnet_ids" { type = list(string) }
-variable "azs" {
-  type = list(string)
-}
-
-variable "blockchain_subnet_ids" {
-  type = list(string)
-}
-variable "kms_key_arn" { type = string }
-variable "lambda_security_group_id" { type = string }
-variable "lambda_sg_arn" { type = string }
-variable "db_credentials_secret_arn" { type = string }
-variable "redis_auth_token_secret_arn" { type = string }
-variable "vote_queue_arn" { type = string }
-variable "vote_queue_url" { type = string }
-variable "lambda_node_url_az1" { type = string }
-variable "lambda_node_url_az2" { type = string }
-variable "ecr_repository_url" { type = string }
-variable "lambda_zip_path" { type = string }
-
 locals {
   name_prefix = "${var.project_name}-${var.env}"
 
+  # Mapa de AZs a IDs de subredes blockchain para EFS mount targets
   blockchain_mount_targets = {
     for i, az in var.azs :
     az => var.blockchain_subnet_ids[i]
@@ -59,6 +36,11 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
+resource "aws_iam_role_policy_attachment" "lambda_xray" {
+  role       = aws_iam_role.lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+}
+
 resource "aws_iam_role_policy" "lambda_ssm" {
   name = "${local.name_prefix}-lambda-ssm"
   role = aws_iam_role.lambda.id
@@ -69,11 +51,16 @@ resource "aws_iam_role_policy" "lambda_ssm" {
       {
         Effect = "Allow"
         Action = [
-          "ssm:DescribeInstanceInformation",
-          "ssm:StartSession",
+          "ssm:StartSession"
+        ]
+        Resource = "arn:aws:ssm:*:*:managed-instance/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "ssm:SendCommand"
         ]
-        Resource = "*"
+        Resource = "arn:aws:ssm:*:*:document/*"
       },
       {
         Effect = "Allow"
@@ -93,6 +80,13 @@ resource "aws_iam_role_policy" "lambda_ssm" {
           "sqs:GetQueueAttributes"
         ]
         Resource = var.vote_queue_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage"
+        ]
+        Resource = var.dlq_arn
       }
     ]
   })
@@ -103,18 +97,26 @@ resource "aws_lambda_function" "acceso" {
   function_name = "${local.name_prefix}-acceso"
   filename      = "${var.lambda_zip_path}/lambda-acceso.zip"
   role          = aws_iam_role.lambda.arn
-  handler       = "bootstrap"
-  runtime       = "provided.al2"
+  handler       = "bootstrap" #Manejamos RUST
+  runtime       = "provided.al2" #Ejecutar lenguaje RUST compilado de forma nativa
 
   vpc_config {
     subnet_ids         = var.private_subnet_ids
     security_group_ids = [var.lambda_security_group_id]
   }
 
+  dead_letter_config {
+    target_arn = var.dlq_arn
+  }
+
   environment {
     variables = {
       DB_CREDENTIALS_ARN = var.db_credentials_secret_arn
     }
+  }
+
+  tracing_config {
+    mode = "Active"
   }
 }
 
@@ -130,10 +132,18 @@ resource "aws_lambda_function" "despachador" {
     security_group_ids = [var.lambda_security_group_id]
   }
 
+  dead_letter_config {
+    target_arn = var.dlq_arn
+  }
+
   environment {
     variables = {
       VOTE_QUEUE_URL = var.vote_queue_url
     }
+  }
+
+  tracing_config {
+    mode = "Active"
   }
 }
 
@@ -149,11 +159,19 @@ resource "aws_lambda_function" "procesador" {
     security_group_ids = [var.lambda_security_group_id]
   }
 
+  dead_letter_config {
+    target_arn = var.dlq_arn
+  }
+
   environment {
     variables = {
       NODE_URL_AZ1 = var.lambda_node_url_az1
       NODE_URL_AZ2 = var.lambda_node_url_az2
     }
+  }
+
+  tracing_config {
+    mode = "Active"
   }
 }
 
@@ -220,35 +238,28 @@ resource "aws_efs_file_system" "blockchain" {
   }
 }
 
-resource "aws_security_group_rule" "efs_inbound" {
-  type                     = "ingress"
-  from_port                = 2049
-  to_port                  = 2049
-  protocol                 = "tcp"
-  security_group_id        = var.lambda_security_group_id
-  source_security_group_id = var.lambda_security_group_id
-}
-
+# Crear un punto de acceso Mount Target para que se puedan conectar al disco EFS
 resource "aws_efs_mount_target" "blockchain" {
-  for_each = local.blockchain_mount_targets
+  for_each = local.blockchain_mount_targets # Repite este bloque de código para cada una de las subredes
 
-  file_system_id  = aws_efs_file_system.blockchain.id
-  subnet_id       = each.value
-  security_groups = [var.lambda_security_group_id]
+  file_system_id  = aws_efs_file_system.blockchain.id   # Le dice al punto de acceso a que disco duro en red (EFS) específico debe conectarse
+  subnet_id       = each.value # Asigna este punto de acceso a la subred actual del bucle (bucle 1, bucle 2, etc.).
+  security_groups = [var.blockchain_security_group_id] # Permitir que solo los nodos blockchain puedan entrar al disco EFS
 }
 
+# Crear el punto de acceso EFS para que el contenedor ECS pueda montar el disco EFS
 resource "aws_efs_access_point" "blockchain" {
-  file_system_id = aws_efs_file_system.blockchain.id
+  file_system_id = aws_efs_file_system.blockchain.id #Conexion al disco de red especifico
   posix_user {
-    gid = 1000
-    uid = 1000
+    gid = 1000 # Es el número de grupo estándar para aplicaciones
+    uid = 1000 # ID= 1000 para saber quién está escribiendo los archivos.
   }
   root_directory {
     path = "/blockchain"
     creation_info {
-      owner_gid   = 1000
-      owner_uid   = 1000
-      permissions = "755"
+      owner_gid   = 1000 # El grupo dueño de la nueva carpeta
+      owner_uid   = 1000 # El usuario dueño de la nueva carpeta
+      permissions = "755" # Permisos de seguridad: El dueño puede hacer todo
     }
   }
 }
@@ -301,7 +312,7 @@ resource "aws_ecs_service" "blockchain" {
 
   network_configuration {
     subnets          = var.blockchain_subnet_ids
-    security_groups  = [var.lambda_security_group_id]
+    security_groups  = [var.blockchain_security_group_id]
     assign_public_ip = false
   }
 

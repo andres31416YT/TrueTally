@@ -1,9 +1,3 @@
-variable "project_name" { type = string }
-variable "env" { type = string }
-variable "vpc_cidr" { type = string }
-variable "azs" { type = list(string) }
-variable "aws_region" { type = string }
-
 locals {
   name_prefix = "${var.project_name}-${var.env}"
 }
@@ -129,32 +123,81 @@ resource "aws_security_group" "lambda" {
   name        = "${local.name_prefix}-lambda-sg"
   description = "Security group for Lambda"
   vpc_id      = aws_vpc.main.id
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
   }
+
   tags = { Name = "${local.name_prefix}-lambda-sg" }
+}
+
+resource "aws_security_group_rule" "lambda_to_rds" {
+  description                     = "Allow Lambda to connect to RDS PostgreSQL"
+  type                            = "ingress"
+  from_port                       = 5432
+  to_port                         = 5432
+  protocol                        = "tcp"
+  security_group_id               = aws_security_group.lambda.id
+  source_security_group_id        = aws_security_group.lambda.id
 }
 
 resource "aws_security_group" "database" {
   name        = "${local.name_prefix}-database-sg"
-  description = "Security group for Aurora"
+  description = "Security group for PostgreSQL (RDS)"
   vpc_id      = aws_vpc.main.id
   ingress {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.lambda.id]
+    description     = "Allow PostgreSQL access from Lambda"
   }
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
   }
   tags = { Name = "${local.name_prefix}-database-sg" }
+}
+
+resource "aws_security_group" "blockchain" {
+  name        = "${local.name_prefix}-blockchain-sg"
+  description = "Security group for blockchain ECS nodes"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port = 9944
+    to_port   = 9944
+    protocol  = "tcp"
+    self      = true
+    description = "Allow blockchain node communication"
+  }
+
+  ingress {
+    from_port = 2049
+    to_port   = 2049
+    protocol  = "tcp"
+    self      = true
+    description = "Allow NFS communication for blockchain"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-blockchain-sg"
+  }
 }
 
 output "vpc_id" { value = aws_vpc.main.id }
@@ -166,6 +209,7 @@ output "blockchain_subnet_ids" { value = [for s in aws_subnet.blockchain : s.id]
 output "lambda_security_group_id" { value = aws_security_group.lambda.id }
 output "lambda_sg_arn" { value = aws_security_group.lambda.arn }
 output "database_sg_id" { value = aws_security_group.database.id }
+output "blockchain_sg_id" { value = aws_security_group.blockchain.id }
 
 # VPC Endpoints
 resource "aws_vpc_endpoint" "s3" {

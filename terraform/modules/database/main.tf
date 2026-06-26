@@ -1,58 +1,3 @@
-variable "project_name" {
-  type = string
-}
-
-variable "env" {
-  type = string
-}
-
-variable "db_username" {
-  type = string
-}
-
-variable "skip_final_snapshot" {
-  type    = bool
-  default = true
-}
-
-variable "db_password" {
-  type      = string
-  sensitive = true
-}
-
-variable "redis_auth_token" {
-  type      = string
-  sensitive = true
-}
-
-variable "vpc_id" {
-  type = string
-}
-
-variable "private_subnet_ids" {
-  type = list(string)
-}
-
-variable "kms_key_arn" {
-  type = string
-}
-
-variable "lambda_security_group_id" {
-  type = string
-}
-
-variable "database_sg_id" {
-  type = string
-}
-
-variable "db_credentials_secret_arn" {
-  type = string
-}
-
-variable "redis_auth_token_secret_arn" {
-  type = string
-}
-
 locals {
   name_prefix = "${var.project_name}-${var.env}"
 }
@@ -62,7 +7,7 @@ resource "aws_elasticache_subnet_group" "main" {
   subnet_ids = var.private_subnet_ids
 
   lifecycle {
-    ignore_changes = all
+    ignore_changes = all # Luego de crearlo, ignora cualquier cambio futuro
   }
 }
 
@@ -76,6 +21,7 @@ resource "aws_security_group" "elasticache" {
     to_port         = 6379
     protocol        = "tcp"
     security_groups = [var.lambda_security_group_id]
+    description     = "Allow Redis access from Lambda"
   }
 
   tags = {
@@ -114,30 +60,6 @@ resource "aws_db_subnet_group" "main" {
   }
 }
 
-resource "aws_security_group" "aurora" {
-  name_prefix = "${local.name_prefix}-aurora-"
-  description = "Security group for Aurora"
-  vpc_id      = var.vpc_id
-
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [var.lambda_security_group_id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${local.name_prefix}-aurora-sg"
-  }
-}
-
 resource "aws_db_instance" "main" {
   identifier          = "${local.name_prefix}-postgres"
   engine              = "postgres"
@@ -153,7 +75,7 @@ resource "aws_db_instance" "main" {
 
   final_snapshot_identifier = var.skip_final_snapshot ? null : "${local.name_prefix}-postgres-final"
 
-  vpc_security_group_ids = [aws_security_group.aurora.id]
+  vpc_security_group_ids = [var.lambda_security_group_id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
   tags = {

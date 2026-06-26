@@ -1,13 +1,21 @@
 ---
-- name: Habilitar acceso HTTPS desde el security group de Lambda hacia endpoints VPC
+- name: Habilitar acceso desde Lambda al security group de blockchain (puerto 9944)
   shell: |
-    SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-lambda-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
+    BLOCKCHAIN_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-blockchain-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
+    LAMBDA_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-lambda-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
+
     aws ec2 authorize-security-group-ingress \
-      --group-id "$SG_ID" \
+      --group-id "$BLOCKCHAIN_SG_ID" \
       --protocol tcp \
-      --port 443 \
-      --source-group "$SG_ID" \
-      --region "{{ aws_region }}" 2>/dev/null || true
+      --port 9944 \
+      --source-group "$LAMBDA_SG_ID" \
+      --region "{{ aws_region }}" 2>/dev/null || \
+    aws ec2 authorize-security-group-ingress \
+      --group-id "$BLOCKCHAIN_SG_ID" \
+      --protocol tcp \
+      --port 9944 \
+      --source-group "$LAMBDA_SG_ID" \
+      --region "{{ aws_region }}" || true
 
 - name: Corregir imagen y registrar nuevo task definition
   shell: |

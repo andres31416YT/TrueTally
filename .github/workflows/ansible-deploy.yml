@@ -1,5 +1,10 @@
+# Workflow de Ansible
+# Se ejecuta automáticamente después que Terraform CI/CD termine exitosamente
+# Encargado de configurar la infraestructura aprovisionada por Terraform
 name: Ansible Deploy
 
+# Trigger: se dispara cuando el workflow 'Terraform CI/CD' completa exitosamente
+# También puede ejecutarse manualmente con workflow_dispatch
 on:
   workflow_run:
     workflows: ['Terraform CI/CD']
@@ -7,11 +12,17 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+# Permisos necesarios:
+# - id-token: write: autenticación OIDC con AWS
+# - contents: read: leer el código del repositorio
+# - actions: read: leer el estado de otros workflows (workflow_run)
 permissions:
   id-token: write
   contents: read
   actions: read
 
+# Job principal: configura toda la infraestructura con Ansible
+# Ejecuta el playbook site.yml con los roles definidos en ansible/roles
 jobs:
   configure:
     name: Configurar infraestructura con Ansible
@@ -19,9 +30,13 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
 
     steps:
-      - name: Checkout del código
+      # Paso 1: descargar el código del repositorio
+      - name: Checkout del código (último commit de la rama)
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch || github.ref_name }}
 
+      # Paso 2: autenticarse con AWS usando OIDC (sin credenciales estáticas)
       - name: Autenticación con AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -29,35 +44,45 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
           mask-aws-account-id: true
 
-      - name: Instalar Ansible y dependencias
+      # Paso 3: instalar Ansible y las colecciones de AWS necesarias
+      - name: Instalar Python 3 y Ansible
         run: |
-          python -m pip install --upgrade pip
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip
+          python3 -m pip install --upgrade pip
           pip install ansible boto3 botocore
           ansible-galaxy collection install amazon.aws community.general
 
+      # Paso 4: detectar si estamos en main (prod) o develop (dev)
       - name: Determinar ambiente
         id: env
         run: |
-          if [[ "${{ github.event.workflow_run.head_branch }}" == "main" ]]; then
+          BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+          if [[ "$BRANCH" == "main" ]]; then
             echo "truetally_env=prod" >> $GITHUB_OUTPUT
           else
             echo "truetally_env=dev" >> $GITHUB_OUTPUT
           fi
 
+      # Paso 5: ejecutar el playbook principal de Ansible
+      # - ANSIBLE_ROLES_PATH: ruta donde están los roles personalizados
+      # - inventario: hosts.ini (servidores EC2, ECS, Lambda, etc.)
+      # - extra-vars: variable truetally_env (dev o prod)
       - name: Ejecutar playbook de Ansible
         run: |
           ansible-playbook \
             -i ansible/inventory/hosts.ini \
             ansible/playbooks/site.yml \
             -v \
-            --extra-vars "truetally_env=${{ steps.env.outputs.truetally_env }}"
-        env:
-          ANSIBLE_HOST_KEY_CHECKING: 'false'
-          ANSIBLE_ROLES_PATH: ansible/roles
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-          SUDOADMIN_EMAIL: ${{ secrets.SUDOADMIN_EMAIL }}
-          SUDOADMIN_PASSWORD: ${{ secrets.SUDOADMIN_PASSWORD }}
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+            --extra-vars "truetally_env=${{ steps.env.outputs.truetally_env }} ansible_python_interpreter=/usr/bin/python3"
+         env:
+           ANSIBLE_HOST_KEY_CHECKING: 'false'
+           ANSIBLE_ROLES_PATH: ansible/roles
+           ANSIBLE_CONFIG: ansible/playbooks/ansible.cfg
+           AWS_REGION: ${{ secrets.AWS_REGION }}
+           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+           SUDOADMIN_EMAIL: ${{ secrets.SUDOADMIN_EMAIL }}
+           SUDOADMIN_PASSWORD: ${{ secrets.SUDOADMIN_PASSWORD }}
+           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}

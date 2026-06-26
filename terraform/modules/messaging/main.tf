@@ -1,7 +1,3 @@
-variable "project_name" { type = string }
-variable "env" { type = string }
-variable "vpc_id" { type = string }
-
 locals {
   name_prefix = "${var.project_name}-${var.env}"
 }
@@ -27,4 +23,8 @@ output "vote_queue_url" {
 
 output "vote_queue_arn" {
   value = aws_sqs_queue.vote_queue.arn
+}
+
+output "dlq_arn" {
+  value = aws_sqs_queue.dlq.arn
 }
