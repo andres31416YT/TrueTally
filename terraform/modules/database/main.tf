@@ -76,6 +76,7 @@ resource "aws_security_group" "elasticache" {
     to_port         = 6379
     protocol        = "tcp"
     security_groups = [var.lambda_security_group_id]
+    description     = "Allow Redis access from Lambda"
   }
 
   tags = {
