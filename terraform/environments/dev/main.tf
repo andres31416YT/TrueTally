@@ -18,6 +18,7 @@ module "networking" {
   vpc_cidr     = local.vpc_cidr
   azs          = local.azs
   aws_region   = local.region
+  kms_key_arn  = module.security.kms_key_arn
 }
 
 module "security" {
