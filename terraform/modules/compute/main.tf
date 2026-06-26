@@ -99,6 +99,7 @@ resource "aws_lambda_function" "acceso" {
   role          = aws_iam_role.lambda.arn
   handler       = "bootstrap" #Manejamos RUST
   runtime       = "provided.al2" #Ejecutar lenguaje RUST compilado de forma nativa
+  kms_key_arn   = var.kms_key_arn
 
   vpc_config {
     subnet_ids         = var.private_subnet_ids
@@ -126,6 +127,7 @@ resource "aws_lambda_function" "despachador" {
   role          = aws_iam_role.lambda.arn
   handler       = "bootstrap"
   runtime       = "provided.al2"
+  kms_key_arn   = var.kms_key_arn
 
   vpc_config {
     subnet_ids         = var.private_subnet_ids
@@ -153,6 +155,7 @@ resource "aws_lambda_function" "procesador" {
   role          = aws_iam_role.lambda.arn
   handler       = "bootstrap"
   runtime       = "provided.al2"
+  kms_key_arn   = var.kms_key_arn
 
   vpc_config {
     subnet_ids         = var.private_subnet_ids
