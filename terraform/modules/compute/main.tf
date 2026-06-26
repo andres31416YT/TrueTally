@@ -94,11 +94,13 @@ resource "aws_iam_role_policy" "lambda_ssm" {
 
 # Lambda functions
 resource "aws_lambda_function" "acceso" {
-  function_name = "${local.name_prefix}-acceso"
-  filename      = "${var.lambda_zip_path}/lambda-acceso.zip"
-  role          = aws_iam_role.lambda.arn
-  handler       = "bootstrap" #Manejamos RUST
-  runtime       = "provided.al2" #Ejecutar lenguaje RUST compilado de forma nativa
+  function_name                  = "${local.name_prefix}-acceso"
+  filename                       = "${var.lambda_zip_path}/lambda-acceso.zip"
+  role                           = aws_iam_role.lambda.arn
+  handler                        = "bootstrap" #Manejamos RUST
+  runtime                        = "provided.al2" #Ejecutar lenguaje RUST compilado de forma nativa
+  kms_key_arn                    = var.kms_key_arn
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
   vpc_config {
     subnet_ids         = var.private_subnet_ids
@@ -121,11 +123,13 @@ resource "aws_lambda_function" "acceso" {
 }
 
 resource "aws_lambda_function" "despachador" {
-  function_name = "${local.name_prefix}-despachador"
-  filename      = "${var.lambda_zip_path}/lambda-despachador.zip"
-  role          = aws_iam_role.lambda.arn
-  handler       = "bootstrap"
-  runtime       = "provided.al2"
+  function_name                  = "${local.name_prefix}-despachador"
+  filename                       = "${var.lambda_zip_path}/lambda-despachador.zip"
+  role                           = aws_iam_role.lambda.arn
+  handler                        = "bootstrap"
+  runtime                        = "provided.al2"
+  kms_key_arn                    = var.kms_key_arn
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
   vpc_config {
     subnet_ids         = var.private_subnet_ids
@@ -148,11 +152,13 @@ resource "aws_lambda_function" "despachador" {
 }
 
 resource "aws_lambda_function" "procesador" {
-  function_name = "${local.name_prefix}-procesador"
-  filename      = "${var.lambda_zip_path}/lambda-procesador.zip"
-  role          = aws_iam_role.lambda.arn
-  handler       = "bootstrap"
-  runtime       = "provided.al2"
+  function_name                  = "${local.name_prefix}-procesador"
+  filename                       = "${var.lambda_zip_path}/lambda-procesador.zip"
+  role                           = aws_iam_role.lambda.arn
+  handler                        = "bootstrap"
+  runtime                        = "provided.al2"
+  kms_key_arn                    = var.kms_key_arn
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
   vpc_config {
     subnet_ids         = var.private_subnet_ids
