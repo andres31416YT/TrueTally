@@ -1,7 +1,3 @@
-variable "project_name" { type = string }
-variable "env" { type = string }
-variable "vpc_id" { type = string }
-
 locals {
   name_prefix = "${var.project_name}-${var.env}"
 }

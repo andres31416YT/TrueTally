@@ -1,7 +1,26 @@
 ---
-# Variables específicas para ECS Blockchain
+# =============================================================================
+# VARIABLES DE ECS BLOCKCHAIN - TrueTally
+# =============================================================================
+# Configuración del nodo blockchain que corre en AWS ECS Fargate
+# La imagen se construye desde app/blockchain-core y se sube a ECR
+# =============================================================================
+
+# CPU asignado a la tarea ECS (256 = 0.25 vCPU)
+# Suficiente para un nodo Substrate de validación ligero
 ecs_task_cpu: 256
+
+# Memoria asignada a la tarea ECS (en MB)
+# 512MB es suficiente para el nodo blockchain en modo validator
 ecs_task_memory: 512
+
+# Cantidad deseada de tareas corriendo (1 por AZ para alta disponibilidad)
+# En desarrollo se usa 1, en producción se puede escalar a 2
 ecs_desired_count: 2
+
+# Puerto que expone el contenedor blockchain (libp2p de Substrate)
+# Las Lambdas se conectan a este puerto para enviar votos
 ecs_container_port: 9944
+
+# Tag de la imagen en ECR (latest, o un SHA específico para inmutabilidad)
 ecs_image_tag: latest

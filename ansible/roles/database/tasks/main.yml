@@ -1,10 +1,26 @@
 ---
+# =============================================================================
+# ROLE: database
+# =============================================================================
+# Responsabilidades:
+# - Obtener información de la instancia RDS PostgreSQL (estado, endpoint)
+# - Leer credenciales desde Secrets Manager (no se almacenan en código)
+# - Parsear credenciales para construir DATABASE_URL
+# - Iniciar RDS si está detenido
+# - Esperar hasta que RDS esté disponible
+# =============================================================================
+
 - name: Obtener información de RDS
+  # Consulta el estado actual de la instancia RDS PostgreSQL
+  # Necesario para obtener el endpoint y verificar si está corriendo
   amazon.aws.rds_instance_info:
     db_instance_identifier: "{{ name_prefix }}-postgres"
   register: rds_info
 
 - name: Obtener credenciales de DB desde Secrets Manager
+  # Lee el secreto de AWS Secrets Manager que contiene usuario/contraseña
+  # El secreto fue creado por Terraform: <prefix>/db/credentials
+  # IMPORTANTE: no hardcodear credenciales, siempre leer de Secrets Manager
   shell: |
     aws secretsmanager get-secret-value \
       --secret-id "{{ name_prefix }}/db/credentials" \
@@ -14,6 +30,8 @@
   register: db_secret_raw
 
 - name: Parsear credenciales de DB
+  # Extrae username, password, endpoint y puerto del JSON de Secrets Manager
+  # Estas variables se usan para construir DATABASE_URL que van a las Lambdas
   set_fact:
     db_username: "{{ db_secret_raw.stdout | from_json | json_query('username') }}"
     db_password: "{{ db_secret_raw.stdout | from_json | json_query('password') }}"
@@ -21,12 +39,16 @@
     db_port: "{{ rds_info.instances[0].endpoint.port }}"
 
 - name: Arrancar RDS si está stopped
+  # Si RDS está detenido (por ejemplo, para ahorrar costos en dev), lo arranca
+  # En prod normalmente ya está corriendo, este paso se salta
   amazon.aws.rds_instance:
     db_instance_identifier: "{{ name_prefix }}-postgres"
     state: started
   when: rds_info.instances[0].db_instance_status == 'stopped'
 
 - name: Esperar a que RDS esté available
+  # Hace polling hasta que RDS responda como 'available'
+  # Timeout: 30 retries x 10 segundos = 5 minutos máximo
   amazon.aws.rds_instance_info:
     db_instance_identifier: "{{ name_prefix }}-postgres"
   register: rds_status

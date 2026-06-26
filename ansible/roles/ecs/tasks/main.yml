@@ -1,24 +1,51 @@
 ---
-- name: Habilitar acceso HTTPS desde el security group de Lambda hacia endpoints VPC
+# =============================================================================
+# ROLE: ecs
+# =============================================================================
+# Responsabilidades:
+# - Configurar regla de security group para permitir Lambdas → blockchain:9944
+# - Corregir task definition de ECS con la imagen actual de ECR
+# - Actualizar el servicio ECS para usar el nuevo task definition
+# - Esperar a que el servicio esté estable (running == desired)
+# =============================================================================
+
+- name: Habilitar acceso desde Lambda al security group de blockchain (puerto 9944)
+  # Abre el puerto 9944 (protocolo libp2p de Substrate) en el SG del blockchain
+  # Permite que las Lambdas (dentro de la VPC) se conecten al nodo blockchain
+  # Usa 2>/dev/null || true para hacer la tarea idempotente (no falla si ya existe)
   shell: |
-    SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-lambda-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
+    BLOCKCHAIN_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-blockchain-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
+    LAMBDA_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-lambda-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
+
     aws ec2 authorize-security-group-ingress \
-      --group-id "$SG_ID" \
+      --group-id "$BLOCKCHAIN_SG_ID" \
       --protocol tcp \
-      --port 443 \
-      --source-group "$SG_ID" \
-      --region "{{ aws_region }}" 2>/dev/null || true
+      --port 9944 \
+      --source-group "$LAMBDA_SG_ID" \
+      --region "{{ aws_region }}" 2>/dev/null || \
+    aws ec2 authorize-security-group-ingress \
+      --group-id "$BLOCKCHAIN_SG_ID" \
+      --protocol tcp \
+      --port 9944 \
+      --source-group "$LAMBDA_SG_ID" \
+      --region "{{ aws_region }}" || true
 
 - name: Corregir imagen y registrar nuevo task definition
+  # Ejecuta un script Python que toma el task definition actual y lo actualiza
+  # con la imagen latest de ECR (fix_task_def.py)
+  # Esto es necesario porque Terraform no actualiza la imagen automáticamente
   shell: |
     python3 "{{ role_path }}/files/fix_task_def.py" "{{ name_prefix }}-blockchain" "{{ aws_region }}" "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ name_prefix }}-blockchain:latest"
   register: register_task
 
 - name: Obtener ARN del nuevo task definition
+  # Extrae el ARN del task definition recién registrado para pasarlo a ECS service
   set_fact:
     new_task_arn: "{{ register_task.stdout | from_json | json_query('taskDefinition.taskDefinitionArn') }}"
 
 - name: Actualizar ECS service
+  # Fuerza al servicio ECS a usar el nuevo task definition con la imagen actualizada
+  # ECS Fargate hará rolling update de las tareas automáticamente
   shell: |
     aws ecs update-service \
       --cluster "{{ name_prefix }}-blockchain-cluster" \
@@ -27,6 +54,9 @@
       --region "{{ aws_region }}"
 
 - name: Esperar a que ECS service intente arrancar (no bloquear si falta imagen)
+  # Hace polling del estado del servicio ECS
+  # ignore_errors=true porque si la imagen no existe en ECR, el servicio no arranca
+  # pero no queremos que el playbook falle por eso
   shell: |
     aws ecs describe-services \
       --cluster "{{ name_prefix }}-blockchain-cluster" \
@@ -41,6 +71,7 @@
   ignore_errors: true
 
 - name: Estado final del servicio ECS
+  # Registra el estado final para debugging (no modifica nada)
   shell: |
     aws ecs describe-services \
       --cluster "{{ name_prefix }}-blockchain-cluster" \

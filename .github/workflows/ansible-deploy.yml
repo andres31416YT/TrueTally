@@ -34,7 +34,7 @@ jobs:
       - name: Checkout del código (último commit de la rama)
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_branch }}
+          ref: ${{ github.event.workflow_run.head_branch || github.ref_name }}
 
       # Paso 2: autenticarse con AWS usando OIDC (sin credenciales estáticas)
       - name: Autenticación con AWS via OIDC
@@ -57,7 +57,8 @@ jobs:
       - name: Determinar ambiente
         id: env
         run: |
-          if [[ "${{ github.event.workflow_run.head_branch }}" == "main" ]]; then
+          BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+          if [[ "$BRANCH" == "main" ]]; then
             echo "truetally_env=prod" >> $GITHUB_OUTPUT
           else
             echo "truetally_env=dev" >> $GITHUB_OUTPUT
@@ -74,13 +75,14 @@ jobs:
             ansible/playbooks/site.yml \
             -v \
             --extra-vars "truetally_env=${{ steps.env.outputs.truetally_env }} ansible_python_interpreter=/usr/bin/python3"
-        env:
-          ANSIBLE_HOST_KEY_CHECKING: 'false'
-          ANSIBLE_ROLES_PATH: ansible/roles
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-          SUDOADMIN_EMAIL: ${{ secrets.SUDOADMIN_EMAIL }}
-          SUDOADMIN_PASSWORD: ${{ secrets.SUDOADMIN_PASSWORD }}
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+         env:
+           ANSIBLE_HOST_KEY_CHECKING: 'false'
+           ANSIBLE_ROLES_PATH: ansible/roles
+           ANSIBLE_CONFIG: ansible/playbooks/ansible.cfg
+           AWS_REGION: ${{ secrets.AWS_REGION }}
+           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+           SUDOADMIN_EMAIL: ${{ secrets.SUDOADMIN_EMAIL }}
+           SUDOADMIN_PASSWORD: ${{ secrets.SUDOADMIN_PASSWORD }}
+           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
