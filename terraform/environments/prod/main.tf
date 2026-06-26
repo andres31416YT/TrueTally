@@ -94,4 +94,5 @@ module "monitoring" {
   source       = "../../modules/monitoring"
   project_name = local.project_name
   env          = local.env
+  kms_key_arn  = module.security.kms_key_arn
 }

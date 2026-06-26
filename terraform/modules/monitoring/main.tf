@@ -6,6 +6,7 @@ locals {
 resource "aws_cloudwatch_log_group" "lambda_acceso" {
   name              = "/aws/lambda/${local.name_prefix}-acceso"
   retention_in_days = 7
+  kms_key_id        = var.kms_key_arn
 
   tags = {
     Environment = var.env
@@ -15,6 +16,7 @@ resource "aws_cloudwatch_log_group" "lambda_acceso" {
 resource "aws_cloudwatch_log_group" "lambda_despachador" {
   name              = "/aws/lambda/${local.name_prefix}-despachador"
   retention_in_days = 7
+  kms_key_id        = var.kms_key_arn
 
   tags = {
     Environment = var.env
@@ -24,6 +26,7 @@ resource "aws_cloudwatch_log_group" "lambda_despachador" {
 resource "aws_cloudwatch_log_group" "lambda_procesador" {
   name              = "/aws/lambda/${local.name_prefix}-procesador"
   retention_in_days = 7
+  kms_key_id        = var.kms_key_arn
 
   tags = {
     Environment = var.env
@@ -33,6 +36,7 @@ resource "aws_cloudwatch_log_group" "lambda_procesador" {
 resource "aws_cloudwatch_log_group" "ecs_blockchain" {
   name              = "/ecs/${local.name_prefix}-blockchain"
   retention_in_days = 7
+  kms_key_id        = var.kms_key_arn
 
   tags = {
     Environment = var.env
