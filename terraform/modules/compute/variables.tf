@@ -77,3 +77,8 @@ variable "lambda_zip_path" {
 variable "dlq_arn" {
   type = string
 }
+
+variable "lambda_reserved_concurrent_executions" {
+  type    = number
+  default = 5
+}
