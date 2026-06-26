@@ -64,27 +64,47 @@
     fi
   register: integration_despachador
 
-- name: Dar permiso a API Gateway para invocar lambda-acceso
+- name: Garantizar permiso a API Gateway para invocar lambda-acceso
   shell: |
-    aws lambda add-permission \
-      --function-name "{{ name_prefix }}-acceso" \
-      --statement-id "api-gateway-access-acceso" \
-      --action "lambda:InvokeFunction" \
-      --principal "apigateway.amazonaws.com" \
-      --source-arn "arn:aws:execute-api:{{ aws_region }}:{{ aws_account_id }}:{{ api_id }}/*/*/*" \
-      --region "{{ aws_region }}"
-  ignore_errors: true
+    STATEMENT_ID="api-gateway-access-acceso"
+    FUNCTION_NAME="{{ name_prefix }}-acceso"
+    REGION="{{ aws_region }}"
+    API_ID="{{ api_id }}"
+    ACCOUNT_ID="{{ aws_account_id }}"
+    SOURCE_ARN="arn:aws:execute-api:${REGION}:${ACCOUNT_ID}:${API_ID}/*/*/*"
 
-- name: Dar permiso a API Gateway para invocar lambda-despachador
+    EXISTING=$(aws lambda get-policy --function-name "$FUNCTION_NAME" --region "$REGION" --query "contains(Policy, \`$STATEMENT_ID\`)" --output text 2>/dev/null || echo "None")
+
+    if [ "$EXISTING" != "True" ]; then
+      aws lambda add-permission \
+        --function-name "$FUNCTION_NAME" \
+        --statement-id "$STATEMENT_ID" \
+        --action "lambda:InvokeFunction" \
+        --principal "apigateway.amazonaws.com" \
+        --source-arn "$SOURCE_ARN" \
+        --region "$REGION"
+    fi
+
+- name: Garantizar permiso a API Gateway para invocar lambda-despachador
   shell: |
-    aws lambda add-permission \
-      --function-name "{{ name_prefix }}-despachador" \
-      --statement-id "api-gateway-access-despachador" \
-      --action "lambda:InvokeFunction" \
-      --principal "apigateway.amazonaws.com" \
-      --source-arn "arn:aws:execute-api:{{ aws_region }}:{{ aws_account_id }}:{{ api_id }}/*/*/*" \
-      --region "{{ aws_region }}"
-  ignore_errors: true
+    STATEMENT_ID="api-gateway-access-despachador"
+    FUNCTION_NAME="{{ name_prefix }}-despachador"
+    REGION="{{ aws_region }}"
+    API_ID="{{ api_id }}"
+    ACCOUNT_ID="{{ aws_account_id }}"
+    SOURCE_ARN="arn:aws:execute-api:${REGION}:${ACCOUNT_ID}:${API_ID}/*/*/*"
+
+    EXISTING=$(aws lambda get-policy --function-name "$FUNCTION_NAME" --region "$REGION" --query "contains(Policy, \`$STATEMENT_ID\`)" --output text 2>/dev/null || echo "None")
+
+    if [ "$EXISTING" != "True" ]; then
+      aws lambda add-permission \
+        --function-name "$FUNCTION_NAME" \
+        --statement-id "$STATEMENT_ID" \
+        --action "lambda:InvokeFunction" \
+        --principal "apigateway.amazonaws.com" \
+        --source-arn "$SOURCE_ARN" \
+        --region "$REGION"
+    fi
 
 - name: Crear o actualizar ruta POST /vote
   shell: |

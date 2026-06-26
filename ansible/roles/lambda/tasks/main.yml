@@ -47,126 +47,96 @@
     aws sqs get-queue-url --queue-name "{{ name_prefix }}-vote-queue" --query 'QueueUrl' --output text --region "{{ aws_region }}"
   register: sqs_queue_url_result
 
-- name: Obtener variables actuales de lambda-acceso
-  shell: |
-    aws lambda get-function-configuration \
-      --function-name "{{ name_prefix }}-acceso" \
-      --region "{{ aws_region }}" \
-      --query 'Environment.Variables' \
-      --output json
-  register: lambda_acceso_env_raw
-
-- name: Obtener variables actuales de lambda-procesador
-  shell: |
-    aws lambda get-function-configuration \
-      --function-name "{{ name_prefix }}-procesador" \
-      --region "{{ aws_region }}" \
-      --query 'Environment.Variables' \
-      --output json
-  register: lambda_procesador_env_raw
-
-- name: Obtener variables actuales de lambda-despachador
-  shell: |
-    aws lambda get-function-configuration \
-      --function-name "{{ name_prefix }}-despachador" \
-      --region "{{ aws_region }}" \
-      --query 'Environment.Variables' \
-      --output json
-  register: lambda_despachador_env_raw
-
-- name: Calcular variables fusionadas para lambda-acceso
-  set_fact:
-    lambda_acceso_new_env: >-
-      {{ (lambda_acceso_env_raw.stdout | from_json | combine({
-        'DATABASE_URL': database_url_result.stdout,
-        'SUDOADMIN_EMAIL': sudoadmin_email,
-        'SUDOADMIN_PASSWORD': sudoadmin_password,
-        'ADMIN_EMAIL': admin_email,
-        'ADMIN_PASSWORD': admin_password
-      }) | combine({
-        'BLOCKCHAIN_NODE_URL': blockchain_node_url
-      } if blockchain_node_url else {})) | to_json }}
-
-- name: Calcular variables fusionadas para lambda-procesador
-  set_fact:
-    lambda_procesador_new_env: >-
-      {{ (lambda_procesador_env_raw.stdout | from_json | combine({
-        'SUDOADMIN_EMAIL': sudoadmin_email,
-        'SUDOADMIN_PASSWORD': sudoadmin_password,
-        'ADMIN_EMAIL': admin_email,
-        'ADMIN_PASSWORD': admin_password
-      }) | combine({
-        'BLOCKCHAIN_NODE_URL': blockchain_node_url
-      } if blockchain_node_url else {})) | to_json }}
-
-- name: Calcular variables fusionadas para lambda-despachador
-  set_fact:
-    lambda_despachador_new_env: >-
-      {{ (lambda_despachador_env_raw.stdout | from_json | combine({
-        'SUDOADMIN_EMAIL': sudoadmin_email,
-        'SUDOADMIN_PASSWORD': sudoadmin_password,
-        'ADMIN_EMAIL': admin_email,
-        'ADMIN_PASSWORD': admin_password
-      }) | combine({
-        'VOTE_QUEUE_URL': sqs_queue_url_result.stdout
-      } if sqs_queue_url_result.stdout else {})) | to_json }}
-
-- name: Escribir variables fusionadas para lambda-acceso
-  copy:
-    content: "{{ lambda_acceso_new_env }}"
-    dest: /tmp/lambda_acceso_vars.json
-
-- name: Escribir variables fusionadas para lambda-procesador
-  copy:
-    content: "{{ lambda_procesador_new_env }}"
-    dest: /tmp/lambda_procesador_vars.json
-
-- name: Escribir variables fusionadas para lambda-despachador
-  copy:
-    content: "{{ lambda_despachador_new_env }}"
-    dest: /tmp/lambda_despachador_vars.json
-
-- name: Crear script de actualización Lambda
-  copy:
-    content: |
-      import json
-      import subprocess
-      import sys
-
-      function_name = sys.argv[1]
-      region = sys.argv[2]
-      variables_file = sys.argv[3]
-
-      with open(variables_file, 'r') as f:
-          variables = json.load(f)
-
-      config = {
-          'FunctionName': function_name,
-          'Environment': {
-              'Variables': variables
-          }
-      }
-
-      with open('/tmp/lambda_config.json', 'w') as f:
-          json.dump(config, f)
-
-      result = subprocess.run([
-          'aws', 'lambda', 'update-function-configuration',
-          '--cli-input-json', 'file:///tmp/lambda_config.json',
-          '--region', region
-      ], capture_output=True, text=True)
-
-      print(result.stdout)
-      if result.returncode != 0:
-          print(result.stderr, file=sys.stderr)
-          sys.exit(1)
-    dest: /tmp/update_lambda.py
-
 - name: Actualizar lambda-acceso
-  shell: python3 /tmp/update_lambda.py "{{ name_prefix }}-acceso" "{{ aws_region }}" /tmp/lambda_acceso_vars.json
+  shell: |
+    python3 -c "
+    import json
+    config = {
+        'FunctionName': '{{ name_prefix }}-acceso',
+        'Timeout': {{ lambda_acceso_timeout }},
+        'MemorySize': {{ lambda_acceso_memory_size }},
+        'Environment': {
+            'Variables': {
+                'DATABASE_URL': '{{ database_url_result.stdout }}',
+                'SUDOADMIN_EMAIL': '{{ sudoadmin_email }}',
+                'SUDOADMIN_PASSWORD': '{{ sudoadmin_password }}',
+                'ADMIN_EMAIL': '{{ admin_email }}',
+                'ADMIN_PASSWORD': '{{ admin_password }}',
+                'BLOCKCHAIN_NODE_URL': '{{ blockchain_node_url }}',
+                'DB_CREDENTIALS_ARN': 'arn:aws:secretsmanager:{{ aws_region }}:{{ aws_account_id }}:secret:{{ name_prefix }}/db/credentials'
+            }
+        }
+    }
+    print(json.dumps(config))
+    " > /tmp/lambda_acceso_config.json
+  args:
+    executable: /bin/bash
+  register: lambda_acceso_update
+
+- name: Aplicar configuración a lambda-acceso
+  shell: |
+    aws lambda update-function-configuration \
+      --cli-input-json file:///tmp/lambda_acceso_config.json \
+      --region "{{ aws_region }}"
 
 - name: Actualizar lambda-procesador
-  shell: python3 /tmp/update_lambda.py "{{ name_prefix }}-procesador" "{{ aws_region }}" /tmp/lambda_procesador_vars.json
+  shell: |
+    python3 -c "
+    import json
+    config = {
+        'FunctionName': '{{ name_prefix }}-procesador',
+        'Timeout': {{ lambda_procesador_timeout }},
+        'MemorySize': {{ lambda_procesador_memory_size }},
+        'Environment': {
+            'Variables': {
+                'NODE_URL_AZ1': '{{ blockchain_node_url }}',
+                'NODE_URL_AZ2': '{{ blockchain_node_url }}',
+                'SUDOADMIN_EMAIL': '{{ sudoadmin_email }}',
+                'SUDOADMIN_PASSWORD': '{{ sudoadmin_password }}',
+                'ADMIN_EMAIL': '{{ admin_email }}',
+                'ADMIN_PASSWORD': '{{ admin_password }}',
+                'BLOCKCHAIN_NODE_URL': '{{ blockchain_node_url }}'
+            }
+        }
+    }
+    print(json.dumps(config))
+    " > /tmp/lambda_procesador_config.json
+  args:
+    executable: /bin/bash
+  register: lambda_procesador_update
+
+- name: Aplicar configuración a lambda-procesador
+  shell: |
+    aws lambda update-function-configuration \
+      --cli-input-json file:///tmp/lambda_procesador_config.json \
+      --region "{{ aws_region }}"
 
 - name: Actualizar lambda-despachador
-  shell: python3 /tmp/update_lambda.py "{{ name_prefix }}-despachador" "{{ aws_region }}" /tmp/lambda_despachador_vars.json
+  shell: |
+    python3 -c "
+    import json
+    config = {
+        'FunctionName': '{{ name_prefix }}-despachador',
+        'Timeout': {{ lambda_despachador_timeout }},
+        'MemorySize': {{ lambda_despachador_memory_size }},
+        'Environment': {
+            'Variables': {
+                'SUDOADMIN_EMAIL': '{{ sudoadmin_email }}',
+                'SUDOADMIN_PASSWORD': '{{ sudoadmin_password }}',
+                'ADMIN_EMAIL': '{{ admin_email }}',
+                'ADMIN_PASSWORD': '{{ admin_password }}',
+                'VOTE_QUEUE_URL': '{{ sqs_queue_url_result.stdout }}'
+            }
+        }
+    }
+    print(json.dumps(config))
+    " > /tmp/lambda_despachador_config.json
+  args:
+    executable: /bin/bash
+  register: lambda_despachador_update
+
+- name: Aplicar configuración a lambda-despachador
+  shell: |
+    aws lambda update-function-configuration \
+      --cli-input-json file:///tmp/lambda_despachador_config.json \
+      --region "{{ aws_region }}"
