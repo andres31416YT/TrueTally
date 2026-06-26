@@ -135,6 +135,10 @@ resource "aws_lambda_function" "acceso" {
       DB_CREDENTIALS_ARN = var.db_credentials_secret_arn
     }
   }
+
+  tracing_config {
+    mode = "Active"
+  }
 }
 
 resource "aws_lambda_function" "despachador" {
@@ -157,6 +161,10 @@ resource "aws_lambda_function" "despachador" {
     variables = {
       VOTE_QUEUE_URL = var.vote_queue_url
     }
+  }
+
+  tracing_config {
+    mode = "Active"
   }
 }
 
@@ -181,6 +189,10 @@ resource "aws_lambda_function" "procesador" {
       NODE_URL_AZ1 = var.lambda_node_url_az1
       NODE_URL_AZ2 = var.lambda_node_url_az2
     }
+  }
+
+  tracing_config {
+    mode = "Active"
   }
 }
 
