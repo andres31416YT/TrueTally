@@ -246,7 +246,7 @@ jobs:
         run: |
           cd ${{ steps.env.outputs.env_path }}
           terraform init -input=false \
-            -backend-config="bucket=${{ env.AWS_STATE_BUCKET }}" \
+            -backend-config="bucket=truetally-terraform-state-1" \
             -backend-config="key=${{ steps.env.outputs.env_name }}/terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
 
@@ -366,7 +366,7 @@ jobs:
         run: |
           cd terraform/environments/dev
           terraform init -input=false \
-            -backend-config="bucket=${{ env.AWS_STATE_BUCKET }}" \
+            -backend-config="bucket=truetally-terraform-state-1" \
             -backend-config="key=dev/terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
 
@@ -449,7 +449,7 @@ jobs:
         run: |
           cd terraform/environments/prod
           terraform init -input=false \
-            -backend-config="bucket=${{ env.AWS_STATE_BUCKET }}" \
+            -backend-config="bucket=truetally-terraform-state-1" \
             -backend-config="key=prod/terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
 
