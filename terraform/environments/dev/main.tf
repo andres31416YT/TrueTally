@@ -88,6 +88,7 @@ module "frontend" {
   create_acm_certificate = var.create_acm_certificate
   route53_zone_id        = var.route53_zone_id
   enabled                = false
+  kms_key_arn            = module.security.kms_key_arn
 }
 
 module "monitoring" {

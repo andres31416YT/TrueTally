@@ -32,3 +32,7 @@ variable "enabled" {
   type    = bool
   default = true
 }
+
+variable "kms_key_arn" {
+  type = string
+}
