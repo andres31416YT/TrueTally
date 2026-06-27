@@ -22,6 +22,7 @@ permissions:
 env:
   TF_INPUT: "0"
   AWS_REGION: us-east-1
+  AWS_STATE_BUCKET: truetally-terraform-state-1
   TF_VAR_redis_auth_token: ${{ secrets.TF_VAR_REDIS_AUTH_TOKEN }}
   TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
   TF_VAR_lambda_zip_path: ${{ github.workspace }}/terraform/artifacts
@@ -245,7 +246,7 @@ jobs:
         run: |
           cd ${{ steps.env.outputs.env_path }}
           terraform init -input=false \
-            -backend-config="bucket=truetally-terraform-state" \
+            -backend-config="bucket=${{ env.AWS_STATE_BUCKET }}" \
             -backend-config="key=${{ steps.env.outputs.env_name }}/terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
 
@@ -365,7 +366,7 @@ jobs:
         run: |
           cd terraform/environments/dev
           terraform init -input=false \
-            -backend-config="bucket=truetally-terraform-state" \
+            -backend-config="bucket=${{ env.AWS_STATE_BUCKET }}" \
             -backend-config="key=dev/terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
 
@@ -448,7 +449,7 @@ jobs:
         run: |
           cd terraform/environments/prod
           terraform init -input=false \
-            -backend-config="bucket=truetally-terraform-state" \
+            -backend-config="bucket=${{ env.AWS_STATE_BUCKET }}" \
             -backend-config="key=prod/terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
 
