@@ -290,7 +290,7 @@ resource "aws_ecs_task_definition" "blockchain" {
     image                  = "${var.ecr_repository_url}:latest"
     essential              = true
     privileged             = false
-    readonlyRootFilesystem = false
+    readonlyRootFilesystem = true
     portMappings = [{
       containerPort = 9944
       hostPort      = 9944
