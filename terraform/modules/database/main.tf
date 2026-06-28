@@ -42,6 +42,9 @@ resource "aws_elasticache_replication_group" "main" {
   subnet_group_name          = aws_elasticache_subnet_group.main.name
   security_group_ids         = [aws_security_group.elasticache.id]
 
+  at_rest_encryption_enabled = true
+  kms_key_id                 = var.kms_key_arn
+
   tags = {
     Name = "${local.name_prefix}-redis"
   }
