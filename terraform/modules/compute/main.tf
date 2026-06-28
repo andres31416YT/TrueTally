@@ -8,6 +8,22 @@ locals {
   }
 }
 
+# Code Signing for Lambda security
+resource "aws_signer_signing_profile" "lambda" {
+  name = "${local.name_prefix}-lambda-signing-profile"
+  platform_id = "AWSLambda-SHA384-ECDSA"
+}
+
+resource "aws_lambda_code_signing_config" "lambda" {
+  allowed_publishers {
+    signing_profile_version_arns = [aws_signer_signing_profile.lambda.version_arn]
+  }
+
+  policies {
+    untrusted_artifact_on_deployment = "Enforce"
+  }
+}
+
 # IAM Role for Lambda
 resource "aws_iam_role" "lambda" {
   name = "${local.name_prefix}-lambda-role"
@@ -100,6 +116,7 @@ resource "aws_lambda_function" "acceso" {
   handler                        = "bootstrap" #Manejamos RUST
   runtime                        = "provided.al2" #Ejecutar lenguaje RUST compilado de forma nativa
   kms_key_arn                    = var.kms_key_arn
+  code_signing_config_arn        = aws_lambda_code_signing_config.lambda.arn
   reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
   vpc_config {
@@ -129,6 +146,7 @@ resource "aws_lambda_function" "despachador" {
   handler                        = "bootstrap"
   runtime                        = "provided.al2"
   kms_key_arn                    = var.kms_key_arn
+  code_signing_config_arn        = aws_lambda_code_signing_config.lambda.arn
   reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
   vpc_config {
@@ -158,6 +176,7 @@ resource "aws_lambda_function" "procesador" {
   handler                        = "bootstrap"
   runtime                        = "provided.al2"
   kms_key_arn                    = var.kms_key_arn
+  code_signing_config_arn        = aws_lambda_code_signing_config.lambda.arn
   reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
   vpc_config {
