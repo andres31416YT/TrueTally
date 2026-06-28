@@ -265,11 +265,6 @@ jobs:
           cd ${{ steps.env.outputs.env_path }}
           terraform validate
 
-      - name: Limpiar state del módulo frontend
-        run: |
-          cd ${{ steps.env.outputs.env_path }}
-          terraform state list 2>/dev/null | awk '/^module\.frontend\./ {print $1}' | xargs -r -n1 terraform state rm
-
       - name: Terraform Plan
         id: plan
         run: |
@@ -376,7 +371,7 @@ jobs:
 
       - name: Deploy Frontend to S3
         run: |
-          BUCKET_NAME="truetally-dev-frontend"
+          BUCKET_NAME="truetally-dev-frontend-${{ secrets.AWS_ACCOUNT_ID }}"
           aws s3 sync app/frontend/out s3://$BUCKET_NAME --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
           echo "Frontend deployed to s3://$BUCKET_NAME"
 
@@ -452,7 +447,7 @@ jobs:
 
       - name: Deploy Frontend to S3
         run: |
-          BUCKET_NAME="truetally-prod-frontend"
+          BUCKET_NAME="truetally-prod-frontend-${{ secrets.AWS_ACCOUNT_ID }}"
           aws s3 sync app/frontend/out s3://$BUCKET_NAME --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
           echo "Frontend deployed to s3://$BUCKET_NAME"
 

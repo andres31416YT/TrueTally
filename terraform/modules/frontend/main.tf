@@ -1,5 +1,8 @@
 locals {
   name_prefix = "${var.project_name}-${var.env}"
+  bucket_suffix = var.bucket_suffix != "" ? "-${var.bucket_suffix}" : ""
+  frontend_bucket = "${local.name_prefix}-frontend${local.bucket_suffix}"
+  logs_bucket = "${local.name_prefix}-logs${local.bucket_suffix}"
 }
 
 terraform {
@@ -14,7 +17,7 @@ terraform {
 
 resource "aws_s3_bucket" "logs" {
   count  = var.enabled ? 1 : 0
-  bucket = "${local.name_prefix}-logs"
+  bucket = local.logs_bucket
 }
 
 resource "aws_s3_bucket_versioning" "logs" {
@@ -40,7 +43,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
 
 resource "aws_s3_bucket" "frontend" {
   count  = var.enabled ? 1 : 0
-  bucket = "${local.name_prefix}-frontend"
+  bucket = local.frontend_bucket
 }
 
 resource "aws_s3_bucket_versioning" "frontend" {
@@ -199,7 +202,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   origin {
-    domain_name = "${local.name_prefix}-frontend.s3-website-${var.aws_region}.amazonaws.com"
+    domain_name = "${local.frontend_bucket}.s3-website-${var.aws_region}.amazonaws.com"
     origin_id   = "s3-origin"
 
     custom_origin_config {

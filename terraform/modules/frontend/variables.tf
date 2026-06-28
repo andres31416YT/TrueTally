@@ -36,3 +36,8 @@ variable "enabled" {
 variable "kms_key_arn" {
   type = string
 }
+
+variable "bucket_suffix" {
+  type    = string
+  default = ""
+}

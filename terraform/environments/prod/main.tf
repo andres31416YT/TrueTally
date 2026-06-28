@@ -90,6 +90,7 @@ module "frontend" {
   route53_zone_id        = var.route53_zone_id
   enabled                = true
   kms_key_arn            = module.security.kms_key_arn
+  bucket_suffix          = local.account_id
 }
 
 module "monitoring" {
