@@ -361,7 +361,7 @@ resource "aws_ecs_service" "blockchain" {
   network_configuration {
     subnets          = var.blockchain_subnet_ids
     security_groups  = [var.blockchain_security_group_id]
-    assign_public_ip = false
+    assign_public_ip = true
   }
 
   deployment_controller {
