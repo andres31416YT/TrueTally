@@ -380,13 +380,6 @@ jobs:
           aws s3 sync app/frontend/out s3://$BUCKET_NAME --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
           echo "Frontend deployed to s3://$BUCKET_NAME"
 
-      - name: Restore S3 Bucket Public Access
-        run: |
-          BUCKET_NAME="truetally-dev-frontend"
-          aws s3api put-public-access-block --bucket "$BUCKET_NAME" --public-access-block-configuration '{"BlockPublicAcls":false,"IgnorePublicAcls":false,"BlockPublicPolicy":false,"RestrictPublicBuckets":false}'
-          aws s3api put-bucket-policy --bucket "$BUCKET_NAME" --policy '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::'$BUCKET_NAME'/*"}]}'
-          echo "Public access restored for $BUCKET_NAME"
-
       - name: Invalidate CloudFront
         run: |
           DIST_ID=$(aws cloudfront list-distributions --query 'DistributionList.Items[?contains(Aliases.Items, `andrespaganroncall.qzz.io`)].Id | [0]' --output text)
@@ -463,20 +456,9 @@ jobs:
           aws s3 sync app/frontend/out s3://$BUCKET_NAME --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
           echo "Frontend deployed to s3://$BUCKET_NAME"
 
-      - name: Restore S3 Bucket Public Access
-        run: |
-          BUCKET_NAME="truetally-prod-frontend"
-          aws s3api put-public-access-block --bucket "$BUCKET_NAME" --public-access-block-configuration '{"BlockPublicAcls":false,"IgnorePublicAcls":false,"BlockPublicPolicy":false,"RestrictPublicBuckets":false}'
-          aws s3api put-bucket-policy --bucket "$BUCKET_NAME" --policy '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::'$BUCKET_NAME'/*"}]}'
-          echo "Public access restored for $BUCKET_NAME"
-
       - name: Invalidate CloudFront
         run: |
           DIST_ID=$(aws cloudfront list-distributions --query 'DistributionList.Items[?contains(Aliases.Items, `andrespaganroncall.qzz.io`)].Id | [0]' --output text)
           if [[ -n "$DIST_ID" && "$DIST_ID" != "None" ]]; then
             aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*"
           fi
-# CI/CD test 1782269909
-# CI/CD pipeline test 1782272103
-# CI/CD pipeline test 1782330212
-# retry CI/CD 1782343300
