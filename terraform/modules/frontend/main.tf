@@ -154,7 +154,7 @@ resource "aws_acm_certificate" "frontend" {
 }
 
 resource "aws_acm_certificate_validation" "frontend" {
-  count = var.enabled && var.create_acm_certificate ? 1 : 0
+  count = var.enabled && var.create_acm_certificate && var.ssl_certificate_arn == "" ? 1 : 0
 
   provider        = aws.us_east_1
   certificate_arn = aws_acm_certificate.frontend[0].arn
