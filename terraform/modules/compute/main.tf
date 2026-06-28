@@ -356,6 +356,7 @@ resource "aws_ecs_service" "blockchain" {
   cluster         = aws_ecs_cluster.blockchain.id
   task_definition = aws_ecs_task_definition.blockchain.arn
   desired_count   = 1
+  launch_type     = "FARGATE"
 
   network_configuration {
     subnets          = var.blockchain_subnet_ids
