@@ -18,6 +18,20 @@ resource "aws_kms_key" "main" {
         }
         Action   = "kms:*"
         Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudFront to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action   = ["kms:Decrypt", "kms:DescribeKey"]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
       }
     ]
   })

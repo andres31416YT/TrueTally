@@ -5,6 +5,8 @@ locals {
   logs_bucket = "${local.name_prefix}-logs${local.bucket_suffix}"
 }
 
+data "aws_caller_identity" "current" {}
+
 terraform {
   required_providers {
     aws = {
@@ -107,9 +109,16 @@ resource "aws_s3_bucket_policy" "frontend" {
     Statement = [
       {
         Effect    = "Allow"
-        Principal = "*"
-        Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.frontend[0].arn}/*"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.frontend[0].arn}/*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = "arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/${aws_cloudfront_distribution.frontend[0].id}"
+          }
+        }
       }
     ]
   })
@@ -149,6 +158,14 @@ resource "aws_acm_certificate_validation" "frontend" {
 
   provider        = aws.us_east_1
   certificate_arn = aws_acm_certificate.frontend[0].arn
+}
+
+resource "aws_cloudfront_origin_access_control" "frontend" {
+  name                              = "${local.name_prefix}-oac"
+  description                       = "OAC for ${local.name_prefix} frontend"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
 }
 
 resource "aws_cloudfront_distribution" "frontend" {
@@ -202,16 +219,12 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   origin {
-    domain_name = "${local.frontend_bucket}.s3-website-${var.aws_region}.amazonaws.com"
-    origin_id   = "s3-origin"
+    domain_name              = aws_s3_bucket.frontend[0].bucket_regional_domain_name
+    origin_id                = "s3-origin"
+    origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
 
-    custom_origin_config {
-      http_port                = 80
-      https_port               = 443
-      origin_protocol_policy   = "http-only"
-      origin_ssl_protocols     = ["TLSv1.2"]
-      origin_read_timeout      = 30
-      origin_keepalive_timeout = 5
+    s3_origin_config {
+      origin_access_identity = ""
     }
   }
 }
