@@ -158,7 +158,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   comment             = "Frontend for ${local.name_prefix}"
   default_root_object = "index.html"
 
-  aliases = var.ssl_certificate_arn != "" ? [var.domain_name] : []
+  aliases = var.create_acm_certificate && var.ssl_certificate_arn != "" ? [var.domain_name] : []
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
@@ -186,7 +186,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   dynamic "viewer_certificate" {
-    for_each = var.ssl_certificate_arn != "" ? [1] : []
+    for_each = var.create_acm_certificate && var.ssl_certificate_arn != "" ? [1] : []
     content {
       acm_certificate_arn      = var.ssl_certificate_arn
       ssl_support_method       = "sni-only"
@@ -195,7 +195,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   dynamic "viewer_certificate" {
-    for_each = var.ssl_certificate_arn == "" ? [1] : []
+    for_each = !(var.create_acm_certificate && var.ssl_certificate_arn != "") ? [1] : []
     content {
       cloudfront_default_certificate = true
     }
