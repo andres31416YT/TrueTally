@@ -1,6 +1,7 @@
 name: Build & Push ECR Images
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main, develop ]
     paths:
@@ -53,6 +54,7 @@ jobs:
           push: true
           tags: |
             ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ github.ref == 'refs/heads/main' && 'truetally-prod-blockchain' || 'truetally-dev-blockchain' }}:${{ github.sha }}
+            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ github.ref == 'refs/heads/main' && 'truetally-prod-blockchain' || 'truetally-dev-blockchain' }}:latest
 
       - name: Image pushed
         run: echo "Image pushed"
