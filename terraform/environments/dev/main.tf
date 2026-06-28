@@ -85,8 +85,8 @@ module "frontend" {
   aws_region             = local.region
   domain_name            = var.domain_name
   ssl_certificate_arn    = var.ssl_certificate_arn
-  create_acm_certificate = var.create_acm_certificate
-  route53_zone_id        = var.route53_zone_id
+  create_acm_certificate = true
+  route53_zone_id        = "Z0135327A2VLRKVUCZ2D"
   enabled                = true
   kms_key_arn            = module.security.kms_key_arn
   bucket_suffix          = local.account_id
