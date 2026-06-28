@@ -80,5 +80,5 @@ variable "dlq_arn" {
 
 variable "lambda_reserved_concurrent_executions" {
   type    = number
-  default = 5
+  default = null
 }

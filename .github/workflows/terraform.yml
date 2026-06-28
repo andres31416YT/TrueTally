@@ -22,6 +22,7 @@ permissions:
 env:
   TF_INPUT: "0"
   AWS_REGION: us-east-1
+  AWS_STATE_BUCKET: truetally-terraform-state-1
   TF_VAR_redis_auth_token: ${{ secrets.TF_VAR_REDIS_AUTH_TOKEN }}
   TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
   TF_VAR_lambda_zip_path: ${{ github.workspace }}/terraform/artifacts
@@ -245,7 +246,7 @@ jobs:
         run: |
           cd ${{ steps.env.outputs.env_path }}
           terraform init -input=false \
-            -backend-config="bucket=truetally-terraform-state" \
+            -backend-config="bucket=truetally-terraform-state-1" \
             -backend-config="key=${{ steps.env.outputs.env_name }}/terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
 
@@ -253,12 +254,6 @@ jobs:
         run: |
           cd ${{ steps.env.outputs.env_path }}
           terraform workspace select -or-create ${{ steps.env.outputs.env_name }}
-
-      - name: Limpiar recursos huérfanos del estado (Aurora SG removido)
-        run: |
-          cd ${{ steps.env.outputs.env_path }}
-          terraform state rm 'module.database.aws_security_group.aurora' 2>/dev/null || true
-          terraform state rm 'module.networking.aws_security_group.aurora' 2>/dev/null || true
 
       - name: Terraform FMT (auto-corrige formato)
         run: |
@@ -365,7 +360,7 @@ jobs:
         run: |
           cd terraform/environments/dev
           terraform init -input=false \
-            -backend-config="bucket=truetally-terraform-state" \
+            -backend-config="bucket=truetally-terraform-state-1" \
             -backend-config="key=dev/terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
 
@@ -384,13 +379,6 @@ jobs:
           BUCKET_NAME="truetally-dev-frontend"
           aws s3 sync app/frontend/out s3://$BUCKET_NAME --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
           echo "Frontend deployed to s3://$BUCKET_NAME"
-
-      - name: Restore S3 Bucket Public Access
-        run: |
-          BUCKET_NAME="truetally-dev-frontend"
-          aws s3api put-public-access-block --bucket "$BUCKET_NAME" --public-access-block-configuration '{"BlockPublicAcls":false,"IgnorePublicAcls":false,"BlockPublicPolicy":false,"RestrictPublicBuckets":false}'
-          aws s3api put-bucket-policy --bucket "$BUCKET_NAME" --policy '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::'$BUCKET_NAME'/*"}]}'
-          echo "Public access restored for $BUCKET_NAME"
 
       - name: Invalidate CloudFront
         run: |
@@ -448,7 +436,7 @@ jobs:
         run: |
           cd terraform/environments/prod
           terraform init -input=false \
-            -backend-config="bucket=truetally-terraform-state" \
+            -backend-config="bucket=truetally-terraform-state-1" \
             -backend-config="key=prod/terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
 
@@ -468,20 +456,9 @@ jobs:
           aws s3 sync app/frontend/out s3://$BUCKET_NAME --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
           echo "Frontend deployed to s3://$BUCKET_NAME"
 
-      - name: Restore S3 Bucket Public Access
-        run: |
-          BUCKET_NAME="truetally-prod-frontend"
-          aws s3api put-public-access-block --bucket "$BUCKET_NAME" --public-access-block-configuration '{"BlockPublicAcls":false,"IgnorePublicAcls":false,"BlockPublicPolicy":false,"RestrictPublicBuckets":false}'
-          aws s3api put-bucket-policy --bucket "$BUCKET_NAME" --policy '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::'$BUCKET_NAME'/*"}]}'
-          echo "Public access restored for $BUCKET_NAME"
-
       - name: Invalidate CloudFront
         run: |
           DIST_ID=$(aws cloudfront list-distributions --query 'DistributionList.Items[?contains(Aliases.Items, `andrespaganroncall.qzz.io`)].Id | [0]' --output text)
           if [[ -n "$DIST_ID" && "$DIST_ID" != "None" ]]; then
             aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*"
           fi
-# CI/CD test 1782269909
-# CI/CD pipeline test 1782272103
-# CI/CD pipeline test 1782330212
-# retry CI/CD 1782343300
