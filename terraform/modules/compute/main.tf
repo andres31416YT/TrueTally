@@ -10,7 +10,7 @@ locals {
 
 # Code Signing for Lambda security
 resource "aws_signer_signing_profile" "lambda" {
-  name = "${local.name_prefix}-lambda-signing-profile"
+  name = replace("${local.name_prefix}-lambda-signing-profile", "-", "")
   platform_id = "AWSLambda-SHA384-ECDSA"
 }
 
