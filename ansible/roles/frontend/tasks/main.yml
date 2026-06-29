@@ -42,10 +42,8 @@
     aws s3 sync ../../app/frontend/{{ frontend.dist_directory }} s3://{{ frontend.s3_bucket }} --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
 
 - name: Configurar custom error responses en CloudFront para SPA
-  # Agrega respuestas personalizadas de error 403/404 para servir index.html
-  # Necesario para que las rutas SPA (/login, /register, /blocks) funcionen correctamente
   shell: |
-    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Aliases.Items, \`{{ domain_name }}\`)].Id | [0]" --output text --region "{{ aws_region }}")
+    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[].DomainName, \`{{ frontend.s3_bucket }}.s3-website.\`)].Id | [0]" --output text --region "{{ aws_region }}")
     if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
       ETAG=$(aws cloudfront get-distribution-config --id "$DIST_ID" --query 'ETag' --output text --region "{{ aws_region }}")
       aws cloudfront get-distribution-config --id "$DIST_ID" --region "{{ aws_region }}" --output json | jq '.DistributionConfig.CustomErrorResponses = {"Quantity":2,"Items":[{"ErrorCode":403,"ResponseCode":200,"ResponsePagePath":"/index.html","ErrorCachingMinTTL":300},{"ErrorCode":404,"ResponseCode":200,"ResponsePagePath":"/index.html","ErrorCachingMinTTL":300}]}' > /tmp/cf-custom-errors.json
