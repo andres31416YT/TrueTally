@@ -18,6 +18,7 @@ module "networking" {
   vpc_cidr     = local.vpc_cidr
   azs          = local.azs
   aws_region   = local.region
+  kms_key_arn  = module.security.kms_key_arn
 }
 
 module "security" {
@@ -84,13 +85,16 @@ module "frontend" {
   aws_region             = local.region
   domain_name            = var.domain_name
   ssl_certificate_arn    = var.ssl_certificate_arn
-  create_acm_certificate = var.create_acm_certificate
+  create_acm_certificate = false
   route53_zone_id        = var.route53_zone_id
-  enabled                = false
+  enabled                = true
+  kms_key_arn            = module.security.kms_key_arn
+  bucket_suffix          = local.account_id
 }
 
 module "monitoring" {
   source       = "../../modules/monitoring"
   project_name = local.project_name
   env          = local.env
+  kms_key_arn  = module.security.kms_key_arn
 }

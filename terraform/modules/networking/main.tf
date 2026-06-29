@@ -11,7 +11,8 @@ resource "aws_vpc" "main" {
 
 resource "aws_cloudwatch_log_group" "vpc_flow_log" {
   name              = "${local.name_prefix}-vpc-flow-logs"
-  retention_in_days = 7
+  retention_in_days = 365
+  kms_key_id        = var.kms_key_arn
 }
 
 resource "aws_flow_log" "main" {
@@ -52,19 +53,6 @@ resource "aws_iam_role_policy" "vpc_flow_log" {
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
   tags   = { Name = "${local.name_prefix}-igw" }
-}
-
-resource "aws_eip" "nat" {
-  for_each = toset(var.azs)
-  domain   = "vpc"
-  tags     = { Name = "${local.name_prefix}-nat-eip-${each.key}" }
-}
-
-resource "aws_nat_gateway" "nat" {
-  for_each      = toset(var.azs)
-  allocation_id = aws_eip.nat[each.key].id
-  subnet_id     = aws_subnet.public[each.key].id
-  tags          = { Name = "${local.name_prefix}-nat-${each.key}" }
 }
 
 resource "aws_subnet" "public" {
@@ -248,8 +236,8 @@ resource "aws_vpc_endpoint" "ecr_api" {
   service_name        = "com.amazonaws.${var.aws_region}.ecr.api"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = [for s in aws_subnet.blockchain : s.id]
-  security_group_ids  = [aws_security_group.lambda.id]
-  private_dns_enabled = false
+  security_group_ids  = [aws_security_group.blockchain.id]
+  private_dns_enabled = true
 
   tags = { Name = "${local.name_prefix}-ecr-api-endpoint" }
 }
@@ -259,8 +247,9 @@ resource "aws_vpc_endpoint" "ecr_dkr" {
   service_name        = "com.amazonaws.${var.aws_region}.ecr.dkr"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = [for s in aws_subnet.blockchain : s.id]
-  security_group_ids  = [aws_security_group.lambda.id]
-  private_dns_enabled = false
+  security_group_ids  = [aws_security_group.blockchain.id]
+  private_dns_enabled = true
 
   tags = { Name = "${local.name_prefix}-ecr-dkr-endpoint" }
 }
+
