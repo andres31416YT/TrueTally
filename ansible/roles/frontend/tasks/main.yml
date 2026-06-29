@@ -41,20 +41,23 @@
   shell: |
     aws s3 sync ../../app/frontend/{{ frontend.dist_directory }} s3://{{ frontend.s3_bucket }} --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
 
-- name: Restaurar acceso público al bucket S3
-  # Terraform aplica un bloqueo de acceso público por seguridad
-  # Este paso lo desbloquea para que el bucket sirva contenido público
-  # Necesario porque el frontend se sirve directamente desde S3 (o CloudFront)
+- name: Configurar custom error responses en CloudFront para SPA
+  # Agrega respuestas personalizadas de error 403/404 para servir index.html
+  # Necesario para que las rutas SPA (/login, /register, /blocks) funcionen correctamente
   shell: |
-    aws s3api put-public-access-block --bucket "{{ frontend.s3_bucket }}" --public-access-block-configuration '{"BlockPublicAcls":false,"IgnorePublicAcls":false,"BlockPublicPolicy":false,"RestrictPublicBuckets":false}'
-    aws s3api put-bucket-policy --bucket "{{ frontend.s3_bucket }}" --policy '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::{{ frontend.s3_bucket }}/*"}]}'
+    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Aliases.Items, \`{{ domain_name }}\`)].Id | [0]" --output text --region "{{ aws_region }}")
+    if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
+      ETAG=$(aws cloudfront get-distribution-config --id "$DIST_ID" --query 'ETag' --output text --region "{{ aws_region }}")
+      aws cloudfront get-distribution-config --id "$DIST_ID" --region "{{ aws_region }}" --output json | jq '.DistributionConfig.CustomErrorResponses = {"Quantity":2,"Items":[{"ErrorCode":403,"ResponseCode":200,"ResponsePagePath":"/index.html","ErrorCachingMinTTL":300},{"ErrorCode":404,"ResponseCode":200,"ResponsePagePath":"/index.html","ErrorCachingMinTTL":300}]}' > /tmp/cf-custom-errors.json
+      aws cloudfront update-distribution --id "$DIST_ID" --distribution-config file:///tmp/cf-custom-errors.json --if-match "$ETAG" --region "{{ aws_region }}"
+    fi
 
 - name: Invalidar CloudFront asociado al bucket frontend
   # Crea una invalidación de CloudFront para que sirva el nuevo contenido
   # Detecta la distribución por el nombre del bucket S3 en los orígenes
   # paths "/*" invalida todo el cache (necesario después de cada deploy)
   shell: |
-    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[].DomainName, \`{{ frontend.s3_bucket }}.s3.\`)].Id | [0]" --output text --region "{{ aws_region }}")
+    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[].DomainName, \`{{ frontend.s3_bucket }}.s3-website.\`)].Id | [0]" --output text --region "{{ aws_region }}")
     if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
       aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" --region "{{ aws_region }}"
     fi
