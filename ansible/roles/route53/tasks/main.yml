@@ -1,0 +1,29 @@
+---
+# =============================================================================
+# ROLE: route53
+# =============================================================================
+# Responsabilidades:
+# - Verificar/crear hosted zone para el dominio
+# - Crear registro A apuntando a CloudFront
+# - Configurar alias hacia la distribución CloudFront
+# =============================================================================
+
+- name: Verificar si existe Hosted Zone
+  shell: |
+    aws route53 list-hosted-zones --query "HostedZones[?contains(Name, '{{ route53.domain_name }}')].[Id]" --output text --region "{{ aws_region }}" 2>/dev/null || echo "None"
+  register: hosted_zone_check
+
+- name: Obtener Hosted Zone ID
+  shell: |
+    aws route53 list-hosted-zones --query "HostedZones[?Name=='{{ route53.domain_name }}.'].Id" --output text --region "{{ aws_region }}" 2>/dev/null || echo "/hostedzone/{{ route53.hosted_zone_id }}"
+  register: hosted_zone_id
+
+- name: Obtener CloudFront Distribution ID
+  shell: |
+    aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[].DomainName, '{{ frontend.s3_bucket }}.s3.')].Id | [0]" --output text --region "{{ aws_region }}"
+  register: cf_dist_id
+
+- name: Crear registro DNS en Route53 apuntando a CloudFront
+  shell: |
+    aws route53 change-resource-record-sets --hosted-zone-id "{{ hosted_zone_id.stdout | regex_replace('/hostedzone/', '') }}" --change-batch '{"Changes":[{"Action":"UPSERT","ResourceRecordSet":{"Name":"{{ route53.domain_name }}","Type":"A","AliasTarget":{"DNSName":"{{ cf_dist_id.stdout }}.cloudfront.net","HostedZoneId":"Z2FDTNDATAQYW2","EvaluateTargetHealth":false}}]}' --region "{{ aws_region }}"
+  ignore_errors: true

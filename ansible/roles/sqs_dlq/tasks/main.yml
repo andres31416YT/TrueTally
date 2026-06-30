@@ -1,0 +1,36 @@
+---
+# =============================================================================
+# ROLE: sqs_dlq
+# =============================================================================
+# Responsabilidades:
+# - Crear cola SQS DLQ para mensajes fallidos
+# - Configurar redrive policy en la cola principal hacia la DLQ
+# - Configurar 3 reintentos máximo antes de enviar a DLQ
+# =============================================================================
+
+- name: Verificar si la DLQ existe
+  shell: |
+    aws sqs get-queue-url --queue-name "{{ name_prefix }}-vote-queue-dlq" --region "{{ aws_region }}" --output text 2>/dev/null || echo "None"
+  register: dlq_url_check
+
+- name: Crear cola DLQ para votos
+  shell: |
+    aws sqs create-queue --queue-name "{{ name_prefix }}-vote-queue-dlq" --attributes "MessageRetentionPeriod=1209600,VisibilityTimeout=300" --region "{{ aws_region }}" --query 'QueueUrl' --output text
+  register: dlq_create
+  when: dlq_url_check.stdout == "None"
+
+- name: Obtener URL de la cola principal
+  shell: |
+    aws sqs get-queue-url --queue-name "{{ name_prefix }}-vote-queue" --region "{{ aws_region }}" --query 'QueueUrl' --output text
+  register: main_queue_url
+
+- name: Obtener ARN de la cola DLQ
+  shell: |
+    aws sqs get-queue-attributes --queue-url "https://sqs.{{ aws_region }}.amazonaws.com/{{ aws_account_id }}/{{ name_prefix }}-vote-queue-dlq" --attribute-names QueueArn --region "{{ aws_region }}" --query 'Attributes.QueueArn' --output text
+  register: dlq_arn_result
+  when: dlq_url_check.stdout == "None"
+
+- name: Configurar redrive policy en cola principal
+  shell: |
+    aws sqs set-queue-attributes --queue-url "{{ main_queue_url.stdout }}" --attributes '{"RedrivePolicy": "{\"deadLetterTargetArn\": \"arn:aws:sqs:{{ aws_region }}:{{ aws_account_id }}:{{ name_prefix }}-vote-queue-dlq\", \"maxReceiveCount\": \"3\"}"}' --region "{{ aws_region }}"
+  ignore_errors: true

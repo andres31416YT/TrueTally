@@ -1,0 +1,46 @@
+---
+# =============================================================================
+# ROLE: vpc_flow_logs
+# =============================================================================
+# Responsabilidades:
+# - Crear CloudWatch Log Group para VPC Flow Logs
+# - Crear rol IAM para escribir flow logs
+# - Configurar flow logs para todas las subnets
+# =============================================================================
+
+- name: Obtener VPC ID
+  shell: |
+    aws ec2 describe-vpcs --filters "Name=tag:Name,Values={{ name_prefix }}-vpc" --query 'Vpcs[0].VpcId' --output text --region "{{ aws_region }}"
+  register: vpc_id_check
+
+- name: Obtener IAM role para Flow Logs existente
+  shell: |
+    aws iam get-role --role-name "{{ name_prefix }}-vpc-flow-logs-role" --query 'Role.RoleName' --output text 2>/dev/null || echo "None"
+  register: flow_logs_role_check
+
+- name: Crear rol IAM para VPC Flow Logs
+  shell: |
+    aws iam create-role --role-name "{{ name_prefix }}-vpc-flow-logs-role" --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"vpc-flow-logs.amazonaws.com"},"Action":"sts:AssumeRole"}]}' --query 'Role.Arn' --output text
+  register: flow_logs_role_create
+  when: flow_logs_role_check.stdout == "None"
+
+- name: Adjuntar política CloudWatch a rol Flow Logs
+  shell: |
+    aws iam put-role-policy --role-name "{{ name_prefix }}-vpc-flow-logs-role" --policy-name "{{ name_prefix }}-vpc-flow-logs-policy" --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["logs:CreateLogStream","logs:PutLogEvents"],"Resource":"arn:aws:logs:{{ aws_region }}:{{ aws_account_id }}:*"}]}'
+  when: flow_logs_role_check.stdout != "None" or flow_logs_role_create.stdout is defined
+
+- name: Verificar CloudWatch Log Group para Flow Logs
+  shell: |
+    aws logs describe-log-groups --log-group-name-prefix "/aws/vpc/flowlogs/{{ name_prefix }}" --query 'logGroups[0].logGroupName' --output text --region "{{ aws_region }}" 2>/dev/null || echo "None"
+  register: log_group_check
+
+- name: Crear CloudWatch Log Group para Flow Logs
+  shell: |
+    aws logs create-log-group --log-group-name "/aws/vpc/flowlogs/{{ name_prefix }}" --retention-in-days {{ vpc_flow_logs.retention_days }} --region "{{ aws_region }}"
+  when: log_group_check.stdout == "None"
+
+- name: Crear flujo de VPC Flow Logs
+  shell: |
+    aws ec2 create-flow-logs --resource-type VPC --resource-ids {{ vpc_id_check.stdout }} --traffic-types ALL --log-destination-type cloud-watch-logs --log-group-name "/aws/vpc/flowlogs/{{ name_prefix }}" --deliver-logs-permission-arn "arn:aws:iam::{{ aws_account_id }}:role/{{ name_prefix }}-vpc-flow-logs-role" --region "{{ aws_region }}"
+  register: flow_logs_create
+  ignore_errors: true

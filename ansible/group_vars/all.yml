@@ -61,6 +61,7 @@ frontend:
   s3_bucket: "{{ name_prefix }}-frontend-{{ aws_account_id }}"
   build_command: npm run build
   dist_directory: out
+  cloudfront_distribution_id: ""
 
 # =============================================================================
 # CONFIGURACIÓN DE MONITOREO
@@ -82,3 +83,25 @@ common_tags:
   ManagedBy: "ansible"
 
 domain_name: "andrespaganroncall.qzz.io"
+
+# =============================================================================
+# CONFIGURACIÓN WAF
+# =============================================================================
+
+waf:
+  rate_limit: 1000
+
+# =============================================================================
+# CONFIGURACIÓN SES
+# =============================================================================
+
+ses:
+  domain: "qzz.io"
+  from_email: "noreply@andrespaganroncall.qzz.io"
+
+# =============================================================================
+# CONFIGURACIÓN VPC FLOW LOGS
+# =============================================================================
+
+vpc_flow_logs:
+  retention_days: 7
