@@ -32,12 +32,15 @@
     - name: Crear S3 Gateway Endpoint
       shell: |
         aws ec2 create-vpc-endpoint --vpc-id "{{ vpc_check.stdout }}" --service-name "com.amazonaws.{{ aws_region }}.s3" --route-table-ids "{{ route_tables_get.stdout | from_json | join(' ') }}" --vpc-endpoint-type Gateway --region "{{ aws_region }}" 2>/dev/null || true
+      ignore_errors: true
 
     - name: Crear SQS Interface Endpoint
       shell: |
         aws ec2 create-vpc-endpoint --vpc-id "{{ vpc_check.stdout }}" --service-name "com.amazonaws.{{ aws_region }}.sqs" --subnet-ids "{{ private_subnets_get.stdout | from_json | join(' ') }}" --security-group-ids "{{ lambda_sg_get.stdout }}" --vpc-endpoint-type Interface --private-dns-enabled --region "{{ aws_region }}" 2>/dev/null || true
+      ignore_errors: true
 
     - name: Crear Secrets Manager Interface Endpoint
       shell: |
         aws ec2 create-vpc-endpoint --vpc-id "{{ vpc_check.stdout }}" --service-name "com.amazonaws.{{ aws_region }}.secretsmanager" --subnet-ids "{{ private_subnets_get.stdout | from_json | join(' ') }}" --security-group-ids "{{ lambda_sg_get.stdout }}" --vpc-endpoint-type Interface --private-dns-enabled --region "{{ aws_region }}" 2>/dev/null || true
-  when: vpc_check.stdout != "None" and vpc_check.stdout != "None"
+      ignore_errors: true
+  when: vpc_check.stdout is defined and vpc_check.stdout != "None" and vpc_check.stdout | length > 0
