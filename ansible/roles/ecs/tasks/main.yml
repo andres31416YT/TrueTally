@@ -34,9 +34,9 @@
 - name: Corregir imagen y registrar nuevo task definition
   # Ejecuta un script Python que toma el task definition actual y lo actualiza
   # con la imagen latest de ECR (fix_task_def.py)
-  # Esto es necesario porque Terraform no actualiza la imagen automáticamente
+  # Nota: el repositorio ECR se llama truetally-blockchain (sin sufijo de env)
   shell: |
-    python3 "{{ role_path }}/files/fix_task_def.py" "{{ name_prefix }}-blockchain" "{{ aws_region }}" "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ name_prefix }}-blockchain:latest"
+    python3 "{{ role_path }}/files/fix_task_def.py" "{{ name_prefix }}-blockchain" "{{ aws_region }}" "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/truetally-blockchain:latest"
   register: register_task
 
 - name: Obtener ARN del nuevo task definition
