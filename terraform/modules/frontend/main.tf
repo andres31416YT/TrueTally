@@ -1,8 +1,8 @@
 locals {
-  name_prefix = "${var.project_name}-${var.env}"
-  bucket_suffix = var.bucket_suffix != "" ? "-${var.bucket_suffix}" : ""
+  name_prefix     = "${var.project_name}-${var.env}"
+  bucket_suffix   = var.bucket_suffix != "" ? "-${var.bucket_suffix}" : ""
   frontend_bucket = "${local.name_prefix}-frontend${local.bucket_suffix}"
-  logs_bucket = "${local.name_prefix}-logs${local.bucket_suffix}"
+  logs_bucket     = "${local.name_prefix}-logs${local.bucket_suffix}"
 }
 
 data "aws_caller_identity" "current" {}
@@ -107,7 +107,7 @@ resource "aws_s3_bucket_policy" "frontend" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect    = "Allow"
+        Effect = "Allow"
         Principal = {
           Service = "cloudfront.amazonaws.com"
         }
@@ -218,8 +218,8 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   origin {
-    domain_name              = "${local.frontend_bucket}.s3-website-${var.aws_region}.amazonaws.com"
-    origin_id                = "s3-origin"
+    domain_name = "${local.frontend_bucket}.s3-website-${var.aws_region}.amazonaws.com"
+    origin_id   = "s3-origin"
 
     custom_origin_config {
       http_port                = 80
@@ -228,11 +228,6 @@ resource "aws_cloudfront_distribution" "frontend" {
       origin_ssl_protocols     = ["TLSv1.2"]
       origin_read_timeout      = 30
       origin_keepalive_timeout = 5
-    }
-
-    custom_header {
-      name  = "Host"
-      value = "${local.frontend_bucket}.s3-website-${var.aws_region}.amazonaws.com"
     }
   }
 }
