@@ -43,10 +43,10 @@
 
 - name: Configurar custom error responses en CloudFront para SPA
   shell: |
-    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[].DomainName, \`{{ frontend.s3_bucket }}.s3.\`)].Id | [0]" --output text --region "{{ aws_region }}")
+    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, \`{{ frontend.s3_bucket }}.s3.\`)].Id | [0]" --output text --region "{{ aws_region }}")
     if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
       ETAG=$(aws cloudfront get-distribution-config --id "$DIST_ID" --query 'ETag' --output text --region "{{ aws_region }}")
-      aws cloudfront get-distribution-config --id "$DIST_ID" --region "{{ aws_region }}" --output json | jq '.DistributionConfig.CustomErrorResponses = {"Quantity":2,"Items":[{"ErrorCode":403,"ResponseCode":200,"ResponsePagePath":"/index.html","ErrorCachingMinTTL":300},{"ErrorCode":404,"ResponseCode":200,"ResponsePagePath":"/index.html","ErrorCachingMinTTL":300}]}' > /tmp/cf-custom-errors.json
+      aws cloudfront get-distribution-config --id "$DIST_ID" --region "{{ aws_region }}" --output json | jq '.DistributionConfig.CustomErrorResponses = {"Quantity":2,"Items":[{"ErrorCode":403,"ResponseCode":"200","ResponsePagePath":"/index.html","ErrorCachingMinTTL":300},{"ErrorCode":404,"ResponseCode":"200","ResponsePagePath":"/index.html","ErrorCachingMinTTL":300}]}' > /tmp/cf-custom-errors.json
       aws cloudfront update-distribution --id "$DIST_ID" --distribution-config file:///tmp/cf-custom-errors.json --if-match "$ETAG" --region "{{ aws_region }}"
     fi
 
