@@ -10,25 +10,23 @@
 # =============================================================================
 
 - name: Habilitar acceso desde Lambda al security group de blockchain (puerto 9944)
-  # Abre el puerto 9944 (protocolo libp2p de Substrate) en el SG del blockchain
-  # Permite que las Lambdas (dentro de la VPC) se conecten al nodo blockchain
-  # Usa 2>/dev/null || true para hacer la tarea idempotente (no falla si ya existe)
   shell: |
     BLOCKCHAIN_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-blockchain-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
     LAMBDA_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-lambda-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
 
-    aws ec2 authorize-security-group-ingress \
-      --group-id "$BLOCKCHAIN_SG_ID" \
-      --protocol tcp \
-      --port 9944 \
-      --source-group "$LAMBDA_SG_ID" \
-      --region "{{ aws_region }}" 2>/dev/null || \
-    aws ec2 authorize-security-group-ingress \
-      --group-id "$BLOCKCHAIN_SG_ID" \
-      --protocol tcp \
-      --port 9944 \
-      --source-group "$LAMBDA_SG_ID" \
-      --region "{{ aws_region }}" || true
+    if [ -n "$BLOCKCHAIN_SG_ID" ] && [ -n "$LAMBDA_SG_ID" ] && [ "$BLOCKCHAIN_SG_ID" != "None" ] && [ "$LAMBDA_SG_ID" != "None" ]; then
+      # Verificar si la regla ya existe antes de crearla (idempotente)
+      RULE_EXISTS=$(aws ec2 describe-security-groups --group-ids "$BLOCKCHAIN_SG_ID" --query "SecurityGroups[0].IpPermissions[?FromPort==\`9944\` && ToPort==\`9944\` && UserIdGroupPairs[?GroupId=='$LAMBDA_SG_ID']] | length(@)" --output text --region "{{ aws_region }}" 2>/dev/null || echo "0")
+
+      if [ "$RULE_EXISTS" = "0" ]; then
+        aws ec2 authorize-security-group-ingress \
+          --group-id "$BLOCKCHAIN_SG_ID" \
+          --protocol tcp \
+          --port 9944 \
+          --source-group "$LAMBDA_SG_ID" \
+          --region "{{ aws_region }}"
+      fi
+    fi
 
 - name: Corregir imagen y registrar nuevo task definition
   # Ejecuta un script Python que toma el task definition actual y lo actualiza
