@@ -10,12 +10,14 @@
 # =============================================================================
 
 - name: Habilitar acceso desde Lambda al security group de blockchain (puerto 9944)
+  # Abre el puerto 9944 en el SG del blockchain para permitir conexiones desde Lambda
+  # Esta regla es necesaria para que las Lambdas consulten el nodo blockchain
+  # No crítico para el funcionamiento del servicio ECS
   shell: |
     BLOCKCHAIN_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-blockchain-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
     LAMBDA_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-lambda-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
 
     if [ -n "$BLOCKCHAIN_SG_ID" ] && [ -n "$LAMBDA_SG_ID" ] && [ "$BLOCKCHAIN_SG_ID" != "None" ] && [ "$LAMBDA_SG_ID" != "None" ]; then
-      # Verificar si la regla ya existe antes de crearla (idempotente)
       RULE_EXISTS=$(aws ec2 describe-security-groups --group-ids "$BLOCKCHAIN_SG_ID" --query "SecurityGroups[0].IpPermissions[?FromPort==\`9944\` && ToPort==\`9944\` && UserIdGroupPairs[?GroupId=='$LAMBDA_SG_ID']] | length(@)" --output text --region "{{ aws_region }}" 2>/dev/null || echo "0")
 
       if [ "$RULE_EXISTS" = "0" ]; then
@@ -24,9 +26,10 @@
           --protocol tcp \
           --port 9944 \
           --source-group "$LAMBDA_SG_ID" \
-          --region "{{ aws_region }}"
+          --region "{{ aws_region }}" || echo "Failed to open SG rule 9944 (Lambda → Blockchain). This may require manual configuration in console."
       fi
     fi
+  ignore_errors: true
 
 - name: Corregir imagen y registrar nuevo task definition
   # Ejecuta un script Python que toma el task definition actual y lo actualiza
