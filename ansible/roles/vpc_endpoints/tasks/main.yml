@@ -43,4 +43,14 @@
       shell: |
         aws ec2 create-vpc-endpoint --vpc-id "{{ vpc_check.stdout }}" --service-name "com.amazonaws.{{ aws_region }}.secretsmanager" --subnet-ids "{{ private_subnets_get.stdout | from_json | join(' ') }}" --security-group-ids "{{ lambda_sg_get.stdout }}" --vpc-endpoint-type Interface --private-dns-enabled --region "{{ aws_region }}" 2>/dev/null || true
       ignore_errors: true
+
+    - name: Crear ECR API Interface Endpoint
+      shell: |
+        aws ec2 create-vpc-endpoint --vpc-id "{{ vpc_check.stdout }}" --service-name "com.amazonaws.{{ aws_region }}.ecr.api" --subnet-ids "{{ private_subnets_get.stdout | from_json | join(' ') }}" --security-group-ids "{{ lambda_sg_get.stdout }}" --vpc-endpoint-type Interface --private-dns-enabled --region "{{ aws_region }}" 2>/dev/null || true
+      ignore_errors: true
+
+    - name: Crear ECR DKR Interface Endpoint
+      shell: |
+        aws ec2 create-vpc-endpoint --vpc-id "{{ vpc_check.stdout }}" --service-name "com.amazonaws.{{ aws_region }}.ecr.dkr" --subnet-ids "{{ private_subnets_get.stdout | from_json | join(' ') }}" --security-group-ids "{{ lambda_sg_get.stdout }}" --vpc-endpoint-type Interface --private-dns-enabled --region "{{ aws_region }}" 2>/dev/null || true
+      ignore_errors: true
   when: vpc_check.stdout is defined and vpc_check.stdout != "None" and vpc_check.stdout | length > 0

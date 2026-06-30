@@ -15,15 +15,27 @@
 
 - name: Crear Web ACL para CloudFront
   shell: >-
-    aws wafv2 create-web-acl
-    --name "{{ name_prefix }}-waf"
-    --scope CLOUDFRONT
-    --region us-east-1
-    --default-action Allow={}
-    --visibility-config SampledRequestsEnabled=true,CloudWatchMetricsEnabled=true,MetricName="{{ name_prefix }}-waf"
-    --rules "$(cat /tmp/waf-rules.json)"
-    --tags '[{"Key":"Project","Value":"{{ project_name }}"},{"Key":"Environment","Value":"{{ truetally_env }}"},{"Key":"ManagedBy","Value":"ansible"}]'
-    --query 'WebACL.Arn'
-    --output text
+    python3 -c "
+    import subprocess, json
+    with open('/tmp/waf-rules.json') as f:
+        rules = json.load(f)
+    cmd = [
+        'aws', 'wafv2', 'create-web-acl',
+        '--name', '{{ name_prefix }}-waf',
+        '--scope', 'CLOUDFRONT',
+        '--region', 'us-east-1',
+        '--default-action', 'Allow={}',
+        '--visibility-config', 'SampledRequestsEnabled=true,CloudWatchMetricsEnabled=true,MetricName={{ name_prefix }}-waf',
+        '--rules', json.dumps(rules),
+        '--tags', json.dumps([{'Key':'Project','Value':'{{ project_name }}'},{'Key':'Environment','Value':'{{ truetally_env }}'},{'Key':'ManagedBy','Value':'ansible'}]),
+        '--query', 'WebACL.Arn',
+        '--output', 'text'
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    print(result.stdout.strip())
+    if result.returncode != 0:
+        import sys
+        sys.exit(result.returncode)
+    "
   register: web_acl_arn
   ignore_errors: true
