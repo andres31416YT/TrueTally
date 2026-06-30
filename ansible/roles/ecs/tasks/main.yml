@@ -11,23 +11,57 @@
 
 - name: Habilitar acceso desde Lambda al security group de blockchain (puerto 9944)
   # Abre el puerto 9944 en el SG del blockchain para permitir conexiones desde Lambda
-  # Esta regla es necesaria para que las Lambdas consulten el nodo blockchain
-  # No crítico para el funcionamiento del servicio ECS
+  # Usa vpc_id para filtrar el SG de blockchain y evitar recursos duplicados en otras VPCs
   shell: |
-    BLOCKCHAIN_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-blockchain-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
-    LAMBDA_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-lambda-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
+    VPC_ID="{{ vpc_id | default('') }}"
 
-    if [ -n "$BLOCKCHAIN_SG_ID" ] && [ -n "$LAMBDA_SG_ID" ] && [ "$BLOCKCHAIN_SG_ID" != "None" ] && [ "$LAMBDA_SG_ID" != "None" ]; then
-      RULE_EXISTS=$(aws ec2 describe-security-groups --group-ids "$BLOCKCHAIN_SG_ID" --query "SecurityGroups[0].IpPermissions[?FromPort==\`9944\` && ToPort==\`9944\` && UserIdGroupPairs[?GroupId=='$LAMBDA_SG_ID']] | length(@)" --output text --region "{{ aws_region }}" 2>/dev/null || echo "0")
+    if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
+      BLOCKCHAIN_SG_ID=$(aws ec2 describe-security-groups \
+        --filters "Name=vpc-id,Values=${VPC_ID}" "Name=group-name,Values={{ name_prefix }}-blockchain-sg" \
+        --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}" 2>/dev/null || echo "")
+    else
+      BLOCKCHAIN_SG_ID=$(aws ec2 describe-security-groups \
+        --filters "Name=group-name,Values={{ name_prefix }}-blockchain-sg" \
+        --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}" 2>/dev/null || echo "")
+    fi
 
-      if [ "$RULE_EXISTS" = "0" ]; then
-        aws ec2 authorize-security-group-ingress \
-          --group-id "$BLOCKCHAIN_SG_ID" \
-          --protocol tcp \
-          --port 9944 \
-          --source-group "$LAMBDA_SG_ID" \
-          --region "{{ aws_region }}" || echo "Failed to open SG rule 9944 (Lambda → Blockchain). This may require manual configuration in console."
+    if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ] && [ -n "$BLOCKCHAIN_SG_ID" ] && [ "$BLOCKCHAIN_SG_ID" != "None" ]; then
+      BLOCKCHAIN_VPC=$(aws ec2 describe-security-groups --group-ids "$BLOCKCHAIN_SG_ID" --query 'SecurityGroups[0].VpcId' --output text --region "{{ aws_region }}" 2>/dev/null || echo "")
+    else
+      BLOCKCHAIN_VPC=""
+    fi
+
+    if [ -n "$BLOCKCHAIN_SG_ID" ] && [ "$BLOCKCHAIN_SG_ID" != "None" ] && [ "$BLOCKCHAIN_VPC" = "$VPC_ID" ] && [ -n "$VPC_ID" ]; then
+      LAMBDA_SG_ID="{{ lambda_security_group_id | default('') }}"
+
+      if [ -z "$LAMBDA_SG_ID" ] || [ "$LAMBDA_SG_ID" = "None" ]; then
+        LAMBDA_SG_ID=$(aws ec2 describe-security-groups \
+          --filters "Name=vpc-id,Values=${VPC_ID}" "Name=group-name,Values={{ name_prefix }}-lambda-sg" \
+          --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}" 2>/dev/null || echo "")
       fi
+
+      if [ -n "$LAMBDA_SG_ID" ] && [ "$LAMBDA_SG_ID" != "None" ]; then
+        LAMBDA_VPC=$(aws ec2 describe-security-groups --group-ids "$LAMBDA_SG_ID" --query 'SecurityGroups[0].VpcId' --output text --region "{{ aws_region }}" 2>/dev/null || echo "")
+
+        if [ "$BLOCKCHAIN_VPC" = "$LAMBDA_VPC" ] && [ -n "$LAMBDA_VPC" ]; then
+          RULE_EXISTS=$(aws ec2 describe-security-groups --group-ids "$BLOCKCHAIN_SG_ID" --query "SecurityGroups[0].IpPermissions[?FromPort==\`9944\` && ToPort==\`9944\` && UserIdGroupPairs[?GroupId=='$LAMBDA_SG_ID']] | length(@)" --output text --region "{{ aws_region }}" 2>/dev/null || echo "0")
+
+          if [ "$RULE_EXISTS" = "0" ]; then
+            aws ec2 authorize-security-group-ingress \
+              --group-id "$BLOCKCHAIN_SG_ID" \
+              --protocol tcp \
+              --port 9944 \
+              --source-group "$LAMBDA_SG_ID" \
+              --region "{{ aws_region }}"
+          fi
+        else
+          echo "No se pudo abrir regla SG 9944: blockchain-sg ($BLOCKCHAIN_SG_ID) y lambda-sg ($LAMBDA_SG_ID) pertenecen a VPCs distintas ($BLOCKCHAIN_VPC != $LAMBDA_VPC)."
+        fi
+      else
+        echo "No se pudo abrir regla SG 9944: no se encontro lambda-sg en la VPC $VPC_ID."
+      fi
+    else
+      echo "No se pudo abrir regla SG 9944: no se encontro blockchain-sg en la VPC $VPC_ID."
     fi
   ignore_errors: true
 

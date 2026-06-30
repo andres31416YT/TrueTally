@@ -13,17 +13,28 @@
     content: "{{ waf_rules_json }}"
     dest: /tmp/waf-rules.json
 
-- name: Crear Web ACL para CloudFront
-  shell: >-
-    aws wafv2 create-web-acl
-    --name {{ name_prefix }}-waf
-    --scope CLOUDFRONT
-    --region us-east-1
-    --default-action 'Allow={}'
-    --visibility-config 'SampledRequestsEnabled=true,CloudWatchMetricsEnabled=true,MetricName={{ name_prefix }}-waf'
-    --rules file:///tmp/waf-rules.json
-    --tags '[{"Key":"Project","Value":"{{ project_name }}"},{"Key":"Environment","Value":"{{ truetally_env }}"},{"Key":"ManagedBy","Value":"ansible"}]'
-    --query 'WebACL.Arn'
-    --output text
+- name: Crear o reutilizar Web ACL para CloudFront
+  # Evita WAFDuplicateItemException si el Web ACL ya existe de despliegues anteriores
+  # Verifica primero con list-web-acls y solo crea si no existe
+  shell: |
+    WEB_ACL_ARN=$(aws wafv2 list-web-acls
+      --scope CLOUDFRONT
+      --region us-east-1
+      --query "WebACLs[?Name=='{{ name_prefix }}-waf'].ARN | [0]"
+      --output text)
+    if [ "$WEB_ACL_ARN" = "None" ] || [ -z "$WEB_ACL_ARN" ]; then
+      aws wafv2 create-web-acl
+        --name {{ name_prefix }}-waf
+        --scope CLOUDFRONT
+        --region us-east-1
+        --default-action 'Allow={}'
+        --visibility-config 'SampledRequestsEnabled=true,CloudWatchMetricsEnabled=true,MetricName={{ name_prefix }}-waf'
+        --rules file:///tmp/waf-rules.json
+        --tags '[{"Key":"Project","Value":"{{ project_name }}"},{"Key":"Environment","Value":"{{ truetally_env }}"},{"Key":"ManagedBy","Value":"ansible"}]'
+        --query 'WebACL.Arn'
+        --output text
+    else
+      echo "$WEB_ACL_ARN"
+    fi
   register: web_acl_arn
   ignore_errors: true

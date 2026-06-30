@@ -78,6 +78,9 @@
     - role: database
       tags: [database]
 
+    - role: vpc_endpoints
+      tags: [network]
+
     - role: ecs
       tags: [ecs]
 
@@ -98,9 +101,6 @@
 
     - role: route53
       tags: [route53]
-
-    - role: vpc_endpoints
-      tags: [network]
 
     - role: vpc_flow_logs
       tags: [network]
