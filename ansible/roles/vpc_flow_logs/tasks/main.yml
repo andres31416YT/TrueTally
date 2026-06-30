@@ -45,6 +45,6 @@
 
 - name: Crear flujo de VPC Flow Logs
   shell: |
-    aws ec2 create-flow-logs --resource-type VPC --resource-ids {{ vpc_id_check.stdout }} --traffic-types ALL --log-destination-type cloud-watch-logs --log-group-name "/aws/vpc/flowlogs/{{ name_prefix }}" --deliver-logs-permission-arn "arn:aws:iam::{{ aws_account_id }}:role/{{ name_prefix }}-vpc-flow-logs-role" --region "{{ aws_region }}"
+    aws ec2 create-flow-logs --resource-type VPC --resource-ids {{ vpc_id_check.stdout }} --traffic-type ALL --log-destination-type cloud-watch-logs --log-group-name "/aws/vpc/flowlogs/{{ name_prefix }}" --deliver-logs-permission-arn "arn:aws:iam::{{ aws_account_id }}:role/{{ name_prefix }}-vpc-flow-logs-role" --region "{{ aws_region }}"
   register: flow_logs_create
   ignore_errors: true

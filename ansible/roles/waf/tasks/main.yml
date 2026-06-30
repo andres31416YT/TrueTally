@@ -8,71 +8,22 @@
 # - Asociar WAF al CloudFront distribution del frontend
 # =============================================================================
 
-- name: Verificar si CloudFront Distribution existe
-  shell: |
-    aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[].DomainName, '{{ frontend.s3_bucket }}.s3.')].Id | [0]" --output text --region "{{ aws_region }}"
-  register: cf_dist_result
-
-- name: Crear archivo de configuración WAF
+- name: Crear archivo de configuración WAF con reglas JSON
   copy:
-    content: |
-      [
-        {
-          "Name": "AWSManagedRulesCommonRuleSet",
-          "Priority": 0,
-          "Statement": {
-            "ManagedRuleGroupStatement": {
-              "VendorName": "AWS",
-              "Name": "AWSManagedRulesCommonRuleSet"
-            }
-          },
-          "VisibilityConfig": {
-            "SampledRequestsEnabled": true,
-            "CloudWatchMetricsEnabled": true,
-            "MetricName": "AWSManagedRulesCommonRuleSet"
-          }
-        },
-        {
-          "Name": "AWSManagedRulesSQLiRuleSet",
-          "Priority": 1,
-          "Statement": {
-            "ManagedRuleGroupStatement": {
-              "VendorName": "AWS",
-              "Name": "AWSManagedRulesSQLiRuleSet"
-            }
-          },
-          "VisibilityConfig": {
-            "SampledRequestsEnabled": true,
-            "CloudWatchMetricsEnabled": true,
-            "MetricName": "AWSManagedRulesSQLiRuleSet"
-          }
-        },
-        {
-          "Name": "RateLimitRule",
-          "Priority": 2,
-          "Statement": {
-            "RateBasedStatement": {
-              "Limit": 1000,
-              "AggregateKeyType": "IP"
-            }
-          },
-          "VisibilityConfig": {
-            "SampledRequestsEnabled": true,
-            "CloudWatchMetricsEnabled": true,
-            "MetricName": "RateLimitRule"
-          }
-        }
-      ]
+    content: "{{ waf_rules_json }}"
     dest: /tmp/waf-rules.json
 
-- name: Crear Web ACL
-  shell: |
-    aws wafv2 create-web-acl --name "{{ name_prefix }}-waf" --scope CLOUDFRONT --region us-east-1 --default-action Allow={} --visibility-config SampledRequestsEnabled=true,CloudWatchMetricsEnabled=true,MetricName="{{ name_prefix }}-waf" --rules file:///tmp/waf-rules.json --tags '[{"Key":"Project","Value":"{{ project_name }}"},{"Key":"Environment","Value":"{{ truetally_env }}"},{"Key":"ManagedBy","Value":"ansible"}]' --query 'WebACL.Arn' --output text
+- name: Crear Web ACL para CloudFront
+  shell: >-
+    aws wafv2 create-web-acl
+    --name "{{ name_prefix }}-waf"
+    --scope CLOUDFRONT
+    --region us-east-1
+    --default-action Allow={}
+    --visibility-config SampledRequestsEnabled=true,CloudWatchMetricsEnabled=true,MetricName="{{ name_prefix }}-waf"
+    --rules file:///tmp/waf-rules.json
+    --tags '[{"Key":"Project","Value":"{{ project_name }}"},{"Key":"Environment","Value":"{{ truetally_env }}"},{"Key":"ManagedBy","Value":"ansible"}]'
+    --query 'WebACL.Arn'
+    --output text
   register: web_acl_arn
   ignore_errors: true
-
-- name: Asociar WAF a CloudFront si ambos existen
-  shell: |
-    aws wafv2 associate-web-acl --web-acl-arn "{{ web_acl_arn.stdout }}" --resource-arn "arn:aws:cloudfront::{{ aws_account_id }}:distribution/{{ cf_dist_result.stdout }}" --region us-east-1
-  ignore_errors: true
-  when: web_acl_arn.stdout | length > 0 and cf_dist_result.stdout | length > 0 and cf_dist_result.stdout != "None"
