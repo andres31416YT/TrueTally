@@ -63,8 +63,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
 
   rule {
     apply_server_side_encryption_by_default {
-      kms_master_key_id = var.kms_key_arn
-      sse_algorithm     = "aws:kms"
+      sse_algorithm = "AES256"
     }
   }
 }
@@ -221,7 +220,6 @@ resource "aws_cloudfront_distribution" "frontend" {
   origin {
     domain_name              = "${local.frontend_bucket}.s3-website-${var.aws_region}.amazonaws.com"
     origin_id                = "s3-origin"
-    origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
 
     custom_origin_config {
       http_port                = 80
