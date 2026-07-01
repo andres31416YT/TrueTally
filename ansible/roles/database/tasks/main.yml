@@ -28,6 +28,7 @@
       --output text \
       --region "{{ aws_region }}"
   register: db_secret_raw
+  no_log: true
 
 - name: Parsear credenciales de DB
   # Extrae username, password, endpoint y puerto del JSON de Secrets Manager

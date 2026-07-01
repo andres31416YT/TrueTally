@@ -22,6 +22,7 @@
       --output text \
       --region "{{ aws_region }}"
   register: db_secret_raw
+  no_log: true
 
 - name: Obtener endpoint de RDS
   # Consulta el endpoint de la instancia RDS para armar la URL de conexión
@@ -44,6 +45,7 @@
   shell: |
     python3 -c "from urllib.parse import quote; print('postgres://{{ db_username }}:' + quote('{{ db_password }}', safe='') + '@{{ db_endpoint }}:{{ db_port }}/truetally')"
   register: database_url_result
+  no_log: true
 
 - name: Obtener IP del nodo blockchain desde ECS
   # Obtiene la IP privada de la tarea ECS que corre el nodo blockchain
@@ -63,8 +65,8 @@
   # Si no hay IP, blockchain_node_url queda vacío (las Lambdas lo manejan)
   set_fact:
     blockchain_node_url: >-
-      {% if blockchain_ip_result.stdout and blockchain_ip_result.stdout != '' and blockchain_ip_result.stdout != 'None' %}
-      http://{{ blockchain_ip_result.stdout }}:9944
+      {% if blockchain_ip_result.stdout and blockchain_ip_result.stdout | trim and blockchain_ip_result.stdout | trim != 'None' %}
+      http://{{ blockchain_ip_result.stdout | trim }}:9944
       {% endif %}
 
 - name: Obtener URL de la cola SQS
@@ -105,6 +107,7 @@
   args:
     executable: /bin/bash
   register: lambda_acceso_update
+  no_log: true
 
 - name: Aplicar configuración a lambda-acceso
   # Aplica la configuración generada a la función Lambda via AWS CLI
@@ -144,6 +147,7 @@
   args:
     executable: /bin/bash
   register: lambda_procesador_update
+  no_log: true
 
 - name: Aplicar configuración a lambda-procesador
   shell: |
@@ -177,6 +181,7 @@
   args:
     executable: /bin/bash
   register: lambda_despachador_update
+  no_log: true
 
 - name: Aplicar configuración a lambda-despachador
   shell: |
