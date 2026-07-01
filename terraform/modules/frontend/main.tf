@@ -195,6 +195,20 @@ resource "aws_cloudfront_distribution" "frontend" {
     compress               = true
   }
 
+  custom_error_responses {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 300
+  }
+
+  custom_error_responses {
+    error_code            = 404
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 300
+  }
+
   restrictions {
     geo_restriction {
       restriction_type = "none"
@@ -218,17 +232,14 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   origin {
-    domain_name = "${local.frontend_bucket}.s3-website-${var.aws_region}.amazonaws.com"
+    domain_name = "${local.frontend_bucket}.s3.amazonaws.com"
     origin_id   = "s3-origin"
 
-    custom_origin_config {
-      http_port                = 80
-      https_port               = 443
-      origin_protocol_policy   = "http-only"
-      origin_ssl_protocols     = ["TLSv1.2"]
-      origin_read_timeout      = 30
-      origin_keepalive_timeout = 5
+    s3_origin_config {
+      origin_access_identity = ""
     }
+
+    origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
   }
 }
 
