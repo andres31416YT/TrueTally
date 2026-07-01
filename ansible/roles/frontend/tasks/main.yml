@@ -35,20 +35,21 @@
     chdir: ../../app/frontend
 
 - name: Sincronizar frontend a S3
-  # Sube el contenido de la carpeta out/ al bucket S3 del frontend
-  # --delete elimina archivos que ya no están en el build (limpia versiones anteriores)
-  # --cache-control max-age=31536000: cache agresivo para archivos con hash en el nombre
-  shell: |
-    aws s3 sync ../../app/frontend/{{ frontend.dist_directory }} s3://{{ frontend.s3_bucket }} --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
+   # Sube el contenido de la carpeta out/ al bucket S3 del frontend
+   # --delete elimina archivos que ya no están en el build (limpia versiones anteriores)
+   # --cache-control max-age=31536000: cache agresivo para archivos con hash en el nombre
+   shell: |
+     aws s3 sync ../../app/frontend/{{ frontend.dist_directory }} s3://{{ frontend.s3_bucket }} --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
 
-- name: Configurar custom error responses en CloudFront para SPA
-  shell: |
-    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, \`s3.\`)].Id | [0]" --output text --region "{{ aws_region }}")
-    if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
-      ETAG=$(aws cloudfront get-distribution-config --id "$DIST_ID" --query 'ETag' --output text --region "{{ aws_region }}")
-      aws cloudfront get-distribution-config --id "$DIST_ID" --region "{{ aws_region }}" --output json | jq '.DistributionConfig.CustomErrorResponses = {"Quantity":2,"Items":[{"ErrorCode":403,"ResponseCode":"200","ResponsePagePath":"/index.html","ErrorCachingMinTTL":300},{"ErrorCode":404,"ResponseCode":"200","ResponsePagePath":"/index.html","ErrorCachingMinTTL":300}]}' > /tmp/cf-custom-errors.json
-      aws cloudfront update-distribution --id "$DIST_ID" --distribution-config file:///tmp/cf-custom-errors.json --if-match "$ETAG" --region "{{ aws_region }}"
-    fi
+ - name: Invalidar CloudFront asociado al bucket frontend
+   # Crea una invalidación de CloudFront para que sirva el nuevo contenido
+   # Detecta la distribución por el nombre del bucket S3 en los orígenes
+   # paths "/*" invalida todo el cache (necesario después de cada deploy)
+   shell: |
+     DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[].DomainName, \`{{ frontend.s3_bucket }}.s3.\`)].Id | [0]" --output text --region "{{ aws_region }}" | grep -v "s3-website")
+     if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
+       aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" --region "{{ aws_region }}"
+     fi
 
 - name: Invalidar CloudFront asociado al bucket frontend
   # Crea una invalidación de CloudFront para que sirva el nuevo contenido
