@@ -20,6 +20,9 @@ fn success_response<T: serde::Serialize>(data: T) -> ApiGatewayResponse {
         headers: {
             let mut h = std::collections::HashMap::new();
             h.insert("Content-Type".to_string(), "application/json".to_string());
+            h.insert("Access-Control-Allow-Origin".to_string(), "*".to_string());
+            h.insert("Access-Control-Allow-Methods".to_string(), "GET,POST,OPTIONS".to_string());
+            h.insert("Access-Control-Allow-Headers".to_string(), "Content-Type,X-User-Email,X-User-Role".to_string());
             h
         },
         body: serde_json::to_string(&json!({
@@ -36,6 +39,9 @@ fn error_response(status: i32, msg: &str) -> ApiGatewayResponse {
         headers: {
             let mut h = std::collections::HashMap::new();
             h.insert("Content-Type".to_string(), "application/json".to_string());
+            h.insert("Access-Control-Allow-Origin".to_string(), "*".to_string());
+            h.insert("Access-Control-Allow-Methods".to_string(), "GET,POST,OPTIONS".to_string());
+            h.insert("Access-Control-Allow-Headers".to_string(), "Content-Type,X-User-Email,X-User-Role".to_string());
             h
         },
         body: serde_json::to_string(&json!({
@@ -103,8 +109,12 @@ async fn handle_request(
     event: LambdaEvent<serde_json::Value>,
     state: Arc<SharedState>,
 ) -> Result<ApiGatewayResponse, Error> {
-    let path = event.payload.get("path").and_then(|v| v.as_str()).unwrap_or("");
-    let method = event.payload.get("httpMethod").and_then(|v| v.as_str()).unwrap_or("GET");
+    let path = event.payload.get("rawPath").and_then(|v| v.as_str())
+        .or_else(|| event.payload.get("path").and_then(|v| v.as_str()))
+        .unwrap_or("");
+    let method = event.payload.get("requestContext").and_then(|c| c.get("http")).and_then(|h| h.get("method")).and_then(|v| v.as_str())
+        .or_else(|| event.payload.get("httpMethod").and_then(|v| v.as_str()))
+        .unwrap_or("GET");
     let body = event.payload.get("body").and_then(|v| v.as_str()).unwrap_or("{}");
 
     match (method, path) {
