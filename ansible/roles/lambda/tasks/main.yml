@@ -61,12 +61,20 @@
   register: blockchain_ip_result
 
 - name: Establecer URL del nodo blockchain
-   # Construye la URL del nodo blockchain solo si se pudo obtener la IP
-   # Si no hay IP, blockchain_node_url queda vacío (las Lambdas lo manejan)
-   set_fact:
-     blockchain_node_url: "{{ 'http://' + blockchain_ip_result.stdout | trim + ':9944' if blockchain_ip_result.stdout and blockchain_ip_result.stdout | trim and blockchain_ip_result.stdout | trim != 'None' else '' }}"
+  shell: |
+    IP="{{ blockchain_ip_result.stdout | default('') | trim }}"
+    if [ -n "$IP" ] && [ "$IP" != "None" ]; then
+      echo "http://${IP}:9944"
+    else
+      echo ""
+    fi
+  register: blockchain_node_url_raw
 
- - name: Obtener URL de la cola SQS
+- name: Set blockchain_node_url
+  set_fact:
+    blockchain_node_url: "{{ blockchain_node_url_raw.stdout }}"
+
+- name: Obtener URL de la cola SQS
   # Obtiene la URL de la cola SQS donde lambda-despachador encola votos
   shell: |
     aws sqs get-queue-url --queue-name "{{ name_prefix }}-vote-queue" --query 'QueueUrl' --output text --region "{{ aws_region }}"
