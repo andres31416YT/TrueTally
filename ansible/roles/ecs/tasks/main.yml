@@ -80,13 +80,17 @@
 
 - name: Actualizar ECS service
   # Fuerza al servicio ECS a usar el nuevo task definition con la imagen actualizada
-  # ECS Fargate hará rolling update de las tareas automáticamente
+  # Además, deshabilita assignPublicIp para que la task use solo IP privada
+  # Esto es necesario porque la subnet blockchain no tiene ruta a internet,
+  # y las tasks necesitan alcanzar ECR solo por VPC endpoint privado
   shell: |
+    BLOCKCHAIN_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-blockchain-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
     aws ecs update-service \
       --cluster "{{ name_prefix }}-blockchain-cluster" \
       --service "{{ name_prefix }}-blockchain-service" \
       --task-definition "{{ new_task_arn }}" \
-      --region "{{ aws_region }}"
+      --region "{{ aws_region }}" \
+      --network-configuration "awsvpcConfiguration={subnets=[{{ blockchain_subnet_ids | join(',') }}],securityGroups=[$BLOCKCHAIN_SG_ID],assignPublicIp=DISABLED}"
 
 - name: Esperar a que ECS service intente arrancar (no bloquear si falta imagen)
   # Hace polling del estado del servicio ECS
