@@ -52,7 +52,7 @@ echo ""
 echo "🔧 Checking Ansible roles..."
 cd "$REPO_ROOT"
 if command -v ansible-lint &> /dev/null; then
-  if ANSIBLE_CONFIG=ansible/playbooks/ansible.cfg ansible-lint ansible/ 2>/dev/null; then
+  if ANSIBLE_CONFIG=ansible/playbooks/ansible.cfg ansible-lint -q ansible/ 2>/dev/null; then
     echo -e "${GREEN}✓ ansible-lint passed${NC}"
   else
     echo -e "${YELLOW}⚠ ansible-lint found issues${NC}"

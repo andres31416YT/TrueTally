@@ -48,9 +48,19 @@
 
 - name: Crear flujo de VPC Flow Logs
   shell: |
-    EXISTING=$(aws ec2 describe-flow-logs --filter "Name=resource-id,Values={{ vpc_id_check.stdout }}" --query 'FlowLogs[?LogGroupName==`/aws/vpc/flowlogs/{{ name_prefix }}`] | length(@)' --output text --region "{{ aws_region }}" 2>/dev/null || echo "0")
+    EXISTING=$(aws ec2 describe-flow-logs \
+      --filter "Name=resource-id,Values={{ vpc_id_check.stdout }}" \
+      --query 'FlowLogs[?LogGroupName==`/aws/vpc/flowlogs/{{ name_prefix }}`] | length(@)' \
+      --output text --region "{{ aws_region }}" 2>/dev/null || echo "0")
     if [ "$EXISTING" = "0" ]; then
-      aws ec2 create-flow-logs --resource-type VPC --resource-ids {{ vpc_id_check.stdout }} --traffic-type ALL --log-destination-type cloud-watch-logs --log-group-name "/aws/vpc/flowlogs/{{ name_prefix }}" --deliver-logs-permission-arn "arn:aws:iam::{{ aws_account_id }}:role/{{ name_prefix }}-vpc-flow-logs-role" --region "{{ aws_region }}"
+      aws ec2 create-flow-logs \
+        --resource-type VPC \
+        --resource-ids {{ vpc_id_check.stdout }} \
+        --traffic-type ALL \
+        --log-destination-type cloud-watch-logs \
+        --log-group-name "/aws/vpc/flowlogs/{{ name_prefix }}" \
+        --deliver-logs-permission-arn "arn:aws:iam::{{ aws_account_id }}:role/{{ name_prefix }}-vpc-flow-logs-role" \
+        --region "{{ aws_region }}"
     fi
   register: flow_logs_create
   ignore_errors: true
