@@ -1,14 +1,14 @@
-use api_gateway::{handlers, init_db, AuthRequest};
+use api_gateway::{handlers, init_db};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
 use axum::{Router, serve};
 use tracing::{error, info};
-use crate::logging;
+use api_gateway::logging::init_logging;
 
 #[tokio::main]
 async fn main() {
-    logging::init_logging("api-gateway");
+    init_logging("api-gateway");
 
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://user:pass@localhost:5432/voting_db".to_string());
