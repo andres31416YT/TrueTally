@@ -26,5 +26,4 @@
 - name: Crear registro DNS en Route53 apuntando a CloudFront
   shell: |
     aws route53 change-resource-record-sets --hosted-zone-id "{{ hosted_zone_id.stdout | regex_replace('/hostedzone/', '') }}" --change-batch '{"Changes":[{"Action":"UPSERT","ResourceRecordSet":{"Name":"{{ route53.domain_name }}","Type":"A","AliasTarget":{"DNSName":"{{ cf_dist_id.stdout }}.cloudfront.net","HostedZoneId":"Z2FDTNDATAQYW2","EvaluateTargetHealth":false}}]}' --region "{{ aws_region }}"
-  ignore_errors: true
   when: cf_dist_id.stdout is defined and cf_dist_id.stdout != "None" and cf_dist_id.stdout | length > 0

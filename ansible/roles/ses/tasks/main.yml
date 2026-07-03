@@ -16,7 +16,7 @@
 - name: Verificar dominio SES si no está verificado
   shell: |
     aws ses verify-domain-identity --domain "{{ ses.domain }}" --region "{{ aws_region }}" --query 'VerificationToken' --output text
-  when: ses_domain_check.stdout == "None" or ses_domain_check.stdout == "None"
+  when: ses_domain_check.stdout != "Success"
 
 - name: Verificar identidad de correo para envío desde Lambda
   shell: |

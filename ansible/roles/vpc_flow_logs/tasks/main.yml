@@ -36,7 +36,10 @@
 
 - name: Crear CloudWatch Log Group para Flow Logs
   shell: |
-    aws logs create-log-group --log-group-name "/aws/vpc/flowlogs/{{ name_prefix }}" --region "{{ aws_region }}" 2>/dev/null || true
+    EXISTING=$(aws logs describe-log-groups --log-group-name-prefix "/aws/vpc/flowlogs/{{ name_prefix }}" --query 'logGroups[?logGroupName==`/aws/vpc/flowlogs/{{ name_prefix }}`] | length(@)' --output text --region "{{ aws_region }}" 2>/dev/null || echo "0")
+    if [ "$EXISTING" = "0" ]; then
+      aws logs create-log-group --log-group-name "/aws/vpc/flowlogs/{{ name_prefix }}" --region "{{ aws_region }}"
+    fi
   register: log_group_create
 
 - name: Configurar retention para CloudWatch Log Group

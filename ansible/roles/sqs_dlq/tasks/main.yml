@@ -28,7 +28,6 @@
   shell: |
     aws sqs get-queue-attributes --queue-url "https://sqs.{{ aws_region }}.amazonaws.com/{{ aws_account_id }}/{{ name_prefix }}-vote-queue-dlq" --attribute-names QueueArn --region "{{ aws_region }}" --query 'Attributes.QueueArn' --output text
   register: dlq_arn_result
-  when: dlq_url_check.stdout == "None"
 
 - name: Configurar redrive policy en cola principal
   shell: |
