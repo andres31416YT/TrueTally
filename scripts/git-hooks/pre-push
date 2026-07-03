@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# =============================================================================
+# Git Hook: pre-push
+# TrueTally - Validaciones completas antes de hacer push
+# =============================================================================
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+fail=0
+
+echo "🚀 Running pre-push checks..."
+echo ""
+
+# ---------------------------------------------------------------------------
+# 1. Frontend: build (verifica compilación completa)
+# ---------------------------------------------------------------------------
+echo ""
+echo "🏗️  Building frontend..."
+cd "$REPO_ROOT/app/frontend"
+if npm run build 2>/dev/null; then
+  echo -e "${GREEN}✓ Frontend build passed${NC}"
+else
+  echo -e "${RED}✗ Frontend build failed${NC}"
+  fail=1
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Rust: unit tests
+# ---------------------------------------------------------------------------
+echo ""
+echo "🦀 Running Rust unit tests..."
+cd "$REPO_ROOT/app"
+if cargo test --workspace 2>/dev/null; then
+  echo -e "${GREEN}✓ Rust tests passed${NC}"
+else
+  echo -e "${RED}✗ Rust tests failed${NC}"
+  echo -e "${YELLOW}  Run 'cargo test --workspace' for details${NC}"
+  fail=1
+fi
+
+# ---------------------------------------------------------------------------
+# 3. Ansible: lint (si ansible-lint está instalado)
+# ---------------------------------------------------------------------------
+echo ""
+echo "🔧 Checking Ansible roles..."
+cd "$REPO_ROOT"
+if command -v ansible-lint &> /dev/null; then
+  if ANSIBLE_CONFIG=ansible/playbooks/ansible.cfg ansible-lint ansible/ 2>/dev/null; then
+    echo -e "${GREEN}✓ ansible-lint passed${NC}"
+  else
+    echo -e "${YELLOW}⚠ ansible-lint found issues${NC}"
+  fi
+else
+  echo -e "${YELLOW}⚠ ansible-lint not installed, skipping (pip install ansible-lint)${NC}"
+fi
+
+echo ""
+if [ "$fail" -eq 1 ]; then
+  echo -e "${RED}─────────────────────────────────────────────${NC}"
+  echo -e "${RED}Push blocked: pre-push checks failed.${NC}"
+  echo -e "${RED}─────────────────────────────────────────────${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}─────────────────────────────────────────────${NC}"
+echo -e "${GREEN}All pre-push checks passed!${NC}"
+echo -e "${GREEN}─────────────────────────────────────────────${NC}"
+exit 0
