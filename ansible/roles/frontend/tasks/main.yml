@@ -29,11 +29,15 @@
 
 - name: Sincronizar frontend a S3
   shell: |
-    aws s3 sync ../../app/frontend/{{ frontend.dist_directory }} s3://{{ frontend.s3_bucket }} --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
+    BUCKET="{{ frontend.s3_bucket }}"
+    if ! aws s3 ls "s3://${BUCKET}" --region "{{ aws_region }}" >/dev/null 2>&1; then
+      BUCKET=$(aws s3 ls --query "Buckets[?starts_with(Name, '{{ name_prefix }}-frontend-')].Name | [0]" --output text --region "{{ aws_region }}")
+    fi
+    aws s3 sync ../../app/frontend/{{ frontend.dist_directory }} "s3://${BUCKET}" --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
 
 - name: Invalidar CloudFront asociado al bucket frontend
   shell: |
-    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[].DomainName, \`{{ frontend.s3_bucket }}.s3.\`)].Id | [0]" --output text --region "{{ aws_region }}" | grep -v "s3-website")
+    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?length(Origins.Items[?contains(DomainName, '{{ name_prefix }}-frontend')]) > \`0\`].Id | [0]" --output text --region "{{ aws_region }}" | grep -v "s3-website")
     if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
       aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" --region "{{ aws_region }}"
     fi
