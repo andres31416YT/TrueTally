@@ -20,7 +20,7 @@
 
 - name: Obtener CloudFront Distribution ID
   shell: |
-    aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[].DomainName, '{{ frontend.s3_bucket }}.s3.')].Id | [0]" --output text --region "{{ aws_region }}"
+    aws cloudfront list-distributions --query "DistributionList.Items[?length(Origins.Items[?contains(DomainName, '{{ frontend.s3_bucket }}.s3.amazonaws.com')]) > \`0\`].Id | [0]" --output text --region "{{ aws_region }}"
   register: cf_dist_id
 
 - name: Crear registro DNS en Route53 apuntando a CloudFront

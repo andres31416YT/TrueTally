@@ -18,7 +18,3 @@
 - name: Configurar alarma de memoria
   shell: |
     aws cloudwatch put-metric-alarm --alarm-name "{{ name_prefix }}-blockchain-memory-high" --alarm-description "Alarma cuando memoria del blockchain supera 80%" --metric-name MemoryUtilization --namespace AWS/ECS --statistic Average --period 300 --threshold 80 --comparison-operator GreaterThanThreshold --dimensions Name=ServiceName,Value={{ name_prefix }}-blockchain-service Name=ClusterName,Value={{ name_prefix }}-blockchain-cluster --evaluation-periods 2 --region {{ aws_region }} 2>/dev/null || true
-
-- name: Configurar alarma de health check
-  shell: |
-    aws cloudwatch put-metric-alarm --alarm-name "{{ name_prefix }}-blockchain-health" --alarm-description "Alarma cuando el servicio blockchain está unhealthy" --metric-name UnHealthyHostCount --namespace AWS/ApplicationELB --statistic Average --period 60 --threshold 1 --comparison-operator GreaterThanOrEqualToThreshold --evaluation-periods 2 --region {{ aws_region }} 2>/dev/null || true

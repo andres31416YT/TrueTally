@@ -37,7 +37,7 @@
 
 - name: Invalidar CloudFront asociado al bucket frontend
   shell: |
-    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?length(Origins.Items[?contains(DomainName, '{{ name_prefix }}-frontend')]) > \`0\`].Id | [0]" --output text --region "{{ aws_region }}" | grep -v "s3-website")
+    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?length(Origins.Items[?contains(DomainName, '{{ frontend.s3_bucket }}.s3.amazonaws.com')]) > \`0\`].Id | [0]" --output text --region "{{ aws_region }}")
     if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
       aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" --region "{{ aws_region }}"
     fi

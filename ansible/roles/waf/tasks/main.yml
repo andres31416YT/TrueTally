@@ -38,3 +38,11 @@
     fi
   register: web_acl_arn
   ignore_errors: true
+
+- name: Asociar Web ACL con CloudFront
+  shell: |
+    aws wafv2 associate-web-acl \
+      --web-acl-arn "{{ web_acl_arn.stdout }}" \
+      --resource-arn "arn:aws:cloudfront::{{ aws_account_id }}:distribution/{{ cloudfront_distribution_id }}" \
+      --region "{{ aws_region }}"
+  ignore_errors: true

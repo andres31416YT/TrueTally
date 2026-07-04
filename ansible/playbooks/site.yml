@@ -62,7 +62,7 @@
     - name: Obtener CloudFront Distribution ID
       tags: [frontend]
       shell: |
-        aws cloudfront list-distributions --query "DistributionList.Items[?length(Origins.Items[?contains(DomainName, '{{ name_prefix }}-frontend')]) > \`0\`].Id | [0]" --output text --region "{{ aws_region }}"
+        aws cloudfront list-distributions --query "DistributionList.Items[?length(Origins.Items[?contains(DomainName, '{{ frontend.s3_bucket }}.s3.amazonaws.com')]) > \`0\`].Id | [0]" --output text --region "{{ aws_region }}"
       register: cf_dist_id_result
 
     - name: Establecer variables dinámicas

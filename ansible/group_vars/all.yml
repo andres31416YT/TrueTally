@@ -16,7 +16,7 @@ aws_region: "{{ lookup('env', 'AWS_REGION', default='us-east-1') }}"
 
 # ID de la cuenta AWS (útil para construir ARNs)
 # En GitHub Actions se pasa como AWS_ACCOUNT_ID
-aws_account_id: "{{ lookup('env', 'AWS_ACCOUNT_ID', default='294960493570') }}"
+aws_account_id: "{{ lookup('env', 'AWS_ACCOUNT_ID', default='413027378908') }}"
 
 # Nombre base del proyecto (se usa como prefijo en todos los recursos)
 project_name: truetally
