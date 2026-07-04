@@ -19,14 +19,14 @@
   shell: |
     WEB_ACL_ARN=$(aws wafv2 list-web-acls \
       --scope CLOUDFRONT \
-      --region "{{ aws_region }}" \
+      --region us-east-1 \
       --query "WebACLs[?Name=='{{ name_prefix }}-waf'].ARN | [0]" \
       --output text)
     if [ "$WEB_ACL_ARN" = "None" ] || [ -z "$WEB_ACL_ARN" ]; then
       aws wafv2 create-web-acl \
         --name "{{ name_prefix }}-waf" \
         --scope CLOUDFRONT \
-        --region "{{ aws_region }}" \
+        --region us-east-1 \
         --default-action 'Allow={}' \
         --visibility-config 'SampledRequestsEnabled=true,CloudWatchMetricsEnabled=true,MetricName={{ name_prefix }}-waf' \
         --rules file:///tmp/waf-rules.json \
@@ -44,5 +44,5 @@
     aws wafv2 associate-web-acl \
       --web-acl-arn "{{ web_acl_arn.stdout }}" \
       --resource-arn "arn:aws:cloudfront::{{ aws_account_id }}:distribution/{{ cloudfront_distribution_id }}" \
-      --region "{{ aws_region }}"
+      --region us-east-1
   ignore_errors: true
