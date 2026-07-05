@@ -1,0 +1,56 @@
+---
+# =============================================================================
+# ROLE: vpc_endpoints
+# =============================================================================
+# Responsabilidades:
+# - Crear VPC Gateway Endpoints para S3 (ahorro de NAT)
+# - Crear VPC Interface Endpoints para SQS
+# - Crear VPC Interface Endpoints para Secrets Manager
+# =============================================================================
+
+- name: Verificar VPC ID
+  shell: |
+    aws ec2 describe-vpcs --filters "Name=tag:Name,Values={{ name_prefix }}-vpc" --query 'Vpcs[0].VpcId' --output text --region "{{ aws_region }}"
+  register: vpc_check
+
+- name: Obtener route tables de la VPC
+  shell: |
+    aws ec2 describe-route-tables --filters "Name=vpc-id,Values={{ vpc_check.stdout }}" --query 'RouteTables[].RouteTableId' --output json --region "{{ aws_region }}"
+  register: route_tables_get
+
+- name: Obtener subnets privadas
+  shell: |
+    aws ec2 describe-subnets --filters "Name=vpc-id,Values={{ vpc_check.stdout }}" "Name=tag:Name,Values={{ name_prefix }}-compute-*,{{ name_prefix }}-database-*" --query 'Subnets[].SubnetId' --output json --region "{{ aws_region }}"
+  register: private_subnets_get
+
+- name: Obtener security group de Lambda
+  shell: |
+    aws ec2 describe-security-groups --filters "Name=vpc-id,Values={{ vpc_check.stdout }}" "Name=group-name,Values={{ name_prefix }}-lambda-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}"
+  register: lambda_sg_get
+
+- block:
+    - name: Crear S3 Gateway Endpoint
+      shell: |
+        aws ec2 create-vpc-endpoint --vpc-id "{{ vpc_check.stdout }}" --service-name "com.amazonaws.{{ aws_region }}.s3" --route-table-ids "{{ route_tables_get.stdout | from_json | join(' ') }}" --vpc-endpoint-type Gateway --region "{{ aws_region }}" 2>/dev/null || true
+      ignore_errors: true
+
+    - name: Crear SQS Interface Endpoint
+      shell: |
+        aws ec2 create-vpc-endpoint --vpc-id "{{ vpc_check.stdout }}" --service-name "com.amazonaws.{{ aws_region }}.sqs" --subnet-ids "{{ private_subnets_get.stdout | from_json | join(' ') }}" --security-group-ids "{{ lambda_sg_get.stdout }}" --vpc-endpoint-type Interface --private-dns-enabled --region "{{ aws_region }}" 2>/dev/null || true
+      ignore_errors: true
+
+    - name: Crear Secrets Manager Interface Endpoint
+      shell: |
+        aws ec2 create-vpc-endpoint --vpc-id "{{ vpc_check.stdout }}" --service-name "com.amazonaws.{{ aws_region }}.secretsmanager" --subnet-ids "{{ private_subnets_get.stdout | from_json | join(' ') }}" --security-group-ids "{{ lambda_sg_get.stdout }}" --vpc-endpoint-type Interface --private-dns-enabled --region "{{ aws_region }}" 2>/dev/null || true
+      ignore_errors: true
+
+    - name: Crear ECR API Interface Endpoint
+      shell: |
+        aws ec2 create-vpc-endpoint --vpc-id "{{ vpc_check.stdout }}" --service-name "com.amazonaws.{{ aws_region }}.ecr.api" --subnet-ids "{{ private_subnets_get.stdout | from_json | join(' ') }}" --security-group-ids "{{ lambda_sg_get.stdout }}" --vpc-endpoint-type Interface --private-dns-enabled --region "{{ aws_region }}" 2>/dev/null || true
+      ignore_errors: true
+
+    - name: Crear ECR DKR Interface Endpoint
+      shell: |
+        aws ec2 create-vpc-endpoint --vpc-id "{{ vpc_check.stdout }}" --service-name "com.amazonaws.{{ aws_region }}.ecr.dkr" --subnet-ids "{{ private_subnets_get.stdout | from_json | join(' ') }}" --security-group-ids "{{ lambda_sg_get.stdout }}" --vpc-endpoint-type Interface --private-dns-enabled --region "{{ aws_region }}" 2>/dev/null || true
+      ignore_errors: true
+  when: vpc_check.stdout is defined and vpc_check.stdout != "None" and vpc_check.stdout | length > 0

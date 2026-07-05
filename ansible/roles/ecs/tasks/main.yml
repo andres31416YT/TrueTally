@@ -10,32 +10,67 @@
 # =============================================================================
 
 - name: Habilitar acceso desde Lambda al security group de blockchain (puerto 9944)
-  # Abre el puerto 9944 (protocolo libp2p de Substrate) en el SG del blockchain
-  # Permite que las Lambdas (dentro de la VPC) se conecten al nodo blockchain
-  # Usa 2>/dev/null || true para hacer la tarea idempotente (no falla si ya existe)
+  # Abre el puerto 9944 en el SG del blockchain para permitir conexiones desde Lambda
+  # Usa vpc_id para filtrar el SG de blockchain y evitar recursos duplicados en otras VPCs
   shell: |
-    BLOCKCHAIN_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-blockchain-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
-    LAMBDA_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-lambda-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
+    VPC_ID="{{ vpc_id | default('') }}"
 
-    aws ec2 authorize-security-group-ingress \
-      --group-id "$BLOCKCHAIN_SG_ID" \
-      --protocol tcp \
-      --port 9944 \
-      --source-group "$LAMBDA_SG_ID" \
-      --region "{{ aws_region }}" 2>/dev/null || \
-    aws ec2 authorize-security-group-ingress \
-      --group-id "$BLOCKCHAIN_SG_ID" \
-      --protocol tcp \
-      --port 9944 \
-      --source-group "$LAMBDA_SG_ID" \
-      --region "{{ aws_region }}" || true
+    if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
+      BLOCKCHAIN_SG_ID=$(aws ec2 describe-security-groups \
+        --filters "Name=vpc-id,Values=${VPC_ID}" "Name=group-name,Values={{ name_prefix }}-blockchain-sg" \
+        --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}" 2>/dev/null || echo "")
+    else
+      BLOCKCHAIN_SG_ID=$(aws ec2 describe-security-groups \
+        --filters "Name=group-name,Values={{ name_prefix }}-blockchain-sg" \
+        --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}" 2>/dev/null || echo "")
+    fi
+
+    if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ] && [ -n "$BLOCKCHAIN_SG_ID" ] && [ "$BLOCKCHAIN_SG_ID" != "None" ]; then
+      BLOCKCHAIN_VPC=$(aws ec2 describe-security-groups --group-ids "$BLOCKCHAIN_SG_ID" --query 'SecurityGroups[0].VpcId' --output text --region "{{ aws_region }}" 2>/dev/null || echo "")
+    else
+      BLOCKCHAIN_VPC=""
+    fi
+
+    if [ -n "$BLOCKCHAIN_SG_ID" ] && [ "$BLOCKCHAIN_SG_ID" != "None" ] && [ "$BLOCKCHAIN_VPC" = "$VPC_ID" ] && [ -n "$VPC_ID" ]; then
+      LAMBDA_SG_ID="{{ lambda_security_group_id | default('') }}"
+
+      if [ -z "$LAMBDA_SG_ID" ] || [ "$LAMBDA_SG_ID" = "None" ]; then
+        LAMBDA_SG_ID=$(aws ec2 describe-security-groups \
+          --filters "Name=vpc-id,Values=${VPC_ID}" "Name=group-name,Values={{ name_prefix }}-lambda-sg" \
+          --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}" 2>/dev/null || echo "")
+      fi
+
+      if [ -n "$LAMBDA_SG_ID" ] && [ "$LAMBDA_SG_ID" != "None" ]; then
+        LAMBDA_VPC=$(aws ec2 describe-security-groups --group-ids "$LAMBDA_SG_ID" --query 'SecurityGroups[0].VpcId' --output text --region "{{ aws_region }}" 2>/dev/null || echo "")
+
+        if [ "$BLOCKCHAIN_VPC" = "$LAMBDA_VPC" ] && [ -n "$LAMBDA_VPC" ]; then
+          RULE_EXISTS=$(aws ec2 describe-security-groups --group-ids "$BLOCKCHAIN_SG_ID" --query "SecurityGroups[0].IpPermissions[?FromPort==\`9944\` && ToPort==\`9944\` && UserIdGroupPairs[?GroupId=='$LAMBDA_SG_ID']] | length(@)" --output text --region "{{ aws_region }}" 2>/dev/null || echo "0")
+
+          if [ "$RULE_EXISTS" = "0" ]; then
+            aws ec2 authorize-security-group-ingress \
+              --group-id "$BLOCKCHAIN_SG_ID" \
+              --protocol tcp \
+              --port 9944 \
+              --source-group "$LAMBDA_SG_ID" \
+              --region "{{ aws_region }}"
+          fi
+        else
+          echo "No se pudo abrir regla SG 9944: blockchain-sg ($BLOCKCHAIN_SG_ID) y lambda-sg ($LAMBDA_SG_ID) pertenecen a VPCs distintas ($BLOCKCHAIN_VPC != $LAMBDA_VPC)."
+        fi
+      else
+        echo "No se pudo abrir regla SG 9944: no se encontro lambda-sg en la VPC $VPC_ID."
+      fi
+    else
+      echo "No se pudo abrir regla SG 9944: no se encontro blockchain-sg en la VPC $VPC_ID."
+    fi
+  ignore_errors: true
 
 - name: Corregir imagen y registrar nuevo task definition
   # Ejecuta un script Python que toma el task definition actual y lo actualiza
   # con la imagen latest de ECR (fix_task_def.py)
-  # Esto es necesario porque Terraform no actualiza la imagen automáticamente
+  # Nota: el repositorio ECR se llama truetally-blockchain (sin sufijo de env)
   shell: |
-    python3 "{{ role_path }}/files/fix_task_def.py" "{{ name_prefix }}-blockchain" "{{ aws_region }}" "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ name_prefix }}-blockchain:latest"
+    python3 "{{ role_path }}/files/fix_task_def.py" "{{ name_prefix }}-blockchain" "{{ aws_region }}" "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/truetally-blockchain:latest"
   register: register_task
 
 - name: Obtener ARN del nuevo task definition
@@ -45,13 +80,17 @@
 
 - name: Actualizar ECS service
   # Fuerza al servicio ECS a usar el nuevo task definition con la imagen actualizada
-  # ECS Fargate hará rolling update de las tareas automáticamente
+  # Además, deshabilita assignPublicIp para que la task use solo IP privada
+  # Esto es necesario porque la subnet blockchain no tiene ruta a internet,
+  # y las tasks necesitan alcanzar ECR solo por VPC endpoint privado
   shell: |
+    BLOCKCHAIN_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{ name_prefix }}-blockchain-sg" --query 'SecurityGroups[0].GroupId' --output text --region "{{ aws_region }}")
     aws ecs update-service \
       --cluster "{{ name_prefix }}-blockchain-cluster" \
       --service "{{ name_prefix }}-blockchain-service" \
       --task-definition "{{ new_task_arn }}" \
-      --region "{{ aws_region }}"
+      --region "{{ aws_region }}" \
+      --network-configuration "awsvpcConfiguration={subnets=[{{ blockchain_subnet_ids | join(',') }}],securityGroups=[$BLOCKCHAIN_SG_ID],assignPublicIp=DISABLED}"
 
 - name: Esperar a que ECS service intente arrancar (no bloquear si falta imagen)
   # Hace polling del estado del servicio ECS

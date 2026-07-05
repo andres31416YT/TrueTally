@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  author: TrueTally
+  description: SES email configuration
+  min_ansible_version: 2.15
+dependencies: []

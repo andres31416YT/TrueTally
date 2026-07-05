@@ -1,0 +1,15 @@
+---
+kinds:
+  - playbook: "ansible/playbooks/**/*.yml"
+  - tasks: "ansible/roles/*/tasks/main.yml"
+  - vars: "ansible/roles/*/vars/**/*.yml"
+  - meta: "ansible/roles/*/meta/main.yml"
+skip_list:
+  - fqcn
+  - yaml[new-line-at-end-of-file]
+  - yaml[line-length]
+  - risky-file-permissions
+  - no-changed-when
+  - var-naming[no-role-prefix]
+  - risky-shell-pipe
+  - schema

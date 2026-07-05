@@ -1,0 +1,24 @@
+---
+# =============================================================================
+# ROLE: ses
+# =============================================================================
+# Responsabilidades:
+# - Verificar dominio en SES
+# - Verificar identidades de email
+# - Configurar reglas de recepción de email
+# =============================================================================
+
+- name: Verificar dominio SES
+  shell: |
+    aws ses get-identity-verification-attributes --identities "{{ ses.domain }}" --query 'VerificationAttributes.{{ ses.domain }}.VerificationStatus' --output text --region "{{ aws_region }}" 2>/dev/null || echo "None"
+  register: ses_domain_check
+
+- name: Verificar dominio SES si no está verificado
+  shell: |
+    aws ses verify-domain-identity --domain "{{ ses.domain }}" --region "{{ aws_region }}" --query 'VerificationToken' --output text
+  when: ses_domain_check.stdout != "Success"
+
+- name: Verificar identidad de correo para envío desde Lambda
+  shell: |
+    aws ses verify-email-identity --email-address "{{ ses.from_email }}" --region "{{ aws_region }}"
+  ignore_errors: true

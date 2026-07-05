@@ -1,0 +1,58 @@
+---
+# =============================================================================
+# ROLE: waf
+# =============================================================================
+# Responsabilidades:
+# - Crear Web ACL con reglas OWASP Core Rule Set (CRS)
+# - Configurar rate limiting para proteger contra abuso
+# - Asociar WAF al CloudFront distribution del frontend
+# =============================================================================
+
+- name: Crear archivo de configuración WAF con reglas JSON
+  copy:
+    content: "{{ waf_rules_json }}"
+    dest: /tmp/waf-rules.json
+
+- name: Crear o reutilizar Web ACL para CloudFront
+  shell: |
+    WEB_ACL_ARN=$(aws wafv2 list-web-acls \
+      --scope CLOUDFRONT \
+      --region us-east-1 \
+      --query "WebACLs[?Name=='{{ name_prefix }}-waf'].ARN | [0]" \
+      --output text)
+    if [ "$WEB_ACL_ARN" = "None" ] || [ -z "$WEB_ACL_ARN" ]; then
+      aws wafv2 create-web-acl \
+        --name "{{ name_prefix }}-waf" \
+        --scope CLOUDFRONT \
+        --region us-east-1 \
+        --default-action 'Allow={}' \
+        --visibility-config 'SampledRequestsEnabled=true,CloudWatchMetricsEnabled=true,MetricName={{ name_prefix }}-waf' \
+        --rules file:///tmp/waf-rules.json \
+        --tags '[{"Key":"Project","Value":"{{ project_name }}"},{"Key":"Environment","Value":"{{ truetally_env }}"},{"Key":"ManagedBy","Value":"ansible"}]' \
+        --query 'WebACL.Arn' \
+        --output text
+    else
+      echo "$WEB_ACL_ARN"
+    fi
+  register: web_acl_arn
+  ignore_errors: true
+
+- name: Obtener configuración actual de la distribución CloudFront
+  shell: |
+    aws cloudfront get-distribution-config --id "{{ cloudfront_distribution_id }}" --region "{{ aws_region }}" > /tmp/dist-config.json
+    jq -r '.ETag' /tmp/dist-config.json
+  register: cf_etag
+  when: web_acl_arn.stdout is defined and web_acl_arn.stdout | length > 0
+  ignore_errors: true
+
+- name: Actualizar distribución con el Web ACL
+  shell: |
+    jq --arg acl "{{ web_acl_arn.stdout }}" '.DistributionConfig.WebACLId = $acl' /tmp/dist-config.json | jq '.DistributionConfig' > /tmp/dist-config-new.json
+    ETAG=$(jq -r '.ETag' /tmp/dist-config.json)
+    aws cloudfront update-distribution \
+      --id "{{ cloudfront_distribution_id }}" \
+      --distribution-config file:///tmp/dist-config-new.json \
+      --if-match "$ETAG" \
+      --region "{{ aws_region }}"
+  when: web_acl_arn.stdout is defined and web_acl_arn.stdout | length > 0 and cf_etag.stdout is defined
+  ignore_errors: true

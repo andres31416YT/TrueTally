@@ -16,7 +16,7 @@ aws_region: "{{ lookup('env', 'AWS_REGION', default='us-east-1') }}"
 
 # ID de la cuenta AWS (útil para construir ARNs)
 # En GitHub Actions se pasa como AWS_ACCOUNT_ID
-aws_account_id: "{{ lookup('env', 'AWS_ACCOUNT_ID', default='294960493570') }}"
+aws_account_id: "{{ lookup('env', 'AWS_ACCOUNT_ID', default='413027378908') }}"
 
 # Nombre base del proyecto (se usa como prefijo en todos los recursos)
 project_name: truetally
@@ -61,6 +61,7 @@ frontend:
   s3_bucket: "{{ name_prefix }}-frontend-{{ aws_account_id }}"
   build_command: npm run build
   dist_directory: out
+  cloudfront_distribution_id: ""
 
 # =============================================================================
 # CONFIGURACIÓN DE MONITOREO
@@ -82,3 +83,36 @@ common_tags:
   ManagedBy: "ansible"
 
 domain_name: "andrespaganroncall.qzz.io"
+
+# =============================================================================
+# CONFIGURACIÓN ROUTE53
+# =============================================================================
+
+route53:
+  domain_name: "{{ domain_name }}"
+  hosted_zone_id: ""
+
+# =============================================================================
+# CONFIGURACIÓN WAF
+# =============================================================================
+
+waf:
+  rate_limit: 1000
+
+# JSON rules for WAF (single line format for AWS CLI)
+waf_rules_json: '[{"Name":"RateLimitRule","Priority":0,"Statement":{"RateBasedStatement":{"Limit":1000,"AggregateKeyType":"IP"}},"Action":{"Block":{}},"VisibilityConfig":{"SampledRequestsEnabled":true,"CloudWatchMetricsEnabled":true,"MetricName":"RateLimitRule"}}]'
+
+# =============================================================================
+# CONFIGURACIÓN SES
+# =============================================================================
+
+ses:
+  domain: "qzz.io"
+  from_email: "noreply@andrespaganroncall.qzz.io"
+
+# =============================================================================
+# CONFIGURACIÓN VPC FLOW LOGS
+# =============================================================================
+
+vpc_flow_logs:
+  retention_days: 7

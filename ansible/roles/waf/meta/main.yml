@@ -1,0 +1,7 @@
+---
+galaxy_info:
+  author: TrueTally
+  description: WAF configuration for CloudFront protection
+  min_ansible_version: "2.15"
+  license: MIT
+dependencies: []

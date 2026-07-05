@@ -1,8 +1,8 @@
 locals {
-  name_prefix = "${var.project_name}-${var.env}"
-  bucket_suffix = var.bucket_suffix != "" ? "-${var.bucket_suffix}" : ""
+  name_prefix     = "${var.project_name}-${var.env}"
+  bucket_suffix   = var.bucket_suffix != "" ? "-${var.bucket_suffix}" : ""
   frontend_bucket = "${local.name_prefix}-frontend${local.bucket_suffix}"
-  logs_bucket = "${local.name_prefix}-logs${local.bucket_suffix}"
+  logs_bucket     = "${local.name_prefix}-logs${local.bucket_suffix}"
 }
 
 data "aws_caller_identity" "current" {}
@@ -63,8 +63,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
 
   rule {
     apply_server_side_encryption_by_default {
-      kms_master_key_id = var.kms_key_arn
-      sse_algorithm     = "aws:kms"
+      sse_algorithm = "AES256"
     }
   }
 }
@@ -108,7 +107,7 @@ resource "aws_s3_bucket_policy" "frontend" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect    = "Allow"
+        Effect = "Allow"
         Principal = {
           Service = "cloudfront.amazonaws.com"
         }
@@ -196,6 +195,20 @@ resource "aws_cloudfront_distribution" "frontend" {
     compress               = true
   }
 
+  custom_error_response {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 300
+  }
+
+  custom_error_response {
+    error_code            = 404
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 300
+  }
+
   restrictions {
     geo_restriction {
       restriction_type = "none"
@@ -219,13 +232,14 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   origin {
-    domain_name              = aws_s3_bucket.frontend[0].bucket_regional_domain_name
-    origin_id                = "s3-origin"
-    origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
+    domain_name = "${local.frontend_bucket}.s3.amazonaws.com"
+    origin_id   = "s3-origin"
 
     s3_origin_config {
       origin_access_identity = ""
     }
+
+    origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
   }
 }
 

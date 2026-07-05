@@ -181,3 +181,94 @@ pub struct ElectionResults {
     pub total_votes: u64,
     pub validated: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    #[test]
+    fn test_vote_request_serialization() {
+        let req = VoteRequest {
+            voter_public_key: "pk_123".into(),
+            candidate_id: "cand_1".into(),
+            election_id: "elec_1".into(),
+            signature: "sig_abc".into(),
+            is_blank_vote: false,
+        };
+
+        let json = serde_json::to_string(&req).unwrap();
+        let parsed: VoteRequest = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.voter_public_key, "pk_123");
+        assert_eq!(parsed.candidate_id, "cand_1");
+        assert_eq!(parsed.election_id, "elec_1");
+        assert!(!parsed.is_blank_vote);
+    }
+
+    #[test]
+    fn test_api_response_success() {
+        let resp: ApiResponse<String> = ApiResponse {
+            success: true,
+            data: Some("ok".into()),
+            error: None,
+        };
+
+        let json = serde_json::to_string(&resp).unwrap();
+        let parsed: ApiResponse<String> = serde_json::from_str(&json).unwrap();
+
+        assert!(parsed.success);
+        assert_eq!(parsed.data, Some("ok".into()));
+        assert!(parsed.error.is_none());
+    }
+
+    #[test]
+    fn test_api_response_error() {
+        let resp: ApiResponse<String> = ApiResponse {
+            success: false,
+            data: None,
+            error: Some("invalid vote".into()),
+        };
+
+        let json = serde_json::to_string(&resp).unwrap();
+        let parsed: ApiResponse<String> = serde_json::from_str(&json).unwrap();
+
+        assert!(!parsed.success);
+        assert!(parsed.data.is_none());
+        assert_eq!(parsed.error, Some("invalid vote".into()));
+    }
+
+    #[test]
+    fn test_election_results_serialization() {
+        let mut results = std::collections::HashMap::new();
+        results.insert("cand_1".into(), 10);
+        results.insert("cand_2".into(), 5);
+
+        let resp = ElectionResults {
+            results: results.clone(),
+            total_votes: 15,
+            validated: true,
+        };
+
+        let json = serde_json::to_string(&resp).unwrap();
+        let parsed: ElectionResults = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.total_votes, 15);
+        assert!(parsed.validated);
+        assert_eq!(parsed.results.get("cand_1"), Some(&10));
+    }
+
+    #[test]
+    fn test_auth_request_roundtrip() {
+        let req = AuthRequest {
+            email: "user@test.com".into(),
+            password: Some("secret".into()),
+        };
+
+        let json = serde_json::to_string(&req).unwrap();
+        let parsed: AuthRequest = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.email, "user@test.com");
+        assert_eq!(parsed.password, Some("secret".into()));
+    }
+}

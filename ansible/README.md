@@ -7,9 +7,19 @@ ansible/
 ├── playbooks/
 │   └── site.yml           # Playbook principal
 ├── roles/
+│   ├── database/          # RDS PostgreSQL, ElastiCache
+│   ├── ecs/               # ECS Fargate blockchain node
+│   ├── api_gateway/       # API Gateway HTTP API
+│   ├── lambda/            # Lambda functions (acceso, despachador, procesador)
+│   ├── frontend/          # Next.js build y S3 sync
+│   ├── waf/               # WAF con reglas OWASP
+│   ├── sqs_dlq/           # SQS Dead Letter Queue
+│   ├── route53/           # DNS y Hosted Zone
+│   ├── vpc_endpoints/     # VPC Endpoints (S3, SQS, Secrets Manager)
+│   ├── vpc_flow_logs/     # VPC Flow Logs
+│   ├── ses/               # SES email configuration
 │   └── blockchain-monitoring/
 │       ├── tasks/
-│       ├── vars/
 │       └── meta/
 ├── inventory/
 │   └── hosts.ini          # Inventario de componentes
@@ -24,13 +34,12 @@ ansible/
 
 ### Prerrequisitos
 ```bash
-# Instalar colecciones de AWS
 ansible-galaxy collection install amazon.aws
 ```
 
 ### Variables de entorno
 ```bash
-export ENVIRONMENT=dev          # o prod
+export ENVIRONMENT=dev
 export AWS_REGION=us-east-1
 export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
@@ -42,25 +51,25 @@ export AWS_ACCOUNT_ID=123456789012
 ansible-playbook -i inventory/hosts.ini playbooks/site.yml --extra-vars "environment=dev"
 ```
 
-### Ejecutar tags específicos
+### Ejecutar roles específicos
 ```bash
-# Solo Lambdas
-ansible-playbook -i inventory/hosts.ini playbooks/site.yml --tags lambdas
-
-# Solo ECS
+ansible-playbook -i inventory/hosts.ini playbooks/site.yml --tags database
 ansible-playbook -i inventory/hosts.ini playbooks/site.yml --tags ecs
-
-# Solo frontend
-ansible-playbook -i inventory/hosts.ini playbooks/site.yml --tags frontend
-
-# Solo validación
-ansible-playbook -i inventory/hosts.ini playbooks/site.yml --tags validate
+ansible-playbook -i inventory/hosts.ini playbooks/site.yml --tags waf
+ansible-playbook -i inventory/hosts.ini playbooks/site.yml --tags network
 ```
 
 ## Componentes gestionados por Ansible
 
-1. **Lambdas**: Build, empaquetado y deploy de código Rust
-2. **ECS Fargate**: Actualización de task definitions y servicios
-3. **Frontend**: Build de Next.js y sync a S3 + invalidación CloudFront
-4. **Database**: Migraciones y seeding (si aplica)
-5. **Monitoring**: Configuración de Prometheus exporter en ECS
+1. **Database**: RDS PostgreSQL, ElastiCache Redis, credenciales
+2. **ECS**: Despliegue nodo blockchain, task definitions
+3. **API Gateway**: HTTP API con integraciones Lambda
+4. **Lambdas**: Configuración de timeout, memoria, variables de entorno
+5. **Frontend**: Build Next.js, S3 sync, CloudFront invalidation
+6. **WAF**: Protección OWASP Core Rule Set y rate limiting
+7. **SQS DLQ**: Cola de mensajes muertos con redrive policy
+8. **Route53**: DNS alias hacia CloudFront
+9. **VPC Endpoints**: Gateway/Interface para S3, SQS, Secrets Manager
+10. **VPC Flow Logs**: Auditoría de tráfico de red
+11. **SES**: Configuración de email
+12. **Blockchain Monitoring**: CloudWatch alarms y log groups

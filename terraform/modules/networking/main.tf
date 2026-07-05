@@ -175,6 +175,14 @@ resource "aws_security_group" "blockchain" {
     description = "Allow NFS communication for blockchain"
   }
 
+  ingress {
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    self            = true
+    description     = "Allow HTTPS to ECR VPC endpoints"
+  }
+
   egress {
     from_port   = 0
     to_port     = 0

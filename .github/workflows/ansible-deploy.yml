@@ -48,7 +48,7 @@ jobs:
       - name: Instalar Python 3 y Ansible
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3 python3-pip
+          sudo apt-get install -y python3 python3-pip jq
           python3 -m pip install --upgrade pip
           pip install ansible boto3 botocore
           ansible-galaxy collection install amazon.aws community.general
@@ -85,3 +85,100 @@ jobs:
           SUDOADMIN_PASSWORD: ${{ secrets.SUDOADMIN_PASSWORD }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+
+      # Paso 6: firmar y desplegar Lambdas Rust desde artifacts de Terraform
+      - name: Download Lambda artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-artifacts
+          path: terraform/artifacts
+
+      - name: Create S3 signing bucket
+        run: |
+          BUCKET="truetally-dev-signing-${{ github.run_id }}"
+          aws s3 mb s3://$BUCKET --region ${{ secrets.AWS_REGION }}
+          echo "BUCKET=$BUCKET" >> $GITHUB_ENV
+
+      - name: Upload ZIPs for signing
+        run: |
+          for zip in terraform/artifacts/lambda-acceso.zip terraform/artifacts/lambda-despachador.zip terraform/artifacts/lambda-procesador.zip; do
+            NAME=$(basename "$zip" .zip)
+            aws s3 cp "$zip" "s3://${{ env.BUCKET }}/$NAME.zip"
+          done
+
+      - name: Start signing jobs
+        run: |
+          for lambda in lambda-acceso lambda-despachador lambda-procesador; do
+            VERSION=$(aws s3api list-object-versions \
+              --bucket ${{ env.BUCKET }} \
+              --prefix "$lambda.zip" \
+              --query 'Versions[0].VersionId' \
+              --output text)
+
+            aws signer start-signing-job \
+              --source "s3={bucketName=${{ env.BUCKET }},key=$lambda.zip,version=$VERSION}" \
+              --destination "s3={bucketName=${{ env.BUCKET }},prefix=signed/}" \
+              --profile-name truetallydevlambdasigningprofile \
+              --region ${{ secrets.AWS_REGION }} \
+              --output json > "/tmp/signing_$lambda.json"
+
+            JOB_ID=$(python3 -c "import json; print(json.load(open('/tmp/signing_$lambda.json'))['jobId'])")
+            echo "$lambda=$JOB_ID" >> $GITHUB_ENV
+          done
+
+      - name: Wait for signing jobs
+        run: |
+          for i in {1..60}; do
+            ALL_DONE=true
+            for lambda in lambda-acceso lambda-despachador lambda-procesador; do
+              JOB_ID=$(grep "^$lambda=" $GITHUB_ENV | cut -d'=' -f2)
+              STATUS=$(aws signer get-signing-job \
+                --job-id "$JOB_ID" \
+                --region ${{ secrets.AWS_REGION }} \
+                --query 'status' \
+                --output text 2>/dev/null || echo "PENDING")
+              echo "$lambda signing status: $STATUS (attempt $i)"
+              if [ "$STATUS" = "PENDING" ] || [ "$STATUS" = "IN_PROGRESS" ]; then
+                ALL_DONE=false
+              elif [ "$STATUS" = "FAILED" ]; then
+                echo "Signing failed for $lambda"
+                exit 1
+              fi
+            done
+            if [ "$ALL_DONE" = true ]; then
+              echo "All signing jobs completed"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Signing jobs timed out"
+          exit 1
+
+      - name: Download signed artifacts and deploy
+        run: |
+          for lambda in lambda-acceso lambda-despachador lambda-procesador; do
+            JOB_ID=$(grep "^$lambda=" $GITHUB_ENV | cut -d'=' -f2)
+            SIGNED_KEY=$(aws signer get-signing-job \
+              --job-id "$JOB_ID" \
+              --region ${{ secrets.AWS_REGION }} \
+              --query 'signedObject.s3Location.key' \
+              --output text)
+            echo "Downloading signed $lambda from $SIGNED_KEY"
+            aws s3 cp "s3://${{ env.BUCKET }}/$SIGNED_KEY" "$lambda-signed.zip"
+
+            if [ "${{ steps.env.outputs.truetally_env }}" == "prod" ]; then
+              LAMBDA_NAME="truetally-prod-$lambda"
+            else
+              LAMBDA_NAME="truetally-dev-$lambda"
+            fi
+            echo "Deploying $LAMBDA_NAME..."
+            aws lambda update-function-code \
+              --function-name "$LAMBDA_NAME" \
+              --zip-file fileb://$lambda-signed.zip \
+              --region ${{ secrets.AWS_REGION }}
+          done
+
+      - name: Cleanup bucket
+        if: always()
+        run: |
+          aws s3 rb s3://${{ env.BUCKET }} --force || true

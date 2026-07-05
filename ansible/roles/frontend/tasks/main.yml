@@ -11,22 +11,15 @@
 # =============================================================================
 
 - name: Obtener URL del API Gateway
-  # Consulta la API Gateway HTTP API para obtener su ID
-  # Necesario para construir NEXT_PUBLIC_API_URL que el frontend usa en build time
   shell: |
     aws apigatewayv2 get-apis --query "Items[?Name=='{{ name_prefix }}-api'].ApiId | [0]" --output text --region "{{ aws_region }}"
   register: api_id_result
 
 - name: Establecer API Gateway URL
-  # Construye la URL pública de la API Gateway
-  # Esta variable se usa como NEXT_PUBLIC_API_URL en el build del frontend
   set_fact:
     api_gateway_url: "https://{{ api_id_result.stdout }}.execute-api.{{ aws_region }}.amazonaws.com"
 
 - name: Build frontend con API_URL correcto
-  # Compila el frontend Next.js con la variable de entorno correcta
-  # NEXT_PUBLIC_API_URL se inyecta en el build para que el frontend sepa a qué API llamar
-  # npm ci instala dependencias exactas del package-lock.json
   shell: |
     export NEXT_PUBLIC_API_URL="{{ api_gateway_url }}"
     npm ci
@@ -35,29 +28,16 @@
     chdir: ../../app/frontend
 
 - name: Sincronizar frontend a S3
-  # Sube el contenido de la carpeta out/ al bucket S3 del frontend
-  # --delete elimina archivos que ya no están en el build (limpia versiones anteriores)
-  # --cache-control max-age=31536000: cache agresivo para archivos con hash en el nombre
   shell: |
-    aws s3 sync ../../app/frontend/{{ frontend.dist_directory }} s3://{{ frontend.s3_bucket }} --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
-
-- name: Configurar custom error responses en CloudFront para SPA
-  # Agrega respuestas personalizadas de error 403/404 para servir index.html
-  # Necesario para que las rutas SPA (/login, /register, /blocks) funcionen correctamente
-  shell: |
-    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Aliases.Items, \`{{ domain_name }}\`)].Id | [0]" --output text --region "{{ aws_region }}")
-    if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
-      ETAG=$(aws cloudfront get-distribution-config --id "$DIST_ID" --query 'ETag' --output text --region "{{ aws_region }}")
-      aws cloudfront get-distribution-config --id "$DIST_ID" --region "{{ aws_region }}" --output json | jq '.DistributionConfig.CustomErrorResponses = {"Quantity":2,"Items":[{"ErrorCode":403,"ResponseCode":200,"ResponsePagePath":"/index.html","ErrorCachingMinTTL":300},{"ErrorCode":404,"ResponseCode":200,"ResponsePagePath":"/index.html","ErrorCachingMinTTL":300}]}' > /tmp/cf-custom-errors.json
-      aws cloudfront update-distribution --id "$DIST_ID" --distribution-config file:///tmp/cf-custom-errors.json --if-match "$ETAG" --region "{{ aws_region }}"
+    BUCKET="{{ frontend.s3_bucket }}"
+    if ! aws s3 ls "s3://${BUCKET}" --region "{{ aws_region }}" >/dev/null 2>&1; then
+      BUCKET=$(aws s3 ls --query "Buckets[?starts_with(Name, '{{ name_prefix }}-frontend-')].Name | [0]" --output text --region "{{ aws_region }}")
     fi
+    aws s3 sync ../../app/frontend/{{ frontend.dist_directory }} "s3://${BUCKET}" --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
 
 - name: Invalidar CloudFront asociado al bucket frontend
-  # Crea una invalidación de CloudFront para que sirva el nuevo contenido
-  # Detecta la distribución por el nombre del bucket S3 en los orígenes
-  # paths "/*" invalida todo el cache (necesario después de cada deploy)
   shell: |
-    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[].DomainName, \`{{ frontend.s3_bucket }}.s3-website.\`)].Id | [0]" --output text --region "{{ aws_region }}")
+    DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?length(Origins.Items[?contains(DomainName, '{{ frontend.s3_bucket }}.s3.amazonaws.com')]) > \`0\`].Id | [0]" --output text --region "{{ aws_region }}")
     if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
       aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" --region "{{ aws_region }}"
     fi

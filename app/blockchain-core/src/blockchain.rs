@@ -178,6 +178,7 @@ mod tests {
         let vote = Vote {
             voter_public_key: "test_pk".to_string(),
             candidate_id: "candidate_1".to_string(),
+            election_id: "election_1".to_string(),
             signature: "test_sig".to_string(),
             timestamp: Utc::now(),
         };
@@ -194,6 +195,7 @@ mod tests {
         let vote = Vote {
             voter_public_key: "test_pk".to_string(),
             candidate_id: "candidate_1".to_string(),
+            election_id: "election_1".to_string(),
             signature: "test_sig".to_string(),
             timestamp: Utc::now(),
         };
@@ -211,6 +213,7 @@ mod tests {
         let vote = Vote {
             voter_public_key: "test_pk".to_string(),
             candidate_id: "candidate_1".to_string(),
+            election_id: "election_1".to_string(),
             signature: "test_sig".to_string(),
             timestamp: Utc::now(),
         };
