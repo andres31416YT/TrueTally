@@ -85,7 +85,7 @@ jobs:
             -Dsonar.projectKey=truetally-frontend \
             -Dsonar.sources=src \
             -Dsonar.tests=src \
-            -Dsonar.test.inclusions=**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx \
+            -Dsonar.test.inclusions=**/*.test.ts,**\*.test.tsx,**\*.spec.ts,**\*.spec.tsx \
             -Dsonar.branch.name="$BRANCH_NAME" \
             -Dsonar.sourceEncoding=UTF-8 \
             -Dsonar.host.url=https://sonarcloud.io \
@@ -349,21 +349,21 @@ jobs:
           cd terraform/environments/dev
           terraform workspace select dev || terraform workspace select -or-create dev
 
-- name: Terraform Apply
-         run: |
-           cd terraform/environments/dev
-           terraform apply -input=false -auto-approve tfplan
+      - name: Terraform Apply
+        run: |
+          cd terraform/environments/dev
+          terraform apply -input=false -auto-approve tfplan
 
-       - name: Create frontend out directory
-         run: mkdir -p app/frontend/out
+      - name: Create frontend out directory
+        run: mkdir -p app/frontend/out
 
-       - name: Descargar Frontend artifacts
-         uses: actions/download-artifact@v4
-         with:
-           name: frontend-dist
-           path: app/frontend/out
+      - name: Descargar Frontend artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: app/frontend/out
 
-       - name: Deploy Frontend to S3
+      - name: Deploy Frontend to S3
         run: |
           BUCKET_NAME="truetally-dev-frontend-${{ secrets.AWS_ACCOUNT_ID }}"
           aws s3 sync app/frontend/out s3://$BUCKET_NAME --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
@@ -419,21 +419,21 @@ jobs:
           cd terraform/environments/prod
           terraform workspace select prod || terraform workspace select -or-create prod
 
-- name: Terraform Apply
-         run: |
-           cd terraform/environments/prod
-           terraform apply -input=false -auto-approve tfplan
+      - name: Terraform Apply
+        run: |
+          cd terraform/environments/prod
+          terraform apply -input=false -auto-approve tfplan
 
-       - name: Create frontend out directory
-         run: mkdir -p app/frontend/out
+      - name: Create frontend out directory
+        run: mkdir -p app/frontend/out
 
-       - name: Descargar Frontend artifacts
-         uses: actions/download-artifact@v4
-         with:
-           name: frontend-dist
-           path: app/frontend/out
+      - name: Descargar Frontend artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: app/frontend/out
 
-       - name: Deploy Frontend to S3
+      - name: Deploy Frontend to S3
         run: |
           BUCKET_NAME="truetally-prod-frontend-${{ secrets.AWS_ACCOUNT_ID }}"
           aws s3 sync app/frontend/out s3://$BUCKET_NAME --delete --cache-control "max-age=31536000" --metadata-directive REPLACE
