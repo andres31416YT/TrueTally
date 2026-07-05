@@ -5,8 +5,9 @@ on:
     branches: [ main, develop ]
     paths:
       - 'app/lambda-acceso/**'
-      - 'app/api-rust/src/**'
-      - 'app/shared/src/**'
+      - 'app/lambda-despachador/**'
+      - 'app/lambda-procesador/**'
+      - 'app/shared/**'
       - '.github/workflows/lambda-deploy.yml'
   workflow_dispatch:
 
@@ -15,10 +16,9 @@ permissions:
   contents: read
 
 jobs:
-  deploy-lambda-acceso:
+  deploy-lambdas:
     runs-on: ubuntu-latest
     env:
-      LAMBDA_NAME: ${{ github.ref == 'refs/heads/main' && 'truetally-prod-acceso' || 'truetally-dev-acceso' }}
       AWS_REGION: us-east-1
       SIGNING_PROFILE: truetallydevlambdasigningprofile
 
@@ -44,15 +44,19 @@ jobs:
             ~/.cargo/registry/
             ~/.cargo/git/
             app/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('app/Cargo.lock', 'app/Cargo.toml', 'app/shared/Cargo.toml', 'app/lambda-acceso/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('app/Cargo.lock', 'app/Cargo.toml', 'app/shared/Cargo.toml', 'app/lambda-acceso/Cargo.toml', 'app/lambda-despachador/Cargo.toml', 'app/lambda-procesador/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Build lambda-acceso
+      - name: Build and package Lambdas
         run: |
           cd app
-          cargo build --release -p lambda-acceso
-          zip -j lambda-acceso.zip target/release/bootstrap
+          for lambda in lambda-acceso lambda-despachador lambda-procesador; do
+            echo "Building $lambda..."
+            cargo build --release -p "$lambda"
+            cp "target/release/bootstrap" "$lambda.zip"
+            echo "Created $lambda.zip"
+          done
 
       - name: Create S3 signing bucket
         run: |
@@ -60,68 +64,81 @@ jobs:
           aws s3 mb s3://$BUCKET --region ${{ env.AWS_REGION }}
           echo "BUCKET=$BUCKET" >> $GITHUB_ENV
 
-      - name: Upload ZIP for signing
+      - name: Upload ZIPs for signing
         run: |
-          aws s3 cp app/lambda-acceso.zip s3://${{ env.BUCKET }}/lambda-acceso.zip
+          for lambda in lambda-acceso lambda-despachador lambda-procesador; do
+            aws s3 cp "app/$lambda.zip" "s3://${{ env.BUCKET }}/$lambda.zip"
+          done
 
-      - name: Start signing job
-        id: sign
+      - name: Start signing jobs
         run: |
-          VERSION=$(aws s3api list-object-versions \
-            --bucket ${{ env.BUCKET }} \
-            --prefix lambda-acceso.zip \
-            --query 'Versions[0].VersionId' \
-            --output text)
+          for lambda in lambda-acceso lambda-despachador lambda-procesador; do
+            VERSION=$(aws s3api list-object-versions \
+              --bucket ${{ env.BUCKET }} \
+              --prefix "$lambda.zip" \
+              --query 'Versions[0].VersionId' \
+              --output text)
 
-          aws signer start-signing-job \
-            --source "s3={bucketName=${{ env.BUCKET }},key=lambda-acceso.zip,version=$VERSION}" \
-            --destination "s3={bucketName=${{ env.BUCKET }},prefix=signed/}" \
-            --profile-name ${{ env.SIGNING_PROFILE }} \
-            --region ${{ env.AWS_REGION }} \
-            --output json > /tmp/signing_job.json
+            aws signer start-signing-job \
+              --source "s3={bucketName=${{ env.BUCKET }},key=$lambda.zip,version=$VERSION}" \
+              --destination "s3={bucketName=${{ env.BUCKET }},prefix=signed/}" \
+              --profile-name ${{ env.SIGNING_PROFILE }} \
+              --region ${{ env.AWS_REGION }} \
+              --output json > "/tmp/signing_$lambda.json"
 
-          JOB_ID=$(python3 -c "import json; print(json.load(open('/tmp/signing_job.json'))['jobId'])")
-          echo "JOB_ID=$JOB_ID" >> $GITHUB_ENV
+            JOB_ID=$(python3 -c "import json; print(json.load(open('/tmp/signing_$lambda.json'))['jobId'])")
+            echo "$lambda=$JOB_ID" >> $GITHUB_ENV
+          done
 
-      - name: Wait for signing job
+      - name: Wait for signing jobs
         run: |
           for i in {1..60}; do
-            STATUS=$(aws signer get-signing-job \
-              --job-id ${{ env.JOB_ID }} \
-              --region ${{ env.AWS_REGION }} \
-              --query 'status' \
-              --output text 2>/dev/null || echo "PENDING")
-            echo "Signing status: $STATUS (attempt $i)"
-            if [ "$STATUS" = "SUCCEEDED" ]; then
-              echo "Signing succeeded"
+            ALL_DONE=true
+            for lambda in lambda-acceso lambda-despachador lambda-procesador; do
+              JOB_ID=$(grep "^$lambda=" $GITHUB_ENV | cut -d'=' -f2)
+              STATUS=$(aws signer get-signing-job \
+                --job-id "$JOB_ID" \
+                --region ${{ env.AWS_REGION }} \
+                --query 'status' \
+                --output text 2>/dev/null || echo "PENDING")
+              echo "$lambda signing status: $STATUS (attempt $i)"
+              if [ "$STATUS" = "PENDING" ] || [ "$STATUS" = "IN_PROGRESS" ]; then
+                ALL_DONE=false
+              elif [ "$STATUS" = "FAILED" ]; then
+                echo "Signing failed for $lambda"
+                exit 1
+              fi
+            done
+            if [ "$ALL_DONE" = true ]; then
+              echo "All signing jobs completed"
               exit 0
-            elif [ "$STATUS" = "FAILED" ]; then
-              echo "Signing failed"
-              exit 1
             fi
             sleep 5
           done
-          echo "Signing job timed out"
+          echo "Signing jobs timed out"
           exit 1
 
-      - name: Download signed artifact
+      - name: Download signed artifacts and deploy
         run: |
-          SIGNED_KEY=$(aws signer get-signing-job \
-            --job-id ${{ env.JOB_ID }} \
-            --region ${{ env.AWS_REGION }} \
-            --query 'signedObject.s3Location.key' \
-            --output text)
-          echo "Signed key: $SIGNED_KEY"
-          aws s3 cp "s3://${{ env.BUCKET }}/$SIGNED_KEY" lambda-acceso-signed.zip
+          for lambda in lambda-acceso lambda-despachador lambda-procesador; do
+            JOB_ID=$(grep "^$lambda=" $GITHUB_ENV | cut -d'=' -f2)
+            SIGNED_KEY=$(aws signer get-signing-job \
+              --job-id "$JOB_ID" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'signedObject.s3Location.key' \
+              --output text)
+            echo "Downloading signed $lambda from $SIGNED_KEY"
+            aws s3 cp "s3://${{ env.BUCKET }}/$SIGNED_KEY" "$lambda-signed.zip"
 
-      - name: Update Lambda code
-        run: |
-          aws lambda update-function-code \
-            --function-name ${{ env.LAMBDA_NAME }} \
-            --zip-file fileb://lambda-acceso-signed.zip \
-            --region ${{ env.AWS_REGION }}
+            LAMBDA_NAME="${{ github.ref == 'refs/heads/main' && 'truetally-prod-'$lambda || 'truetally-dev-'$lambda }}"
+            echo "Deploying $LAMBDA_NAME..."
+            aws lambda update-function-code \
+              --function-name "$LAMBDA_NAME" \
+              --zip-file fileb://$lambda-signed.zip \
+              --region ${{ env.AWS_REGION }}
+          done
 
       - name: Cleanup bucket
         if: always()
         run: |
-          aws s3 rb s3://${{ env.BUCKET }} --force
+          aws s3 rb s3://${{ env.BUCKET }} --force || true
