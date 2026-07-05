@@ -1,0 +1,128 @@
+name: Lambda Deploy
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'app/lambda-acceso/**'
+      - 'app/api-rust/src/**'
+      - 'app/shared/src/**'
+      - '.github/workflows/lambda-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-lambda-acceso:
+    runs-on: ubuntu-latest
+    env:
+      LAMBDA_NAME: ${{ github.ref == 'refs/heads/main' && 'truetally-prod-acceso' || 'truetally-dev-acceso' }}
+      AWS_REGION: us-east-1
+      SIGNING_PROFILE: truetallydevlambdasigningprofile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            app/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('app/Cargo.lock', 'app/Cargo.toml', 'app/shared/Cargo.toml', 'app/lambda-acceso/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build lambda-acceso
+        run: |
+          cd app
+          cargo build --release -p lambda-acceso
+          zip -j lambda-acceso.zip target/release/bootstrap
+
+      - name: Create S3 signing bucket
+        run: |
+          BUCKET="truetally-dev-signing-${{ github.run_id }}"
+          aws s3 mb s3://$BUCKET --region ${{ env.AWS_REGION }}
+          aws s3api put-bucket-versioning --bucket $BUCKET --versioning-configuration Status=Enabled
+          echo "BUCKET=$BUCKET" >> $GITHUB_ENV
+
+      - name: Upload ZIP for signing
+        run: |
+          aws s3 cp app/lambda-acceso.zip s3://${{ env.BUCKET }}/lambda-acceso.zip
+
+      - name: Start signing job
+        id: sign
+        run: |
+          VERSION=$(aws s3api list-object-versions \
+            --bucket ${{ env.BUCKET }} \
+            --prefix lambda-acceso.zip \
+            --query 'Versions[0].VersionId' \
+            --output text)
+
+          aws signer start-signing-job \
+            --source "s3={bucketName=${{ env.BUCKET }},key=lambda-acceso.zip,version=$VERSION}" \
+            --destination "s3={bucketName=${{ env.BUCKET }},prefix=signed/}" \
+            --profile-name ${{ env.SIGNING_PROFILE }} \
+            --region ${{ env.AWS_REGION }} \
+            --output json > /tmp/signing_job.json
+
+          JOB_ID=$(python3 -c "import json; print(json.load(open('/tmp/signing_job.json'))['jobId'])")
+          echo "JOB_ID=$JOB_ID" >> $GITHUB_ENV
+
+      - name: Wait for signing job
+        run: |
+          for i in {1..60}; do
+            STATUS=$(aws signer get-signing-job \
+              --job-id ${{ env.JOB_ID }} \
+              --region ${{ env.AWS_REGION }} \
+              --query 'status' \
+              --output text 2>/dev/null || echo "PENDING")
+            echo "Signing status: $STATUS (attempt $i)"
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              echo "Signing succeeded"
+              exit 0
+            elif [ "$STATUS" = "FAILED" ]; then
+              echo "Signing failed"
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "Signing job timed out"
+          exit 1
+
+      - name: Download signed artifact
+        run: |
+          SIGNED_KEY=$(aws signer get-signing-job \
+            --job-id ${{ env.JOB_ID }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'signedObject.s3Location.key' \
+            --output text)
+          echo "Signed key: $SIGNED_KEY"
+          aws s3 cp "s3://${{ env.BUCKET }}/$SIGNED_KEY" lambda-acceso-signed.zip
+
+      - name: Update Lambda code
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ env.LAMBDA_NAME }} \
+            --zip-file fileb://lambda-acceso-signed.zip \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Cleanup bucket
+        if: always()
+        run: |
+          aws s3 rb s3://${{ env.BUCKET }} --force
