@@ -178,6 +178,12 @@ jobs:
             echo "db_password=${{ secrets.TF_VAR_DB_PASSWORD_DEV }}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Autenticación con AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
       - name: Instalar Rust x86_64 toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
