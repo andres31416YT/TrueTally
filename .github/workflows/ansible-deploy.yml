@@ -86,12 +86,14 @@ jobs:
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
-      # Paso 6: firmar y desplegar Lambdas Rust desde artifacts de Terraform
-      - name: Download Lambda artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-artifacts
-          path: terraform/artifacts
+      # Paso 6: firmar y desplegar Lambdas Rust desde S3
+      - name: Download Lambda artifacts from S3
+        run: |
+          ENV="${{ steps.env.outputs.truetally_env }}"
+          BUCKET="truetally-dev-lambda-artifacts"
+          mkdir -p terraform/artifacts
+          aws s3 sync "s3://$BUCKET/$ENV/" terraform/artifacts/ --region ${{ secrets.AWS_REGION }}
+          echo "Lambda artifacts downloaded from s3://$BUCKET/$ENV/"
 
       - name: Create S3 signing bucket
         run: |
