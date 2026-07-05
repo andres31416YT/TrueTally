@@ -23,13 +23,23 @@
     aws cloudfront list-distributions --query "DistributionList.Items[?length(Origins.Items[?contains(DomainName, '{{ frontend.s3_bucket }}.s3.amazonaws.com')]) > \`0\`].Id | [0]" --output text --region "{{ aws_region }}"
   register: cf_dist_id
 
+- name: Construir estructura del cambio Route53
+  set_fact:
+    route53_change_batch:
+      Changes:
+        - Action: UPSERT
+          ResourceRecordSet:
+            Name: "{{ route53.domain_name }}"
+            Type: A
+            AliasTarget:
+              DNSName: "{{ cf_dist_id.stdout }}.cloudfront.net"
+              HostedZoneId: "Z2FDTNDATAQYW2"
+              EvaluateTargetHealth: false
+
 - name: Crear archivo de cambio Route53
   copy:
-    content: "{{ {'Changes': [{'Action': 'UPSERT', 'ResourceRecordSet': {'Name': route53.domain_name, 'Type': 'A', 'AliasTarget': {'DNSName': cf_dist_id.stdout + '.cloudfront.net', 'HostedZoneId': 'Z2FDTNDATAQYW2', 'EvaluateTargetHealth': false}}}] | to_json }}"
     dest: /tmp/route53-change.json
-
-- name: Validar que el JSON generado es válido
-  shell: python3 -m json.tool /tmp/route53-change.json > /dev/null
+    content: "{{ route53_change_batch | to_nice_json }}"
   when: cf_dist_id.stdout is defined and cf_dist_id.stdout != "None" and cf_dist_id.stdout | length > 0
 
 - name: Crear registro DNS en Route53 apuntando a CloudFront
