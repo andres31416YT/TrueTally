@@ -130,7 +130,11 @@ jobs:
             echo "Downloading signed $lambda from $SIGNED_KEY"
             aws s3 cp "s3://${{ env.BUCKET }}/$SIGNED_KEY" "$lambda-signed.zip"
 
-            LAMBDA_NAME="${{ github.ref == 'refs/heads/main' && 'truetally-prod-'$lambda || 'truetally-dev-'$lambda }}"
+            if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+              LAMBDA_NAME="truetally-prod-$lambda"
+            else
+              LAMBDA_NAME="truetally-dev-$lambda"
+            fi
             echo "Deploying $LAMBDA_NAME..."
             aws lambda update-function-code \
               --function-name "$LAMBDA_NAME" \
