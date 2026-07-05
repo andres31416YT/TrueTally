@@ -224,7 +224,11 @@ jobs:
           path: terraform/artifacts/*.zip
           retention-days: 7
 
-      - name: Upload Frontend artifact
+      - name: Upload Lambda artifacts to S3
+        run: |
+          BUCKET="truetally-dev-lambda-artifacts"
+          aws s3 sync terraform/artifacts/ "s3://$BUCKET/${{ steps.env.outputs.env_name }}/" --region ${{ secrets.AWS_REGION }}
+          echo "Lambda artifacts uploaded to s3://$BUCKET/${{ steps.env.outputs.env_name }}/"
         uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
