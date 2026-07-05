@@ -296,7 +296,7 @@ jobs:
             github.rest.issues.createComment({
               ...context.repo,
               issue_number: context.issue.number,
-              body: '### Terraform Plan (${{ steps.env.outputs.env_name }})\\n```\\n' + truncated + '\\n```'
+              body: '### Terraform Plan (${{ steps.env.outputs.env_name }})\n```\n' + truncated + '\n```'
             });
 
       - name: Guardar plan como artefacto
@@ -319,21 +319,6 @@ jobs:
       - name: Checkout del código
         uses: actions/checkout@v4
 
-      - name: Descargar Lambda artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-artifacts
-          path: terraform/artifacts
-
-      - name: Create frontend out directory
-        run: mkdir -p app/frontend/out
-
-      - name: Descargar Frontend artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: app/frontend/out
-
       - name: Descargar plan de dev
         uses: actions/download-artifact@v4
         with:
@@ -345,18 +330,6 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Upload Lambda artifacts to S3
-        run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            ENV="prod"
-          else
-            ENV="dev"
-          fi
-          BUCKET="truetally-dev-lambda-artifacts"
-          aws s3 mb "s3://$BUCKET" --region ${{ secrets.AWS_REGION }} || true
-          aws s3 sync terraform/artifacts/ "s3://$BUCKET/$ENV/" --region ${{ secrets.AWS_REGION }}
-          echo "Lambda artifacts uploaded to s3://$BUCKET/$ENV/"
 
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
@@ -389,7 +362,7 @@ jobs:
 
       - name: Invalidate CloudFront
         run: |
-          DIST_ID=$(aws cloudfront list-distributions --query 'DistributionList.Items[?Aliases.Items != null && contains(Aliases.Items, `andrespaganroncall.qzz.io`)].Id | [0]' --output text)
+          DIST_ID=$(aws cloudfront list-distributions --query 'DistributionList.Items[?Aliases.Items != null && `andrespaganroncall.qzz.io`].Id | [0]' --output text)
           if [[ -n "$DIST_ID" && "$DIST_ID" != "None" ]]; then
             aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*"
           fi
@@ -407,21 +380,6 @@ jobs:
       - name: Checkout del código
         uses: actions/checkout@v4
 
-      - name: Descargar Lambda artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: lambda-artifacts
-          path: terraform/artifacts
-
-      - name: Create frontend out directory
-        run: mkdir -p app/frontend/out
-
-      - name: Descargar Frontend artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: app/frontend/out
-
       - name: Descargar plan de prod
         uses: actions/download-artifact@v4
         with:
@@ -433,18 +391,6 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Upload Lambda artifacts to S3
-        run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            ENV="prod"
-          else
-            ENV="dev"
-          fi
-          BUCKET="truetally-dev-lambda-artifacts"
-          aws s3 mb "s3://$BUCKET" --region ${{ secrets.AWS_REGION }} || true
-          aws s3 sync terraform/artifacts/ "s3://$BUCKET/$ENV/" --region ${{ secrets.AWS_REGION }}
-          echo "Lambda artifacts uploaded to s3://$BUCKET/$ENV/"
 
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
@@ -477,7 +423,7 @@ jobs:
 
       - name: Invalidate CloudFront
         run: |
-          DIST_ID=$(aws cloudfront list-distributions --query 'DistributionList.Items[?Aliases.Items != null && contains(Aliases.Items, `andrespaganroncall.qzz.io`)].Id | [0]' --output text)
+          DIST_ID=$(aws cloudfront list-distributions --query 'DistributionList.Items[?Aliases.Items != null && `andrespaganroncall.qzz.io`].Id | [0]' --output text)
           if [[ -n "$DIST_ID" && "$DIST_ID" != "None" ]]; then
             aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*"
           fi
