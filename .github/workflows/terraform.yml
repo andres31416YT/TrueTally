@@ -178,18 +178,64 @@ jobs:
             echo "db_password=${{ secrets.TF_VAR_DB_PASSWORD_DEV }}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Instalar Rust x86_64 toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Instalar toolchain cruzado x86_64 musl
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: x86_64-unknown-linux-musl
+
+      - name: Instalar herramientas de Linkers y ZIP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools zip unzip gcc-x86-64-linux-gnu
+
+      - name: Generar empaquetados ZIP de Lambdas
+        working-directory: app
+        run: |
+          mkdir -p "${{ github.workspace }}/terraform/artifacts"
+          . "$HOME/.cargo/env"
+          cargo build --release --target x86_64-unknown-linux-musl -p lambda-acceso
+          cp target/x86_64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j "${{ github.workspace }}/terraform/artifacts/lambda-acceso.zip" ./bootstrap
+          rm ./bootstrap
+          cargo build --release --target x86_64-unknown-linux-musl -p lambda-despachador
+          cp target/x86_64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j "${{ github.workspace }}/terraform/artifacts/lambda-despachador.zip" ./bootstrap
+          rm ./bootstrap
+          cargo build --release --target x86_64-unknown-linux-musl -p lambda-procesador
+          cp target/x86_64-unknown-linux-musl/release/bootstrap ./bootstrap
+          zip -j "${{ github.workspace }}/terraform/artifacts/lambda-procesador.zip" ./bootstrap
+          rm ./bootstrap
+
+      - name: Build Frontend
+        working-directory: app/frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Upload Lambda artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-artifacts
+          path: terraform/artifacts/*.zip
+          retention-days: 7
+
+      - name: Upload Frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: app/frontend/out/**
+          retention-days: 7
+
       - name: Autenticación con AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Upload Lambda artifacts to S3
-        run: |
-          ENV="${{ steps.env.outputs.env_name }}"
-          BUCKET="truetally-dev-lambda-artifacts"
-          aws s3 sync terraform/artifacts/ "s3://$BUCKET/$ENV/" --region ${{ secrets.AWS_REGION }}
-          echo "Lambda artifacts uploaded to s3://$BUCKET/$ENV/"
 
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
@@ -300,6 +346,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Upload Lambda artifacts to S3
+        run: |
+          ENV="${{ steps.env.outputs.env_name }}"
+          BUCKET="truetally-dev-lambda-artifacts"
+          aws s3 sync terraform/artifacts/ "s3://$BUCKET/$ENV/" --region ${{ secrets.AWS_REGION }}
+          echo "Lambda artifacts uploaded to s3://$BUCKET/$ENV/"
+
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -375,6 +428,13 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload Lambda artifacts to S3
+        run: |
+          ENV="${{ steps.env.outputs.env_name }}"
+          BUCKET="truetally-dev-lambda-artifacts"
+          aws s3 sync terraform/artifacts/ "s3://$BUCKET/$ENV/" --region ${{ secrets.AWS_REGION }}
+          echo "Lambda artifacts uploaded to s3://$BUCKET/$ENV/"
 
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
