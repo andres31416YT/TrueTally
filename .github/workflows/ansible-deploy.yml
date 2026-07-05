@@ -92,6 +92,8 @@ jobs:
         with:
           name: lambda-artifacts
           path: terraform/artifacts
+          workflow: Terraform CI/CD
+          run-id: ${{ github.event.workflow_run.id }}
 
       - name: Create S3 signing bucket
         run: |
