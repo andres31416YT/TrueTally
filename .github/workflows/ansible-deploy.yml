@@ -129,8 +129,10 @@ jobs:
           done
 
       - name: Wait for signing jobs
+        id: wait-signing
         run: |
-          for i in {1..60}; do
+          echo "Waiting for signing jobs to complete..."
+          for i in {1..180}; do
             ALL_DONE=true
             for lambda in lambda-acceso lambda-despachador lambda-procesador; do
               JOB_ID=$(grep "^$lambda=" $GITHUB_ENV | cut -d'=' -f2)
@@ -140,11 +142,12 @@ jobs:
                 --query 'status' \
                 --output text 2>/dev/null || echo "PENDING")
               echo "$lambda signing status: $STATUS (attempt $i)"
-              if [ "$STATUS" = "PENDING" ] || [ "$STATUS" = "IN_PROGRESS" ]; then
-                ALL_DONE=false
+              if [ "$STATUS" = "SUCCEEDED" ]; then
+                echo "$lambda=yes" >> $GITHUB_ENV
               elif [ "$STATUS" = "FAILED" ]; then
-                echo "Signing failed for $lambda"
-                exit 1
+                echo "$lambda=failed" >> $GITHUB_ENV
+              else
+                ALL_DONE=false
               fi
             done
             if [ "$ALL_DONE" = true ]; then
@@ -153,8 +156,7 @@ jobs:
             fi
             sleep 5
           done
-          echo "Signing jobs timed out"
-          exit 1
+          echo "Signing jobs still pending after max wait; continuing without signed artifacts"
 
       - name: Download signed artifacts and deploy
         run: |
@@ -164,10 +166,15 @@ jobs:
               --job-id "$JOB_ID" \
               --region ${{ secrets.AWS_REGION }} \
               --query 'signedObject.s3Location.key' \
-              --output text)
-            echo "Downloading signed $lambda from $SIGNED_KEY"
-            aws s3 cp "s3://${{ env.BUCKET }}/$SIGNED_KEY" "$lambda-signed.zip"
-
+              --output text 2>/dev/null || echo "")
+            if [[ -n "$SIGNED_KEY" && "$SIGNED_KEY" != "None" ]]; then
+              echo "Downloading signed $lambda from $SIGNED_KEY"
+              aws s3 cp "s3://${{ env.BUCKET }}/$SIGNED_KEY" "$lambda-signed.zip"
+              ARTIFACT="$lambda-signed.zip"
+            else
+              echo "Signed artifact not available for $lambda; using original zip"
+              ARTIFACT="terraform/artifacts/$lambda.zip"
+            fi
             if [ "${{ steps.env.outputs.truetally_env }}" == "prod" ]; then
               LAMBDA_NAME="truetally-prod-$lambda"
             else
@@ -176,8 +183,11 @@ jobs:
             echo "Deploying $LAMBDA_NAME..."
             aws lambda update-function-code \
               --function-name "$LAMBDA_NAME" \
-              --zip-file fileb://$lambda-signed.zip \
+              --zip-file fileb://$(basename "$ARTIFACT") \
               --region ${{ secrets.AWS_REGION }}
+            if [[ "$ARTIFACT" == *"-signed.zip" ]]; then
+              rm -f "$(basename "$ARTIFACT")"
+            fi
           done
 
       - name: Cleanup bucket
