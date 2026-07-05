@@ -14,8 +14,6 @@
     dest: /tmp/waf-rules.json
 
 - name: Crear o reutilizar Web ACL para CloudFront
-  # Evita WAFDuplicateItemException si el Web ACL ya existe de despliegues anteriores
-  # Verifica primero con list-web-acls y solo crea si no existe
   shell: |
     WEB_ACL_ARN=$(aws wafv2 list-web-acls \
       --scope CLOUDFRONT \
@@ -39,10 +37,22 @@
   register: web_acl_arn
   ignore_errors: true
 
-- name: Asociar Web ACL con CloudFront
+- name: Obtener configuración actual de la distribución CloudFront
   shell: |
-    aws wafv2 associate-web-acl \
-      --web-acl-arn "{{ web_acl_arn.stdout }}" \
-      --resource-arn "arn:aws:cloudfront::{{ aws_account_id }}:distribution/{{ cloudfront_distribution_id }}" \
-      --region us-east-1
+    aws cloudfront get-distribution-config --id "{{ cloudfront_distribution_id }}" --region "{{ aws_region }}" > /tmp/dist-config.json
+    jq -r '.ETag' /tmp/dist-config.json
+  register: cf_etag
+  when: web_acl_arn.stdout is defined and web_acl_arn.stdout | length > 0
+  ignore_errors: true
+
+- name: Actualizar distribución con el Web ACL
+  shell: |
+    jq --arg acl "{{ web_acl_arn.stdout }}" '.DistributionConfig.WebACLId = $acl' /tmp/dist-config.json | jq '.DistributionConfig' > /tmp/dist-config-new.json
+    ETAG=$(jq -r '.ETag' /tmp/dist-config.json)
+    aws cloudfront update-distribution \
+      --id "{{ cloudfront_distribution_id }}" \
+      --distribution-config file:///tmp/dist-config-new.json \
+      --if-match "$ETAG" \
+      --region "{{ aws_region }}"
+  when: web_acl_arn.stdout is defined and web_acl_arn.stdout | length > 0 and cf_etag.stdout is defined
   ignore_errors: true
