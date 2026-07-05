@@ -20,8 +20,13 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  environment:
-    AWS_PROFILE: "{{ lookup('env', 'ANSIBLE_AWS_PROFILE', default='') }}"
+  vars:
+    ansible_aws_profile: "{{ lookup('env', 'ANSIBLE_AWS_PROFILE', default='') }}"
+  pre_tasks:
+    - name: Set AWS_PROFILE env only if defined
+      set_fact:
+        aws_env: "{{ {'AWS_PROFILE': ansible_aws_profile} if ansible_aws_profile else {} }}"
+  environment: "{{ aws_env }}"
 
   vars_files:
     - ../group_vars/all.yml
