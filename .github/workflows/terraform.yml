@@ -348,8 +348,13 @@ jobs:
 
       - name: Upload Lambda artifacts to S3
         run: |
-          ENV="${{ steps.env.outputs.env_name }}"
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            ENV="prod"
+          else
+            ENV="dev"
+          fi
           BUCKET="truetally-dev-lambda-artifacts"
+          aws s3 mb "s3://$BUCKET" --region ${{ secrets.AWS_REGION }} || true
           aws s3 sync terraform/artifacts/ "s3://$BUCKET/$ENV/" --region ${{ secrets.AWS_REGION }}
           echo "Lambda artifacts uploaded to s3://$BUCKET/$ENV/"
 
@@ -431,8 +436,13 @@ jobs:
 
       - name: Upload Lambda artifacts to S3
         run: |
-          ENV="${{ steps.env.outputs.env_name }}"
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            ENV="prod"
+          else
+            ENV="dev"
+          fi
           BUCKET="truetally-dev-lambda-artifacts"
+          aws s3 mb "s3://$BUCKET" --region ${{ secrets.AWS_REGION }} || true
           aws s3 sync terraform/artifacts/ "s3://$BUCKET/$ENV/" --region ${{ secrets.AWS_REGION }}
           echo "Lambda artifacts uploaded to s3://$BUCKET/$ENV/"
 
