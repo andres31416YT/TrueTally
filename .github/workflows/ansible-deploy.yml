@@ -86,7 +86,7 @@ jobs:
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
-      # Paso 6: firmar y desplegar Lambdas Rust desde S3
+       # Paso 6: desplegar Lambdas Rust desde S3
       - name: Download Lambda artifacts from S3
         run: |
           ENV="${{ steps.env.outputs.truetally_env }}"
@@ -95,62 +95,7 @@ jobs:
           aws s3 sync "s3://$BUCKET/$ENV/" terraform/artifacts/ --region ${{ secrets.AWS_REGION }}
           echo "Lambda artifacts downloaded from s3://$BUCKET/$ENV/"
 
-      - name: Create S3 signing bucket
-        run: |
-          BUCKET="truetally-dev-signing-${{ github.run_id }}"
-          aws s3 mb s3://$BUCKET --region ${{ secrets.AWS_REGION }}
-          echo "BUCKET=$BUCKET" >> $GITHUB_ENV
-
-      - name: Upload ZIPs for signing
-        run: |
-          for zip in terraform/artifacts/lambda-acceso.zip terraform/artifacts/lambda-despachador.zip terraform/artifacts/lambda-procesador.zip; do
-            NAME=$(basename "$zip" .zip)
-            aws s3 cp "$zip" "s3://${{ env.BUCKET }}/$NAME.zip"
-          done
-
-      - name: Start signing jobs
-        run: |
-          for lambda in lambda-acceso lambda-despachador lambda-procesador; do
-            VERSION=$(aws s3api list-object-versions \
-              --bucket ${{ env.BUCKET }} \
-              --prefix "$lambda.zip" \
-              --query 'Versions[0].VersionId' \
-              --output text)
-
-            aws signer start-signing-job \
-              --source "s3={bucketName=${{ env.BUCKET }},key=$lambda.zip,version=$VERSION}" \
-              --destination "s3={bucketName=${{ env.BUCKET }},prefix=signed/}" \
-              --profile-name truetallydevlambdasigningprofile \
-              --region ${{ secrets.AWS_REGION }} \
-              --output json > "/tmp/signing_$lambda.json"
-
-            JOB_ID=$(python3 -c "import json; print(json.load(open('/tmp/signing_$lambda.json'))['jobId'])")
-            echo "$lambda=$JOB_ID" >> $GITHUB_ENV
-          done
-
-      - name: Request Lambda signing (fire-and-forget)
-        run: |
-          echo "Requesting signing jobs..."
-          for lambda in lambda-acceso lambda-despachador lambda-procesador; do
-            VERSION=$(aws s3api list-object-versions \
-              --bucket ${{ env.BUCKET }} \
-              --prefix "$lambda.zip" \
-              --query 'Versions[0].VersionId' \
-              --output text)
-
-            aws signer start-signing-job \
-              --source "s3={bucketName=${{ env.BUCKET }},key=$lambda.zip,version=$VERSION}" \
-              --destination "s3={bucketName=${{ env.BUCKET }},prefix=signed/}" \
-              --profile-name truetallydevlambdasigningprofile \
-              --region ${{ secrets.AWS_REGION }} \
-              --output json > "/tmp/signing_$lambda.json" 2>/dev/null || echo "{\"jobId\":\"\"}" > "/tmp/signing_$lambda.json"
-
-            JOB_ID=$(python3 -c "import json; print(json.load(open('/tmp/signing_$lambda.json'))['jobId'])")
-            echo "$lambda=$JOB_ID" >> $GITHUB_ENV
-            echo "$lambda signing job requested: $JOB_ID"
-          done
-
-      - name: Deploy Lambdas without waiting for signing
+      - name: Deploy Lambdas
         run: |
           for lambda in lambda-acceso lambda-despachador lambda-procesador; do
             if [ "${{ steps.env.outputs.truetally_env }}" == "prod" ]; then
@@ -158,7 +103,7 @@ jobs:
             else
               LAMBDA_NAME="truetally-dev-$lambda"
             fi
-            echo "Deploying $LAMBDA_NAME from original artifact..."
+            echo "Deploying $LAMBDA_NAME..."
             aws lambda update-function-code \
               --function-name "$LAMBDA_NAME" \
               --zip-file fileb://terraform/artifacts/$lambda.zip \
