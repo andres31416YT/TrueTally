@@ -103,6 +103,25 @@ waf:
 waf_rules_json: '[{"Name":"RateLimitRule","Priority":0,"Statement":{"RateBasedStatement":{"Limit":1000,"AggregateKeyType":"IP"}},"Action":{"Block":{}},"VisibilityConfig":{"SampledRequestsEnabled":true,"CloudWatchMetricsEnabled":true,"MetricName":"RateLimitRule"}}]'
 
 # =============================================================================
+# CONFIGURACIÓN CORS
+# =============================================================================
+
+cors:
+  allow_origins:
+    - "*"
+  allow_methods:
+    - GET
+    - POST
+    - OPTIONS
+  allow_headers:
+    - Content-Type
+    - Authorization
+    - X-Amz-Date
+    - X-Api-Key
+    - X-Amz-Security-Token
+  max_age: 86400
+
+# =============================================================================
 # CONFIGURACIÓN SES
 # =============================================================================
 

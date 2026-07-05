@@ -20,6 +20,8 @@
   hosts: localhost
   connection: local
   gather_facts: false
+  environment:
+    AWS_PROFILE: "{{ lookup('env', 'ANSIBLE_AWS_PROFILE', default='') }}"
 
   vars_files:
     - ../group_vars/all.yml

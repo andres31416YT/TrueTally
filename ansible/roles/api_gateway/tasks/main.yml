@@ -190,6 +190,23 @@
     fi
   ignore_errors: true
 
+- name: Configurar CORS en API Gateway
+  # Habilita CORS en la API HTTP para que el frontend pueda consumirla
+  # Idempotente: si ya tiene la configuración, no la modifica
+  shell: |
+    CURRENT=$(aws apigatewayv2 get-api --api-id "{{ api_id }}" --query 'Api.CorsConfiguration.AllowOrigins | [0]' --output text --region "{{ aws_region }}" 2>/dev/null || echo "None")
+    if [ "$CURRENT" = "None" ] || [ -z "$CURRENT" ]; then
+      aws apigatewayv2 update-api \
+        --api-id "{{ api_id }}" \
+        --cors-configuration '{
+          "AllowOrigins": {{ cors.allow_origins | to_json }},
+          "AllowMethods": {{ cors.allow_methods | to_json }},
+          "AllowHeaders": {{ cors.allow_headers | to_json }},
+          "MaxAge": {{ cors.max_age }}
+        }' \
+        --region "{{ aws_region }}"
+    fi
+
 - name: Crear o actualizar stage con auto-deploy
   # Configura el stage $default con auto-deploy activado
   # Cualquier cambio en rutas/integraciones se despliega automáticamente
