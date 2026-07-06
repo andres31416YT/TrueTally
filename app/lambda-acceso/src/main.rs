@@ -527,7 +527,7 @@ async fn register_voter_handler(
             let _ = shared::log_audit(pool, "voter_registered", &format!("election: {} email: {} public_key: {}", payload.election_id, payload.email, payload.public_key)).await;
             success_response(id)
         }
-        Err(_) => error_response(500, "Database error"),
+        Err(e) => error_response(500, &format!("Database error: {}", e)),
     }
 }
 

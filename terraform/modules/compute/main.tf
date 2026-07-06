@@ -1,30 +1,14 @@
 locals {
   name_prefix = "${var.project_name}-${var.env}"
 
-  # Mapa de AZs a IDs de subredes blockchain para EFS mount targets
+  # Map AZ names to subnet IDs for EFS mount targets
   blockchain_mount_targets = {
     for i, az in var.azs :
     az => var.blockchain_subnet_ids[i]
   }
 }
 
-# Code Signing for Lambda security
-resource "aws_signer_signing_profile" "lambda" {
-  name = replace("${local.name_prefix}-lambda-signing-profile", "-", "")
-  platform_id = "AWSLambda-SHA384-ECDSA"
-}
-
-resource "aws_lambda_code_signing_config" "lambda" {
-  allowed_publishers {
-    signing_profile_version_arns = [aws_signer_signing_profile.lambda.version_arn]
-  }
-
-  policies {
-    untrusted_artifact_on_deployment = "Enforce"
-  }
-}
-
-# IAM Role for Lambda
+# IAM Role for Lambda functions
 resource "aws_iam_role" "lambda" {
   name = "${local.name_prefix}-lambda-role"
 
@@ -57,6 +41,7 @@ resource "aws_iam_role_policy_attachment" "lambda_xray" {
   policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
 }
 
+# Lambda IAM policy for SSM, Secrets Manager, and SQS access
 resource "aws_iam_role_policy" "lambda_ssm" {
   name = "${local.name_prefix}-lambda-ssm"
   role = aws_iam_role.lambda.id
@@ -64,6 +49,7 @@ resource "aws_iam_role_policy" "lambda_ssm" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      # Allow SSM session management
       {
         Effect = "Allow"
         Action = [
@@ -71,6 +57,7 @@ resource "aws_iam_role_policy" "lambda_ssm" {
         ]
         Resource = "arn:aws:ssm:*:*:managed-instance/*"
       },
+      # Allow SSM command sending
       {
         Effect = "Allow"
         Action = [
@@ -78,6 +65,7 @@ resource "aws_iam_role_policy" "lambda_ssm" {
         ]
         Resource = "arn:aws:ssm:*:*:document/*"
       },
+      # Allow reading DB credentials from Secrets Manager
       {
         Effect = "Allow"
         Action = [
@@ -88,6 +76,7 @@ resource "aws_iam_role_policy" "lambda_ssm" {
           var.redis_auth_token_secret_arn
         ]
       },
+      # Allow receiving messages from vote queue
       {
         Effect = "Allow"
         Action = [
@@ -97,6 +86,7 @@ resource "aws_iam_role_policy" "lambda_ssm" {
         ]
         Resource = var.vote_queue_arn
       },
+      # Allow sending messages to DLQ
       {
         Effect = "Allow"
         Action = [
@@ -108,15 +98,15 @@ resource "aws_iam_role_policy" "lambda_ssm" {
   })
 }
 
-# Lambda functions
+# Lambda Functions
+# Deployment is handled by Ansible after initial creation
 resource "aws_lambda_function" "acceso" {
   function_name                  = "${local.name_prefix}-acceso"
   filename                       = "${var.lambda_zip_path}/lambda-acceso.zip"
   role                           = aws_iam_role.lambda.arn
-  handler                        = "bootstrap" #Manejamos RUST
-  runtime                        = "provided.al2" #Ejecutar lenguaje RUST compilado de forma nativa
+  handler                        = "bootstrap"
+  runtime                        = "provided.al2"
   kms_key_arn                    = var.kms_key_arn
-  code_signing_config_arn        = aws_lambda_code_signing_config.lambda.arn
   reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
   vpc_config {
@@ -139,6 +129,7 @@ resource "aws_lambda_function" "acceso" {
   }
 }
 
+# Lambda despachador: receives votes from frontend and sends to SQS queue
 resource "aws_lambda_function" "despachador" {
   function_name                  = "${local.name_prefix}-despachador"
   filename                       = "${var.lambda_zip_path}/lambda-despachador.zip"
@@ -146,7 +137,6 @@ resource "aws_lambda_function" "despachador" {
   handler                        = "bootstrap"
   runtime                        = "provided.al2"
   kms_key_arn                    = var.kms_key_arn
-  code_signing_config_arn        = aws_lambda_code_signing_config.lambda.arn
   reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
   vpc_config {
@@ -169,6 +159,7 @@ resource "aws_lambda_function" "despachador" {
   }
 }
 
+# Lambda procesador: processes votes from SQS and updates blockchain
 resource "aws_lambda_function" "procesador" {
   function_name                  = "${local.name_prefix}-procesador"
   filename                       = "${var.lambda_zip_path}/lambda-procesador.zip"
@@ -176,7 +167,6 @@ resource "aws_lambda_function" "procesador" {
   handler                        = "bootstrap"
   runtime                        = "provided.al2"
   kms_key_arn                    = var.kms_key_arn
-  code_signing_config_arn        = aws_lambda_code_signing_config.lambda.arn
   reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
   vpc_config {
@@ -200,7 +190,7 @@ resource "aws_lambda_function" "procesador" {
   }
 }
 
-# ECS Cluster for Blockchain
+# ECS Cluster for Blockchain node
 resource "aws_ecs_cluster" "blockchain" {
   name = "${local.name_prefix}-blockchain-cluster"
 
@@ -210,6 +200,7 @@ resource "aws_ecs_cluster" "blockchain" {
   }
 }
 
+# IAM role for ECS tasks (blockchain container)
 resource "aws_iam_role" "ecs_task" {
   name = "${local.name_prefix}-ecs-task-role"
 
@@ -227,6 +218,7 @@ resource "aws_iam_role" "ecs_task" {
   })
 }
 
+# IAM role for ECS task execution (pulling images, writing logs)
 resource "aws_iam_role" "ecs_execution" {
   name = "${local.name_prefix}-ecs-execution-role"
 
@@ -254,6 +246,7 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_task" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Policy allowing ECS tasks to mount EFS filesystem
 resource "aws_iam_role_policy" "ecs_task_efs" {
   name = "${local.name_prefix}-ecs-efs"
   role = aws_iam_role.ecs_task.id
@@ -274,7 +267,7 @@ resource "aws_iam_role_policy" "ecs_task_efs" {
   })
 }
 
-# EFS for Blockchain Node persistence
+# EFS filesystem for blockchain node state persistence
 resource "aws_efs_file_system" "blockchain" {
   creation_token = "${local.name_prefix}-blockchain-efs"
   encrypted      = true
@@ -285,33 +278,35 @@ resource "aws_efs_file_system" "blockchain" {
   }
 }
 
-# Crear un punto de acceso Mount Target para que se puedan conectar al disco EFS
+# Mount targets for EFS in each availability zone
 resource "aws_efs_mount_target" "blockchain" {
-  for_each = local.blockchain_mount_targets # Repite este bloque de código para cada una de las subredes
+  for_each = local.blockchain_mount_targets
 
-  file_system_id  = aws_efs_file_system.blockchain.id   # Le dice al punto de acceso a que disco duro en red (EFS) específico debe conectarse
-  subnet_id       = each.value # Asigna este punto de acceso a la subred actual del bucle (bucle 1, bucle 2, etc.).
-  security_groups = [var.blockchain_security_group_id] # Permitir que solo los nodos blockchain puedan entrar al disco EFS
+  file_system_id  = aws_efs_file_system.blockchain.id
+  subnet_id       = each.value
+  security_groups = [var.blockchain_security_group_id]
 }
 
-# Crear el punto de acceso EFS para que el contenedor ECS pueda montar el disco EFS
+# EFS access point for ECS container mounting
 resource "aws_efs_access_point" "blockchain" {
-  file_system_id = aws_efs_file_system.blockchain.id #Conexion al disco de red especifico
+  file_system_id = aws_efs_file_system.blockchain.id
+
   posix_user {
-    gid = 1000 # Es el número de grupo estándar para aplicaciones
-    uid = 1000 # ID= 1000 para saber quién está escribiendo los archivos.
+    gid = 1000
+    uid = 1000
   }
+
   root_directory {
     path = "/blockchain"
     creation_info {
-      owner_gid   = 1000 # El grupo dueño de la nueva carpeta
-      owner_uid   = 1000 # El usuario dueño de la nueva carpeta
-      permissions = "755" # Permisos de seguridad: El dueño puede hacer todo
+      owner_gid   = 1000
+      owner_uid   = 1000
+      permissions = "755"
     }
   }
 }
 
-# ECS Task Definition with EFS volume
+# ECS Task Definition for blockchain node with EFS volume mount
 resource "aws_ecs_task_definition" "blockchain" {
   family                   = "${local.name_prefix}-blockchain"
   network_mode             = "awsvpc"
@@ -351,6 +346,7 @@ resource "aws_ecs_task_definition" "blockchain" {
   }
 }
 
+# ECS Service running the blockchain node
 resource "aws_ecs_service" "blockchain" {
   name            = "${local.name_prefix}-blockchain-service"
   cluster         = aws_ecs_cluster.blockchain.id
