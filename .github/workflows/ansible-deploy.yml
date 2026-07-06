@@ -97,7 +97,7 @@ jobs:
 
       - name: Deploy Lambdas
         run: |
-          for lambda in lambda-acceso lambda-despachador lambda-procesador; do
+          for lambda in acceso despachador procesador; do
             if [ "${{ steps.env.outputs.truetally_env }}" == "prod" ]; then
               LAMBDA_NAME="truetally-prod-$lambda"
             else
@@ -106,7 +106,7 @@ jobs:
             echo "Deploying $LAMBDA_NAME..."
             aws lambda update-function-code \
               --function-name "$LAMBDA_NAME" \
-              --zip-file fileb://terraform/artifacts/$lambda.zip \
+              --zip-file fileb://terraform/artifacts/lambda-$lambda.zip \
               --region ${{ secrets.AWS_REGION }}
           done
 
