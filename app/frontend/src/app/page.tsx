@@ -269,7 +269,8 @@ export default function VotingPage() {
   const loadElections = async () => {
     const res = await api.listElections();
     if (res.success && res.data) {
-      setElections(res.data);
+      const electionArray = Array.isArray(res.data) ? res.data : (res.data as any)?.elections ?? [];
+      setElections(electionArray);
     }
   };
 
@@ -315,7 +316,8 @@ export default function VotingPage() {
     if (!session) return;
     const res = await api.listMyElections(session.email, searchTerm || undefined);
     if (res.success && res.data) {
-      setMyElections(res.data);
+      const electionArray = Array.isArray(res.data) ? res.data : (res.data as any)?.elections ?? [];
+      setMyElections(electionArray);
     }
   };
 
