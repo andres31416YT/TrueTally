@@ -45,7 +45,8 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
       setResults(resultsData);
     }
     if (candidatesRes.success && candidatesRes.data) {
-      setCandidates(candidatesRes.data);
+      const candidates = Array.isArray(candidatesRes.data) ? candidatesRes.data : (candidatesRes.data as any).candidates || [];
+      setCandidates(candidates);
     }
     setLoading(false);
   };
@@ -300,7 +301,8 @@ export default function VotingPage() {
   const loadCandidates = async (electionId: string) => {
     const res = await api.getCandidates(electionId);
     if (res.success && res.data) {
-      setCandidates(res.data);
+      const candidates = Array.isArray(res.data) ? res.data : (res.data as any).candidates || [];
+      setCandidates(candidates);
     }
   };
 
