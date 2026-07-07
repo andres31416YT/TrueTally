@@ -335,7 +335,8 @@ export default function VotingPage() {
   const loadElectionCandidates = async (electionId: string) => {
     const res = await api.getCandidates(electionId);
     if (res.success && res.data) {
-      setElectionCandidates(res.data);
+      const candidates = Array.isArray(res.data) ? res.data : (res.data as any).candidates || [];
+      setElectionCandidates(candidates);
     }
   };
 
