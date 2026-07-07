@@ -178,13 +178,6 @@ resource "aws_lambda_function" "procesador" {
     target_arn = var.dlq_arn
   }
 
-  environment {
-    variables = {
-      NODE_URL_AZ1 = var.lambda_node_url_az1
-      NODE_URL_AZ2 = var.lambda_node_url_az2
-    }
-  }
-
   tracing_config {
     mode = "Active"
   }
