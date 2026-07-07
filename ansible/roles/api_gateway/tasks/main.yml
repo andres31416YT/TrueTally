@@ -217,7 +217,7 @@
         --cors-configuration '{
           "AllowOrigins": ["*"],
           "AllowMethods": ["GET","POST","OPTIONS"],
-          "AllowHeaders": ["Content-Type","Authorization","X-Amz-Date","X-Api-Key","X-Amz-Security-Token"],
+          "AllowHeaders": ["Content-Type","Authorization","X-User-Email","X-User-Role","X-Amz-Date","X-Api-Key","X-Amz-Security-Token"],
           "MaxAge": 86400
         }' \
         --region "{{ aws_region }}"
