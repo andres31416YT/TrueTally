@@ -39,6 +39,18 @@
         aws ec2 create-vpc-endpoint --vpc-id "{{ vpc_check.stdout }}" --service-name "com.amazonaws.{{ aws_region }}.sqs" --subnet-ids "{{ private_subnets_get.stdout | from_json | join(' ') }}" --security-group-ids "{{ lambda_sg_get.stdout }}" --vpc-endpoint-type Interface --private-dns-enabled --region "{{ aws_region }}" 2>/dev/null || true
       ignore_errors: true
 
+    - name: Permitir trafico HTTPS (443) desde Lambda al endpoint de SQS
+      # El endpoint de SQS reusa el security group de Lambda, pero ese SG solo
+      # permitia 5432 (PostgreSQL). Sin 443 de entrada, la Lambda no puede
+      # enviar mensajes a SQS por el endpoint -> "dispatch failure" en /vote.
+      shell: |
+        aws ec2 authorize-security-group-ingress \
+          --group-id "{{ lambda_sg_get.stdout }}" \
+          --protocol tcp --port 443 \
+          --source-group "{{ lambda_sg_get.stdout }}" \
+          --region "{{ aws_region }}" 2>/dev/null || true
+      ignore_errors: true
+
     - name: Crear Secrets Manager Interface Endpoint
       shell: |
         aws ec2 create-vpc-endpoint --vpc-id "{{ vpc_check.stdout }}" --service-name "com.amazonaws.{{ aws_region }}.secretsmanager" --subnet-ids "{{ private_subnets_get.stdout | from_json | join(' ') }}" --security-group-ids "{{ lambda_sg_get.stdout }}" --vpc-endpoint-type Interface --private-dns-enabled --region "{{ aws_region }}" 2>/dev/null || true
