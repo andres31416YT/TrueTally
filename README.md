@@ -185,13 +185,6 @@ TrueTally/
 │   │   │   ├── network.rs    # Networking P2P
 │   │   │   └── main.rs       # Punto de entrada
 │   │   └── Dockerfile
-│   ├── api-rust/              # API Gateway en Rust
-│   │   ├── src/
-│   │   │   ├── handlers.rs    # Endpoints HTTP
-│   │   │   ├── models.rs     # Modelos de datos
-│   │   │   ├── db.rs         # Operaciones de base de datos
-│   │   │   └── main.rs       # Punto de entrada
-│   │   └── Dockerfile
 │   ├── frontend/             # Aplicación Next.js
 │   │   ├── src/
 │   │   │   ├── app/          # Páginas de Next.js

@@ -238,6 +238,9 @@ async fn handle_request(
         ("GET", "/blocks") => {
             Ok(proxy_to_blockchain(&state).await)
         }
+        ("POST", "/results") => {
+            Ok(proxy_results_to_blockchain(&state, body).await)
+        }
 
         _ => Ok(error_response(404, "Not found")),
     }
@@ -547,6 +550,35 @@ async fn proxy_to_blockchain(state: &Arc<SharedState>) -> ApiGatewayResponse {
     let url = format!("{}/blocks", state.blockchain_node_url);
 
     match state.http_client.get(&url).timeout(std::time::Duration::from_secs(3)).send().await {
+        Ok(resp) => {
+            let status = resp.status().as_u16() as i32;
+            match resp.text().await {
+                Ok(body) => {
+                    let mut headers = std::collections::HashMap::new();
+                    headers.insert("Content-Type".to_string(), "application/json".to_string());
+                    ApiGatewayResponse {
+                        status_code: status,
+                        headers,
+                        body,
+                        is_base64_encoded: false,
+                    }
+                }
+                Err(e) => error_response(502, &format!("Error reading blockchain response: {}", e)),
+            }
+        }
+        Err(e) => error_response(502, &format!("Error connecting to blockchain: {}", e)),
+    }
+}
+
+async fn proxy_results_to_blockchain(state: &Arc<SharedState>, body: &str) -> ApiGatewayResponse {
+    let election_id = serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| v.get("election_id").and_then(|e| e.as_str()).map(|s| s.to_string()))
+        .unwrap_or_default();
+
+    let url = format!("{}/results/{}", state.blockchain_node_url, election_id);
+
+    match state.http_client.get(&url).timeout(std::time::Duration::from_secs(5)).send().await {
         Ok(resp) => {
             let status = resp.status().as_u16() as i32;
             match resp.text().await {

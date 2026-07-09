@@ -14,28 +14,6 @@ services:
       - "9944:9944" # RPC/WebSocket para la API
     restart: unless-stopped
 
-  # --- ROL: INTEGRANTE C (API & Conector) ---
-  api-gateway:
-    env_file:
-      - .env
-    build:
-      context: ./api-rust
-      dockerfile: Dockerfile
-    container_name: api_gateway
-    depends_on:
-      - blockchain-node
-      - database-aux
-    environment:
-      - DATABASE_URL=postgres://user:pass@database-aux:5432/voting_db
-      - NODE_RPC_URL=http://blockchain-node:9944
-      - RUST_LOG=info
-      - RUST_BACKTRACE=1
-    networks:
-      - voting-network
-    ports:
-      - "8080:8080"
-    restart: always
-
   # --- ROL: INTEGRANTE C (Persistencia Auxiliar) ---
   database-aux:
     image: postgres:16-alpine
@@ -58,8 +36,6 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: frontend_app
-    depends_on:
-      - api-gateway
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8080
       - NODE_ENV=production
