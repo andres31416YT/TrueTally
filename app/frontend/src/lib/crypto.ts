@@ -53,14 +53,14 @@ export function getValidKeyPair(storedPublicKey?: string): KeyPair {
     ? localStorage.getItem('user_secret_key')
     : null;
 
+  const secretKeyValue = storedSecretKey ?? '';
   const hasValidStoredSecretKey = Boolean(
-    storedSecretKey &&
-      storedSecretKey.length === ED25519_SECRET_KEY_HEX_LENGTH &&
-      /^[0-9a-f]+$/i.test(storedSecretKey)
+    secretKeyValue.length === ED25519_SECRET_KEY_HEX_LENGTH &&
+      /^[0-9a-f]+$/i.test(secretKeyValue)
   );
 
   if (hasValidStoredSecretKey && storedPublicKey) {
-    return { publicKey: storedPublicKey, secretKey: storedSecretKey };
+    return { publicKey: storedPublicKey, secretKey: storedSecretKey as string };
   }
 
   const keys = generateKeyPair();
