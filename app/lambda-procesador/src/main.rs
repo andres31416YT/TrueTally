@@ -1,8 +1,8 @@
-use lambda_runtime::{service_fn, Error, LambdaEvent};
 use aws_lambda_events::sqs::SqsEvent;
-use std::env;
+use lambda_runtime::{service_fn, Error, LambdaEvent};
 use reqwest::Client;
 use shared::VoteRequest;
+use std::env;
 use tracing::info;
 
 #[tokio::main]
@@ -18,8 +18,8 @@ async fn main() -> Result<(), Error> {
         .build()
         .expect("Failed to create HTTP client");
 
-    let node_rpc_url = env::var("BLOCKCHAIN_NODE_URL")
-        .unwrap_or_else(|_| "http://localhost:9944".to_string());
+    let node_rpc_url =
+        env::var("BLOCKCHAIN_NODE_URL").unwrap_or_else(|_| "http://localhost:9944".to_string());
 
     let shared_state = SharedState {
         http_client,
@@ -41,15 +41,10 @@ struct SharedState {
     node_rpc_url: String,
 }
 
-async fn handle_sqs_event(
-    event: LambdaEvent<SqsEvent>,
-    state: SharedState,
-) -> Result<(), Error> {
+async fn handle_sqs_event(event: LambdaEvent<SqsEvent>, state: SharedState) -> Result<(), Error> {
     for record in event.payload.records {
-        let message_id = record
-            .message_id
-            .unwrap_or_else(|| "unknown".to_string());
-        
+        let message_id = record.message_id.unwrap_or_else(|| "unknown".to_string());
+
         let body = record.body.unwrap_or_default();
         info!("Processing message {}: {}", message_id, body);
 
@@ -70,8 +65,8 @@ async fn handle_sqs_event(
 }
 
 async fn process_vote(body: &str, state: &SharedState) -> Result<(), Error> {
-    let vote: VoteRequest = serde_json::from_str(body)
-        .map_err(|e| format!("Invalid vote JSON: {}", e))?;
+    let vote: VoteRequest =
+        serde_json::from_str(body).map_err(|e| format!("Invalid vote JSON: {}", e))?;
 
     info!(
         election_id = %vote.election_id,

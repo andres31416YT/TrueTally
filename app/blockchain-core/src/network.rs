@@ -23,14 +23,14 @@ impl P2PNode {
     pub async fn start(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let addr = format!("0.0.0.0:{}", self.port);
         let listener = TcpListener::bind(&addr).await?;
-        
+
         println!("P2P Node listening on {}", addr);
-        
+
         loop {
             let (stream, addr) = listener.accept().await?;
             let peers = self.peers.clone();
             let blockchain = self.blockchain.clone();
-            
+
             tokio::spawn(async move {
                 if let Err(e) = Self::handle_connection(stream, addr, peers, blockchain).await {
                     eprintln!("Connection error: {}", e);
@@ -52,13 +52,13 @@ impl P2PNode {
                 peers_guard.push(peer_addr);
             }
         }
-        
+
         let mut buffer = [0u8; 65536];
         let n = stream.read(&mut buffer).await?;
-        
+
         if n > 0 {
             let message = String::from_utf8_lossy(&buffer[..n]);
-            
+
             if let Ok(request) = serde_json::from_str::<P2PMessage>(&message) {
                 match request.message_type.as_str() {
                     "get_blocks" => {
@@ -86,39 +86,51 @@ impl P2PNode {
                 }
             }
         }
-        
+
         Ok(())
     }
 
-    pub async fn connect_to_peer(&self, peer_addr: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn connect_to_peer(
+        &self,
+        peer_addr: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let stream = TcpStream::connect(peer_addr).await?;
         let peers = self.peers.clone();
         let peer_addr_owned = peer_addr.to_string();
-        
+
         tokio::spawn(async move {
-            let _ = Self::handle_connection(stream, peer_addr_owned.parse().unwrap(), peers, Arc::new(Mutex::new(Vec::new()))).await;
+            let _ = Self::handle_connection(
+                stream,
+                peer_addr_owned.parse().unwrap(),
+                peers,
+                Arc::new(Mutex::new(Vec::new())),
+            )
+            .await;
         });
-        
+
         Ok(())
     }
 
-    pub async fn broadcast_block(&self, block: &Block) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn broadcast_block(
+        &self,
+        block: &Block,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let peers = self.peers.lock().await;
         let block_json = serde_json::to_string(block)?;
-        
+
         let message = P2PMessage {
             message_type: "broadcast_block".to_string(),
             data: block_json,
         };
-        
+
         let message_json = serde_json::to_string(&message)?;
-        
+
         for peer in peers.iter() {
             if let Ok(mut stream) = TcpStream::connect(peer).await {
                 let _ = stream.write_all(message_json.as_bytes()).await;
             }
         }
-        
+
         Ok(())
     }
 

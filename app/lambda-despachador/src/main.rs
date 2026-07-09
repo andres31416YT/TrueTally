@@ -1,10 +1,10 @@
+use aws_sdk_sqs::Client as SqsClient;
 use lambda_runtime::{service_fn, Error, LambdaEvent};
 use serde_json::json;
+use shared::logging;
 use shared::VoteRequest;
 use std::sync::Arc;
-use aws_sdk_sqs::Client as SqsClient;
 use tracing::{error, info};
-use shared::logging;
 
 #[derive(serde::Serialize)]
 struct ApiGatewayResponse {
@@ -28,7 +28,8 @@ fn success_response(msg: &str) -> ApiGatewayResponse {
         body: serde_json::to_string(&json!({
             "success": true,
             "data": msg
-        })).unwrap_or_default(),
+        }))
+        .unwrap_or_default(),
         is_base64_encoded: false,
     }
 }
@@ -44,7 +45,8 @@ fn error_response(status: i32, msg: &str) -> ApiGatewayResponse {
         body: serde_json::to_string(&json!({
             "success": false,
             "error": msg
-        })).unwrap_or_default(),
+        }))
+        .unwrap_or_default(),
         is_base64_encoded: false,
     }
 }
@@ -52,12 +54,12 @@ fn error_response(status: i32, msg: &str) -> ApiGatewayResponse {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     logging::init_logging("lambda-despachador");
-    
+
     let config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
     let sqs_client = SqsClient::new(&config);
-    
-    let vote_queue_url = std::env::var("VOTE_QUEUE_URL")
-        .expect("VOTE_QUEUE_URL environment variable is not set");
+
+    let vote_queue_url =
+        std::env::var("VOTE_QUEUE_URL").expect("VOTE_QUEUE_URL environment variable is not set");
 
     let shared_state = Arc::new(SharedState {
         sqs_client,
@@ -67,7 +69,8 @@ async fn main() -> Result<(), Error> {
     lambda_runtime::run(service_fn(move |event| {
         let state = shared_state.clone();
         async move { handle_request(event, state).await }
-    })).await?;
+    }))
+    .await?;
 
     Ok(())
 }
@@ -81,37 +84,48 @@ async fn handle_request(
     event: LambdaEvent<serde_json::Value>,
     state: Arc<SharedState>,
 ) -> Result<ApiGatewayResponse, Error> {
-    let path = event.payload.get("path").and_then(|v| v.as_str()).unwrap_or("");
-    let method = event.payload.get("httpMethod").and_then(|v| v.as_str()).unwrap_or("GET");
-    
+    let path = event
+        .payload
+        .get("path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let method = event
+        .payload
+        .get("httpMethod")
+        .and_then(|v| v.as_str())
+        .unwrap_or("GET");
+
     if method != "POST" || path != "/vote" {
         return Ok(error_response(404, "Not found"));
     }
 
-    let body = event.payload.get("body").and_then(|v| v.as_str()).unwrap_or("{}");
-    let payload: VoteRequest = serde_json::from_str(body)
-        .map_err(|e| {
-            error!(
-                service = "lambda-despachador",
-                event = "json_parse_error",
-                error = %e,
-                "Failed to parse vote request"
-            );
-            format!("Invalid JSON: {}", e)
-        })?;
+    let body = event
+        .payload
+        .get("body")
+        .and_then(|v| v.as_str())
+        .unwrap_or("{}");
+    let payload: VoteRequest = serde_json::from_str(body).map_err(|e| {
+        error!(
+            service = "lambda-despachador",
+            event = "json_parse_error",
+            error = %e,
+            "Failed to parse vote request"
+        );
+        format!("Invalid JSON: {}", e)
+    })?;
 
-    let message_body = serde_json::to_string(&payload)
-        .map_err(|e| {
-            error!(
-                service = "lambda-despachador",
-                event = "serialization_error",
-                error = %e,
-                "Failed to serialize vote"
-            );
-            format!("Serialization error: {}", e)
-        })?;
+    let message_body = serde_json::to_string(&payload).map_err(|e| {
+        error!(
+            service = "lambda-despachador",
+            event = "serialization_error",
+            error = %e,
+            "Failed to serialize vote"
+        );
+        format!("Serialization error: {}", e)
+    })?;
 
-    state.sqs_client
+    state
+        .sqs_client
         .send_message()
         .queue_url(&state.vote_queue_url)
         .message_body(message_body)
