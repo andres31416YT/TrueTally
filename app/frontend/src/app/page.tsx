@@ -552,9 +552,16 @@ export default function VotingPage() {
           localStorage.setItem('user_session', JSON.stringify(newSession));
 
           if (authDataResponse.public_key) {
-            localStorage.setItem('user_secret_key', 'sk_session_active');
-            setKeyPair({ publicKey: authDataResponse.public_key, secretKey: 'sk_session_active' });
-          }
+              const existingSecret = localStorage.getItem('user_secret_key');
+              if (existingSecret) {
+                localStorage.setItem('user_secret_key', existingSecret);
+                setKeyPair({ publicKey: authDataResponse.public_key, secretKey: existingSecret });
+              } else {
+                const keys = generateKeyPair();
+                localStorage.setItem('user_secret_key', keys.secretKey);
+                setKeyPair({ publicKey: authDataResponse.public_key, secretKey: keys.secretKey });
+              }
+            }
 
           setStep('home');
           setError(null);
