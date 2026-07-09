@@ -74,11 +74,16 @@
         --api-id "{{ api_id }}" \
         --integration-type AWS_PROXY \
         --integration-uri "arn:aws:apigateway:{{ aws_region }}:lambda:path/2015-03-31/functions/arn:aws:lambda:{{ aws_region }}:{{ aws_account_id }}:function:{{ name_prefix }}-despachador/invocations" \
-        --payload-format-version "2.0" \
+        --payload-format-version "1.0" \
         --region "{{ aws_region }}" \
         --query 'IntegrationId' \
         --output text
     else
+      aws apigatewayv2 update-integration \
+        --api-id "{{ api_id }}" \
+        --integration-id "$INTEGRATION_ID" \
+        --payload-format-version "1.0" \
+        --region "{{ aws_region }}" >/dev/null
       echo "$INTEGRATION_ID"
     fi
   register: integration_despachador
