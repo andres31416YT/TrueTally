@@ -4,7 +4,7 @@ locals {
 
 resource "aws_sqs_queue" "vote_queue" {
   name                       = "${local.name_prefix}-vote-queue"
-  visibility_timeout_seconds = 30
+  visibility_timeout_seconds = 360
   message_retention_seconds  = 1209600
   kms_master_key_id                 = "alias/aws/sqs"
   kms_data_key_reuse_period_seconds = 300

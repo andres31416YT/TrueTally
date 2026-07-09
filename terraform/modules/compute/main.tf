@@ -183,6 +183,15 @@ resource "aws_lambda_function" "procesador" {
   }
 }
 
+# Event Source Mapping: SQS vote queue -> lambda-procesador
+# Consume los votos encolados por lambda-despachador y los escribe en la blockchain.
+resource "aws_lambda_event_source_mapping" "procesador_vote" {
+  event_source_arn        = var.vote_queue_arn
+  function_name            = aws_lambda_function.procesador.arn
+  batch_size               = 5
+  function_response_types  = ["ReportBatchItemFailures"]
+}
+
 # ECS Cluster for Blockchain node
 resource "aws_ecs_cluster" "blockchain" {
   name = "${local.name_prefix}-blockchain-cluster"
