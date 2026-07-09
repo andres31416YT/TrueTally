@@ -6,7 +6,7 @@ interface ApiResponse<T> {
   error?: string;
 }
 
-function getAuthHeaders(): Record<string, string> {
+export function getAuthHeaders(): Record<string, string> {
   const sessionData = typeof window !== 'undefined' ? localStorage.getItem('user_session') : null;
   if (!sessionData) return {};
 

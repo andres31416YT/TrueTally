@@ -149,3 +149,62 @@ async fn handle_request(
 
     Ok(success_response("Vote queued for processing"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_success_response_structure() {
+        let response = success_response("queued");
+
+        assert_eq!(response.status_code, 202);
+        assert_eq!(response.is_base64_encoded, false);
+        assert!(response.headers.contains_key("Content-Type"));
+        assert_eq!(
+            response.headers.get("Content-Type").unwrap(),
+            "application/json"
+        );
+
+        let body: serde_json::Value =
+            serde_json::from_str(&response.body).expect("Body should be valid JSON");
+        assert_eq!(body.get("success").unwrap(), &true);
+        assert_eq!(body.get("data").unwrap(), "queued");
+    }
+
+    #[test]
+    fn test_error_response_structure() {
+        let response = error_response(404, "Not found");
+
+        assert_eq!(response.status_code, 404);
+        assert_eq!(response.is_base64_encoded, false);
+        assert!(response.headers.contains_key("Content-Type"));
+        assert_eq!(
+            response.headers.get("Content-Type").unwrap(),
+            "application/json"
+        );
+
+        let body: serde_json::Value =
+            serde_json::from_str(&response.body).expect("Body should be valid JSON");
+        assert_eq!(body.get("success").unwrap(), &false);
+        assert_eq!(body.get("error").unwrap(), "Not found");
+    }
+
+    #[test]
+    fn test_vote_request_deserialization() {
+        let json = r#"{
+            "voter_public_key": "pk_123",
+            "candidate_id": "cand_1",
+            "election_id": "elec_1",
+            "signature": "sig_abc",
+            "is_blank_vote": false
+        }"#;
+
+        let req: VoteRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.voter_public_key, "pk_123");
+        assert_eq!(req.candidate_id, "cand_1");
+        assert_eq!(req.election_id, "elec_1");
+        assert_eq!(req.signature, "sig_abc");
+        assert!(!req.is_blank_vote);
+    }
+}

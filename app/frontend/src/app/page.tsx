@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { usePathname } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
-import { generateKeyPair, signMessage, createVotePayload } from '@/lib/crypto';
+import { generateKeyPair, signMessage, createVotePayload, getValidKeyPair, sanitizeStoredSecretKey } from '@/lib/crypto';
 import { api, Election, NewElection, Candidate, AuthResponse } from '@/lib/api';
 
 interface KeyPair {
@@ -232,23 +232,18 @@ export default function VotingPage() {
   useEffect(() => {
     loadElections();
     const savedSession = localStorage.getItem('user_session');
-    const savedSecretKey = localStorage.getItem('user_secret_key');
     if (savedSession) {
       try {
         const parsed = JSON.parse(savedSession);
         setSession(parsed);
         if (parsed.public_key) {
-          if (savedSecretKey) {
-            setKeyPair({ publicKey: parsed.public_key, secretKey: savedSecretKey });
-          } else {
-            const keys = generateKeyPair();
-            localStorage.setItem('user_secret_key', keys.secretKey);
-            setKeyPair({ publicKey: parsed.public_key, secretKey: keys.secretKey });
-          }
+          sanitizeStoredSecretKey();
+          const keys = getValidKeyPair(parsed.public_key);
+          setKeyPair(keys);
         } else {
           const keys = generateKeyPair();
           localStorage.setItem('user_secret_key', keys.secretKey);
-          setKeyPair({ publicKey: keys.publicKey, secretKey: keys.secretKey });
+          setKeyPair(keys);
         }
       } catch (e) {
         localStorage.removeItem('user_session');
@@ -552,15 +547,8 @@ export default function VotingPage() {
           localStorage.setItem('user_session', JSON.stringify(newSession));
 
           if (authDataResponse.public_key) {
-              const existingSecret = localStorage.getItem('user_secret_key');
-              if (existingSecret) {
-                localStorage.setItem('user_secret_key', existingSecret);
-                setKeyPair({ publicKey: authDataResponse.public_key, secretKey: existingSecret });
-              } else {
-                const keys = generateKeyPair();
-                localStorage.setItem('user_secret_key', keys.secretKey);
-                setKeyPair({ publicKey: authDataResponse.public_key, secretKey: keys.secretKey });
-              }
+              const keys = getValidKeyPair(authDataResponse.public_key);
+              setKeyPair(keys);
             }
 
           setStep('home');
@@ -607,10 +595,8 @@ export default function VotingPage() {
   const handleSubmitVote = async () => {
     if (!keyPair || !selectedElection) {
       if (!keyPair) {
-        const keys = generateKeyPair();
-        localStorage.setItem('user_secret_key', keys.secretKey);
-        setKeyPair({ publicKey: keys.publicKey, secretKey: keys.secretKey });
-        return;
+        const keys = getValidKeyPair();
+        setKeyPair(keys);
       }
       return;
     }

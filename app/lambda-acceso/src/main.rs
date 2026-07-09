@@ -721,3 +721,47 @@ async fn proxy_results_to_blockchain(state: &Arc<SharedState>, body: &str) -> Ap
         Err(e) => error_response(502, &format!("Error connecting to blockchain: {}", e)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lambda_runtime::LambdaEvent;
+
+    #[test]
+    fn test_success_response_structure() {
+        let response = success_response("test_data");
+
+        assert_eq!(response.status_code, 200);
+        assert_eq!(response.is_base64_encoded, false);
+        assert!(response.headers.contains_key("Content-Type"));
+        assert_eq!(
+            response.headers.get("Content-Type").unwrap(),
+            "application/json"
+        );
+
+        let body: serde_json::Value =
+            serde_json::from_str(&response.body).expect("Body should be valid JSON");
+        assert_eq!(body.get("success").unwrap(), &true);
+        assert_eq!(body.get("data").unwrap(), "test_data");
+        assert!(body.get("error").is_none());
+    }
+
+    #[test]
+    fn test_error_response_structure() {
+        let response = error_response(400, "bad request");
+
+        assert_eq!(response.status_code, 400);
+        assert_eq!(response.is_base64_encoded, false);
+        assert!(response.headers.contains_key("Content-Type"));
+        assert_eq!(
+            response.headers.get("Content-Type").unwrap(),
+            "application/json"
+        );
+
+        let body: serde_json::Value =
+            serde_json::from_str(&response.body).expect("Body should be valid JSON");
+        assert_eq!(body.get("success").unwrap(), &false);
+        assert_eq!(body.get("error").unwrap(), "bad request");
+        assert!(body.get("data").is_none());
+    }
+}

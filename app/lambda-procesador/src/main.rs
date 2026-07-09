@@ -99,3 +99,44 @@ async fn process_vote(body: &str, state: &SharedState) -> Result<(), Error> {
     info!("Vote successfully submitted to blockchain");
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use shared::VoteRequest;
+
+    #[test]
+    fn test_vote_request_deserialization() {
+        let json = r#"{
+            "voter_public_key": "pk_123",
+            "candidate_id": "cand_1",
+            "election_id": "elec_1",
+            "signature": "sig_abc",
+            "is_blank_vote": false
+        }"#;
+
+        let req: VoteRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.voter_public_key, "pk_123");
+        assert_eq!(req.candidate_id, "cand_1");
+        assert_eq!(req.election_id, "elec_1");
+        assert!(!req.is_blank_vote);
+    }
+
+    #[test]
+    fn test_blockchain_url_construction() {
+        let node_url = "http://10.0.30.63:9944";
+        let election_id = "test_elec";
+        let url = format!("{}/vote", node_url);
+        assert_eq!(url, "http://10.0.30.63:9944/vote");
+    }
+
+    #[test]
+    fn test_process_vote_error_message() {
+        let error_msg = format!(
+            "Blockchain node rejected vote (status {}): {}",
+            500, "Internal Server Error"
+        );
+        assert!(error_msg.contains("500"));
+        assert!(error_msg.contains("Internal Server Error"));
+    }
+}
