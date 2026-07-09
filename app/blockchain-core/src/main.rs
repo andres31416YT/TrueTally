@@ -1,3 +1,6 @@
+// TODO workflow-trigger: agregar este comentario para probar el workflow ecr-build
+// Verificación de seguridad Checkov y SonarQube para blockchain-core
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,

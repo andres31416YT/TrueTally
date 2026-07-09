@@ -20,17 +20,69 @@ on:
 env:
   AWS_REGION: us-east-1
 
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+
 jobs:
+  security:
+    name: Security Scan (Checkov)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Ejecutar Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: app/blockchain-core
+          soft_fail: true
+          output_file_path: checkov_results.xml
+          output_format: junitxml
+
+      - name: Upload Checkov results
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-ecr-results
+          path: checkov_results.xml
+
+  sonarqube:
+    name: SonarQube Code Analysis
+    runs-on: ubuntu-latest
+    needs: security
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Analizar Blockchain Core (Rust)
+        env:
+          SONAR_BRANCH_NAME: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+        run: |
+          BRANCH_NAME="${{ env.SONAR_BRANCH_NAME }}"
+          docker run --rm \
+            -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
+            -e SONAR_PROJECT_BASE_DIR=/workspace \
+            -v "${{ github.workspace }}/app/blockchain-core:/workspace" \
+            sonarsource/sonar-scanner-cli:latest \
+            -Dsonar.projectKey=truetally-blockchain \
+            -Dsonar.sources=src \
+            -Dsonar.branch.name="$BRANCH_NAME" \
+            -Dsonar.sourceEncoding=UTF-8 \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}" \
+            -Dsonar.organization=truetally
+
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
+    needs: [security, sonarqube]
     environment:
       name: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
-
-    permissions:
-      id-token: write
-      contents: read
-      packages: write
 
     steps:
       - name: Checkout repository
