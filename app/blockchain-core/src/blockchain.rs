@@ -11,7 +11,7 @@ pub struct Blockchain {
     consensus: Consensus,
 }
 
-impl Blockchain {
+impl Blockchain { //
     pub fn new(difficulty: u32, mining_enabled: bool) -> Self {
         let consensus = Consensus::new(difficulty, mining_enabled);
         let chain = vec![create_genesis_block()];
