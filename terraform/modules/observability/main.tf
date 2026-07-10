@@ -31,6 +31,10 @@ resource "aws_security_group" "observability" {
   tags = {
     Name = "${local.name_prefix}-observability-sg"
   }
+
+  lifecycle {
+    ignore_changes = [ingress]
+  }
 }
 
 
