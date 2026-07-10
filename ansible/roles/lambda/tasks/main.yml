@@ -3,34 +3,52 @@
 # ROLE: lambda
 # =============================================================================
 # Responsabilidades:
+# - Obtener credenciales de BD desde Secrets Manager
 # - Obtener endpoint de RDS para construir DATABASE_URL
 # - Obtener URL de la cola SQS para VOTE_QUEUE_URL
 # - Actualizar configuración de las 3 Lambdas (acceso, procesador, despachador)
 # - Ajustar timeout y memory size según variables de group_vars
 # - Preservar BLOCKCHAIN_NODE_URL usando el DNS estable de Cloud Map
+# - Verificar post-actualizacion que DATABASE_URL no quede vacia
 # =============================================================================
 
-- name: Validar variables de BD provenientes del rol database
-  # El rol database ya parseó el secreto; aquí solo validamos que no estén vacías
+- name: Obtener credenciales de DB desde Secrets Manager
+  shell: |
+    aws secretsmanager get-secret-value \
+      --secret-id "{{ name_prefix }}/db/credentials" \
+      --query 'SecretString' \
+      --output text \
+      --region "{{ aws_region }}"
+  register: db_secret_raw
+  no_log: true
+
+- name: Obtener endpoint de RDS
+  shell: |
+    aws rds describe-db-instances --db-instance-identifier "{{ name_prefix }}-postgres" --query 'DBInstances[0].Endpoint.Address' --output text --region "{{ aws_region }}"
+  register: rds_endpoint_raw
+
+- name: Parsear credenciales de DB
+  set_fact:
+    db_username: "{{ db_secret_raw.stdout | from_json | json_query('username') }}"
+    db_password: "{{ db_secret_raw.stdout | from_json | json_query('password') }}"
+    db_endpoint: "{{ rds_endpoint_raw.stdout }}"
+    db_port: 5432
+
+- name: Validar credenciales de BD
   assert:
     that:
       - db_username is defined and db_username | length > 0
       - db_password is defined and db_password | length > 0
       - db_endpoint is defined and db_endpoint | length > 0
-      - db_port is defined and db_port | int > 0
-    fail_msg: "Faltan variables de BD. Verifica que el rol database se ejecute antes que lambda."
+    fail_msg: "Credenciales de BD vacías. Verifica el secreto {{ name_prefix }}/db/credentials."
 
 - name: Construir DATABASE_URL
-  # Construye la URL de conexión PostgreSQL con password URL-encoded
-  # Ejemplo: postgres://truetally:password@host:5432/truetally
   shell: |
     python3 -c "from urllib.parse import quote; print('postgres://{{ db_username }}:' + quote('{{ db_password }}', safe='') + '@{{ db_endpoint }}:{{ db_port }}/truetally')"
   register: database_url_result
   no_log: true
 
 - name: Establecer URL del nodo blockchain via Cloud Map DNS
-  # Usa el servicio de descubrimiento de Cloud Map para obtener un endpoint estable
-  # El DNS se resuelve automaticamente a la IP privada de la tarea ECS blockchain
   shell: |
     echo "http://blockchain.{{ name_prefix }}.local:9944"
   register: blockchain_node_url_raw
@@ -40,19 +58,11 @@
     blockchain_node_url: "{{ blockchain_node_url_raw.stdout }}"
 
 - name: Obtener URL de la cola SQS
-  # Obtiene la URL de la cola SQS donde lambda-despachador encola votos
   shell: |
     aws sqs get-queue-url --queue-name "{{ name_prefix }}-vote-queue" --query 'QueueUrl' --output text --region "{{ aws_region }}"
   register: sqs_queue_url_result
 
 - name: Actualizar lambda-acceso
-  # Genera el JSON de configuración para lambda-acceso y lo guarda en /tmp
-  # Variables que se actualizan:
-  # - DATABASE_URL: conexión a PostgreSQL
-  # - Credenciales de admin desde secrets de GitHub Actions
-  # - BLOCKCHAIN_NODE_URL: endpoint estable via Cloud Map DNS
-  # - DB_CREDENTIALS_ARN: ARN del secreto en Secrets Manager
-  # Timeout y Memory vienen de group_vars/lambda.yml
   shell: |
     python3 -c "
     import json
@@ -80,18 +90,22 @@
   no_log: true
 
 - name: Aplicar configuración a lambda-acceso
-  # Aplica la configuración generada a la función Lambda via AWS CLI
-  # Usa cli-input-json para enviar todo el bloque de configuración de una vez
   shell: |
     aws lambda update-function-configuration \
       --cli-input-json file:///tmp/lambda_acceso_config.json \
       --region "{{ aws_region }}"
 
+- name: Verificar DATABASE_URL en lambda-acceso
+  shell: |
+    aws lambda get-function-configuration \
+      --function-name "{{ name_prefix }}-acceso" \
+      --query 'Environment.Variables.DATABASE_URL' \
+      --output text \
+      --region "{{ aws_region }}"
+  register: lambda_acceso_db_url_check
+  failed_when: lambda_acceso_db_url_check.stdout == "" or lambda_acceso_db_url_check.stdout == "None"
+
 - name: Actualizar lambda-procesador
-  # Genera configuración para lambda-procesador
-  # Timeout: 300s (5 min) porque procesa votos de la blockchain
-  # Memory: 1024MB por el volumen de datos de la blockchain
-  # BLOCKCHAIN_NODE_URL usa el DNS estable de Cloud Map
   shell: |
     python3 -c "
     import json
@@ -123,9 +137,6 @@
       --region "{{ aws_region }}"
 
 - name: Actualizar lambda-despachador
-  # Genera configuración para lambda-despachador
-  # Esta lambda recibe votos del frontend y los envía a SQS
-  # Variables clave: VOTE_QUEUE_URL (cola SQS), credenciales de admin
   shell: |
     python3 -c "
     import json
