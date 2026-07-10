@@ -186,8 +186,8 @@ resource "aws_ecs_task_definition" "promtail" {
   family                   = "${local.name_prefix}-observability-promtail"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "128"
-  memory                   = "256"
+  cpu                      = "256"
+  memory                   = "512"
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
@@ -195,8 +195,8 @@ resource "aws_ecs_task_definition" "promtail" {
     name                   = "promtail"
     image                  = "grafana/promtail:2.9.3"
     essential              = true
-    cpu                    = 128
-    memory                 = 256
+    cpu                    = 256
+    memory                 = 512
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -261,8 +261,8 @@ resource "aws_ecs_task_definition" "grafana" {
   family                   = "${local.name_prefix}-observability-grafana"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "128"
-  memory                   = "256"
+  cpu                      = "256"
+  memory                   = "512"
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
@@ -270,8 +270,8 @@ resource "aws_ecs_task_definition" "grafana" {
     name                   = "grafana"
     image                  = "grafana/grafana:10.2.2"
     essential              = true
-    cpu                    = 128
-    memory                 = 256
+    cpu                    = 256
+    memory                 = 512
     logConfiguration = {
       logDriver = "awslogs"
       options = {
