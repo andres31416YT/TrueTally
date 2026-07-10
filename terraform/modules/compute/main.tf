@@ -256,7 +256,6 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_task" {
 }
 
 resource "aws_iam_role_policy" "ecs_execution_service_discovery" {
-  count = var.service_discovery_namespace_id != "" ? 1 : 0
   name = "${local.name_prefix}-ecs-execution-sd"
   role = aws_iam_role.ecs_execution.id
 
@@ -271,7 +270,7 @@ resource "aws_iam_role_policy" "ecs_execution_service_discovery" {
           "servicediscovery:RegisterInstance",
           "servicediscovery:DeregisterInstance"
         ]
-        Resource = aws_service_discovery_service.blockchain[0].arn
+        Resource = aws_service_discovery_service.blockchain.arn
       }
     ]
   })
@@ -408,18 +407,13 @@ resource "aws_ecs_service" "blockchain" {
     rollback = true
   }
 
-  dynamic "service_registries" {
-    for_each = var.service_discovery_namespace_id != "" ? [1] : []
-    content {
-      registry_arn = aws_service_discovery_service.blockchain[0].arn
-    }
+  service_registries {
+    registry_arn = aws_service_discovery_service.blockchain.arn
   }
 }
 
 # Service Discovery for blockchain node (stable DNS endpoint)
 resource "aws_service_discovery_service" "blockchain" {
-  count = var.service_discovery_namespace_id != "" ? 1 : 0
-
   name = "blockchain"
 
   dns_config {
@@ -428,7 +422,6 @@ resource "aws_service_discovery_service" "blockchain" {
       type = "A"
       ttl  = 60
     }
-    routing_policy = "MULTIVALUE"
   }
 
   tags = {
@@ -437,7 +430,7 @@ resource "aws_service_discovery_service" "blockchain" {
 }
 
 locals {
-  blockchain_service_dns = var.service_discovery_namespace_id != "" ? "blockchain.${var.service_discovery_namespace_name}" : ""
+  blockchain_service_dns = "blockchain.${var.service_discovery_namespace_name}"
 }
 
 output "blockchain_service_dns" {
