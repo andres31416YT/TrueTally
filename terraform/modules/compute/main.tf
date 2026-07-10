@@ -255,9 +255,9 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_task" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-resource "aws_iam_role_policy" "ecs_execution_service_discovery" {
-  name = "${local.name_prefix}-ecs-execution-sd"
-  role = aws_iam_role.ecs_execution.id
+resource "aws_iam_role_policy" "ecs_task_service_discovery" {
+  name = "${local.name_prefix}-ecs-task-sd"
+  role = aws_iam_role.ecs_task.id
 
   policy = jsonencode({
     Version = "2012-10-17"

@@ -33,17 +33,7 @@ resource "aws_security_group" "observability" {
   }
 }
 
-resource "aws_security_group_rule" "observability_from_blockchain" {
-  count = var.blockchain_sg_id != "" ? 1 : 0
 
-  type                     = "ingress"
-  from_port                = 0
-  to_port                  = 0
-  protocol                 = "-1"
-  security_group_id        = aws_security_group.observability.id
-  source_security_group_id = var.blockchain_sg_id
-  description              = "Allow traffic from blockchain SG"
-}
 
 # ECS Cluster for Observability
 resource "aws_ecs_cluster" "observability" {

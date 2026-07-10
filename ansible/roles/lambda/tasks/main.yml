@@ -166,39 +166,8 @@
     aws lambda update-function-configuration \
       --cli-input-json file:///tmp/lambda_despachador_config.json \
       --region "{{ aws_region }}"
-  register: db_secret_raw
-  no_log: true
 
-- name: Obtener endpoint de RDS
-  # Consulta el endpoint de la instancia RDS para armar la URL de conexión
-  shell: |
-    aws rds describe-db-instances --db-instance-identifier "{{ name_prefix }}-postgres" --query 'DBInstances[0].Endpoint.Address' --output text --region "{{ aws_region }}"
-  register: rds_endpoint_raw
-
-- name: Parsear credenciales de DB
-  # Extrae usuario, contraseña, endpoint y puerto del JSON de Secrets Manager
-  # Estas variables se usan para construir DATABASE_URL
-  set_fact:
-    db_username: "{{ db_secret_raw.stdout | from_json | json_query('username') }}"
-    db_password: "{{ db_secret_raw.stdout | from_json | json_query('password') }}"
-    db_endpoint: "{{ rds_endpoint_raw.stdout }}"
-    db_port: 5432
-
-- name: Construir DATABASE_URL
-  # Construye la URL de conexión PostgreSQL con password URL-encoded
-  # Ejemplo: postgres://truetally:password@host:5432/truetally
-  shell: |
-    python3 -c "from urllib.parse import quote; print('postgres://{{ db_username }}:' + quote('{{ db_password }}', safe='') + '@{{ db_endpoint }}:{{ db_port }}/truetally')"
-  register: database_url_result
-  no_log: true
-
-- name: Obtener URL de la cola SQS
-  # Obtiene la URL de la cola SQS donde lambda-despachador encola votos
-  shell: |
-    aws sqs get-queue-url --queue-name "{{ name_prefix }}-vote-queue" --query 'QueueUrl' --output text --region "{{ aws_region }}"
-  register: sqs_queue_url_result
-
-- name: Actualizar lambda-acceso
+- name: Actualizar lambda-procesador
   # Genera el JSON de configuración para lambda-acceso y lo guarda en /tmp
   # Variables que se actualizan:
   # - DATABASE_URL: conexión a PostgreSQL
