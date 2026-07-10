@@ -1,0 +1,22 @@
+---
+galaxy_info:
+  author: TrueTally
+  description: Observability stack (Loki, Promtail, Prometheus, Grafana)
+  company: TrueTally
+
+  license: MIT
+
+  min_ansible_version: "2.9"
+
+  platforms:
+    - name: Amazon Linux
+      versions:
+        - "2"
+
+  galaxy_tags:
+    - observability
+    - loki
+    - prometheus
+    - grafana
+
+dependencies: []

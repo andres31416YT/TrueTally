@@ -1,0 +1,9 @@
+---
+# Default vars for observability role
+observability:
+  grafana_admin_user: "admin"
+  grafana_admin_password: "admin"
+  loki_url: "http://localhost:3100"
+  prometheus_url: "http://localhost:9090"
+  cloudwatch_namespace: "TrueTally/{{ truetally_env }}"
+  cloudwatch_region: "{{ aws_region }}"

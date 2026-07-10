@@ -58,12 +58,9 @@ variable "vote_queue_url" {
   type = string
 }
 
-variable "lambda_node_url_az1" {
-  type = string
-}
-
-variable "lambda_node_url_az2" {
-  type = string
+variable "aws_region" {
+  type    = string
+  default = "us-east-1"
 }
 
 variable "ecr_repository_url" {
@@ -71,7 +68,8 @@ variable "ecr_repository_url" {
 }
 
 variable "lambda_zip_path" {
-  type = string
+  type        = string
+  description = "Path to lambda ZIP artifacts directory"
 }
 
 variable "dlq_arn" {

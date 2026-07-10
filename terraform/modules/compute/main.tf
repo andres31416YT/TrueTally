@@ -324,6 +324,14 @@ resource "aws_ecs_task_definition" "blockchain" {
     essential              = true
     privileged             = false
     readonlyRootFilesystem = true
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = "/ecs/${local.name_prefix}-blockchain"
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "ecs"
+      }
+    }
     portMappings = [{
       containerPort = 9944
       hostPort      = 9944

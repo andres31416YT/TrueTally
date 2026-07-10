@@ -8,7 +8,6 @@
 # - Obtener IP del nodo blockchain desde ECS para BLOCKCHAIN_NODE_URL
 # - Obtener URL de la cola SQS para VOTE_QUEUE_URL
 # - Actualizar configuración de las 3 Lambdas (acceso, procesador, despachador)
-# - Corregir variables legacy (NODE_URL_AZ1/AZ2 → BLOCKCHAIN_NODE_URL)
 # - Ajustar timeout y memory size según variables de group_vars
 # =============================================================================
 
@@ -124,8 +123,6 @@
 
 - name: Actualizar lambda-procesador
   # Genera configuración para lambda-procesador
-  # IMPORTANTE: corrige variables legacy (NODE_URL_AZ1/AZ2)
-  # que el código Rust aún espera, además de BLOCKCHAIN_NODE_URL
   # Timeout: 300s (5 min) porque procesa votos de la blockchain
   # Memory: 1024MB por el volumen de datos de la blockchain
   shell: |
@@ -137,8 +134,6 @@
         'MemorySize': {{ lambda_procesador_memory_size }},
         'Environment': {
             'Variables': {
-                'NODE_URL_AZ1': '{{ blockchain_node_url }}',
-                'NODE_URL_AZ2': '{{ blockchain_node_url }}',
                 'SUDOADMIN_EMAIL': '{{ sudoadmin_email }}',
                 'SUDOADMIN_PASSWORD': '{{ sudoadmin_password }}',
                 'ADMIN_EMAIL': '{{ admin_email }}',

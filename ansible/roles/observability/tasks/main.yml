@@ -1,0 +1,157 @@
+---
+# =============================================================================
+# ROLE: observability
+# =============================================================================
+# Responsabilidades:
+# - Obtener informacion de acceso al stack de observabilidad (Grafana)
+# - Generar archivo de provisioning para data sources de Grafana
+# - Mostrar credenciales y URLs de acceso
+# =============================================================================
+
+- name: Obtener IP de la task de Grafana
+  shell: |
+    TASK_ARN=$(aws ecs list-tasks --cluster "{{ name_prefix }}-observability-cluster" --service-name "{{ name_prefix }}-observability-grafana" --query 'taskArns[0]' --output text --region "{{ aws_region }}")
+    if [ "$TASK_ARN" != "None" ] && [ -n "$TASK_ARN" ]; then
+      aws ecs describe-tasks --cluster "{{ name_prefix }}-observability-cluster" --tasks "$TASK_ARN" --query 'tasks[0].attachments[0].details[?name==`privateIPv4Address`].value | [0]' --output text --region "{{ aws_region }}"
+    else
+      echo "unknown"
+    fi
+  register: grafana_ip_result
+
+- name: Establecer URL de Grafana
+  shell: |
+    IP="{{ grafana_ip_result.stdout | default('') | trim }}"
+    if [ -n "$IP" ] && [ "$IP" != "None" ]; then
+      echo "http://${IP}:3000"
+    else
+      echo "http://localhost:3000"
+    fi
+  register: grafana_url_raw
+
+- name: Set grafana_url
+  set_fact:
+    grafana_url: "{{ grafana_url_raw.stdout }}"
+
+- name: Generar archivo de provisioning para data sources
+  # Genera un archivo YAML que se puede copiar manualmente a Grafana
+  # para configurar los data sources automaticamente
+  copy:
+    dest: "/tmp/grafana-provisioning-datasources.yaml"
+    content: |
+      apiVersion: 1
+
+      datasources:
+        - name: Loki
+          type: loki
+          access: proxy
+          orgId: 1
+          url: {{ observability.loki_url }}
+          basicAuth: false
+          isDefault: false
+          version: 1
+          editable: true
+
+        - name: Prometheus
+          type: prometheus
+          access: proxy
+          orgId: 1
+          url: {{ observability.prometheus_url }}
+          basicAuth: false
+          isDefault: true
+          version: 1
+          editable: true
+
+        - name: CloudWatch
+          type: cloudwatch
+          access: proxy
+          orgId: 1
+          url: https://monitoring.{{ aws_region }}.amazonaws.com
+          basicAuth: false
+          isDefault: false
+          version: 1
+          editable: true
+          jsonData:
+            authType: default
+            defaultRegion: {{ aws_region }}
+          secureJsonData: {}
+
+- name: Mostrar informacion de acceso al stack de observabilidad
+  debug:
+    msg:
+      - "=============================================="
+      - "STACK DE OBSERVABILIDAD DESPLEGADO"
+      - "=============================================="
+      - "Grafana URL: {{ grafana_url }}"
+      - "Usuario: {{ observability.grafana_admin_user }}"
+      - "Password: {{ observability.grafana_admin_password }}"
+      - "Loki URL (interno): {{ observability.loki_url }}"
+      - "Prometheus URL (interno): {{ observability.prometheus_url }}"
+      - "=============================================="
+      - "Para configurar data sources en Grafana:"
+      - "1. Accede a {{ grafana_url }}"
+      - "2. Ve a Configuration > Data Sources"
+      - "3. Agrega los data sources:"
+      - "   - Loki: {{ observability.loki_url }}"
+      - "   - Prometheus: {{ observability.prometheus_url }}"
+      - "   - CloudWatch: https://monitoring.{{ aws_region }}.amazonaws.com"
+      - "=============================================="
+      - "Archivo de provisioning generado en: /tmp/grafana-provisioning-datasources.yaml"
+      - "=============================================="
+
+- name: Generar dashboard basico de infraestructura
+  # Genera un archivo JSON con un dashboard basico para importar en Grafana
+  copy:
+    dest: "/tmp/grafana-dashboard-infrastructure.json"
+    content: |
+      {
+        "dashboard": {
+          "id": null,
+          "title": "Infrastructure Overview",
+          "tags": ["truetally", "observability"],
+          "timezone": "browser",
+          "panels": [
+            {
+              "id": 1,
+              "title": "ECS CPU Utilization",
+              "type": "graph",
+              "targets": [
+                {
+                  "expr": "avg(aws_ecs_cpuutilization{cluster_name=\"{{ name_prefix }}-blockchain-cluster\"})",
+                  "legendFormat": "Blockchain CPU"
+                }
+              ],
+              "yaxes": [
+                {"unit": "percent", "min": 0, "max": 100},
+                {"format": "short"}
+              ]
+            },
+            {
+              "id": 2,
+              "title": "ECS Memory Utilization",
+              "type": "graph",
+              "targets": [
+                {
+                  "expr": "avg(aws_ecs_memoryutilization{cluster_name=\"{{ name_prefix }}-blockchain-cluster\"})",
+                  "legendFormat": "Blockchain Memory"
+                }
+              ],
+              "yaxes": [
+                {"unit": "percent", "min": 0, "max": 100},
+                {"format": "short"}
+              ]
+            }
+          ],
+          "time": {
+            "from": "now-1h",
+            "to": "now"
+          },
+          "refresh": "30s"
+        },
+        "overwrite": false
+      }
+
+- name: Mostrar informacion de dashboards
+  debug:
+    msg:
+      - "Dashboard basico generado en: /tmp/grafana-dashboard-infrastructure.json"
+      - "Puedes importarlo en Grafana navegando a: Dashboards > Import"

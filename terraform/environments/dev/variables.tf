@@ -28,16 +28,6 @@ variable "redis_auth_token" {
   sensitive = true
 }
 
-variable "lambda_node_url_az1" {
-  type    = string
-  default = "http://localhost:9944"
-}
-
-variable "lambda_node_url_az2" {
-  type    = string
-  default = "http://localhost:9944"
-}
-
 variable "domain_name" {
   type    = string
   default = "andrespaganroncall.qzz.io"
