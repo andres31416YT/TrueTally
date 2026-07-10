@@ -17,7 +17,7 @@
       - db_username is defined and db_username | length > 0
       - db_password is defined and db_password | length > 0
       - db_endpoint is defined and db_endpoint | length > 0
-      - db_port is defined and db_port | length > 0
+      - db_port is defined and db_port | int > 0
     fail_msg: "Faltan variables de BD. Verifica que el rol database se ejecute antes que lambda."
 
 - name: Construir DATABASE_URL
