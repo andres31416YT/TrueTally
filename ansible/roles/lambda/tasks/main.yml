@@ -3,7 +3,6 @@
 # ROLE: lambda
 # =============================================================================
 # Responsabilidades:
-# - Obtener credenciales de BD desde Secrets Manager
 # - Obtener endpoint de RDS para construir DATABASE_URL
 # - Obtener URL de la cola SQS para VOTE_QUEUE_URL
 # - Actualizar configuración de las 3 Lambdas (acceso, procesador, despachador)
@@ -11,32 +10,15 @@
 # - Preservar BLOCKCHAIN_NODE_URL usando el DNS estable de Cloud Map
 # =============================================================================
 
-- name: Obtener credenciales de DB desde Secrets Manager
-  # Lee el secreto que Terraform creó con usuario/contraseña de PostgreSQL
-  # No se hardcodean credenciales, siempre se leen de AWS Secrets Manager
-  shell: |
-    aws secretsmanager get-secret-value \
-      --secret-id "{{ name_prefix }}/db/credentials" \
-      --query 'SecretString' \
-      --output text \
-      --region "{{ aws_region }}"
-  register: db_secret_raw
-  no_log: true
-
-- name: Obtener endpoint de RDS
-  # Consulta el endpoint de la instancia RDS para armar la URL de conexión
-  shell: |
-    aws rds describe-db-instances --db-instance-identifier "{{ name_prefix }}-postgres" --query 'DBInstances[0].Endpoint.Address' --output text --region "{{ aws_region }}"
-  register: rds_endpoint_raw
-
-- name: Parsear credenciales de DB
-  # Extrae usuario, contraseña, endpoint y puerto del JSON de Secrets Manager
-  # Estas variables se usan para construir DATABASE_URL
-  set_fact:
-    db_username: "{{ db_secret_raw.stdout | from_json | json_query('username') }}"
-    db_password: "{{ db_secret_raw.stdout | from_json | json_query('password') }}"
-    db_endpoint: "{{ rds_endpoint_raw.stdout }}"
-    db_port: 5432
+- name: Validar variables de BD provenientes del rol database
+  # El rol database ya parseó el secreto; aquí solo validamos que no estén vacías
+  assert:
+    that:
+      - db_username is defined and db_username | length > 0
+      - db_password is defined and db_password | length > 0
+      - db_endpoint is defined and db_endpoint | length > 0
+      - db_port is defined and db_port | length > 0
+    fail_msg: "Faltan variables de BD. Verifica que el rol database se ejecute antes que lambda."
 
 - name: Construir DATABASE_URL
   # Construye la URL de conexión PostgreSQL con password URL-encoded
