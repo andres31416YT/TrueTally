@@ -73,6 +73,8 @@ module "compute" {
   lambda_zip_path                = var.lambda_zip_path
   dlq_arn                        = module.messaging.dlq_arn
   lambda_reserved_concurrent_executions = 5
+  service_discovery_namespace_id = module.networking.service_discovery_namespace_id
+  service_discovery_namespace_name = module.networking.service_discovery_namespace_name
 }
 
 module "frontend" {

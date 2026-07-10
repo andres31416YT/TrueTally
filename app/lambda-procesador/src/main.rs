@@ -20,6 +20,11 @@ async fn main() -> Result<(), Error> {
 
     let node_rpc_url =
         env::var("BLOCKCHAIN_NODE_URL").unwrap_or_else(|_| "http://localhost:9944".to_string());
+    let node_rpc_url = if node_rpc_url.trim().is_empty() {
+        "http://localhost:9944".to_string()
+    } else {
+        node_rpc_url
+    };
 
     let shared_state = SharedState {
         http_client,

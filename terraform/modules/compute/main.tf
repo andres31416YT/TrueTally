@@ -121,6 +121,7 @@ resource "aws_lambda_function" "acceso" {
   environment {
     variables = {
       DB_CREDENTIALS_ARN = var.db_credentials_secret_arn
+      BLOCKCHAIN_NODE_URL = local.blockchain_service_dns != "" ? "http://${local.blockchain_service_dns}:9944" : "http://localhost:9944"
     }
   }
 
@@ -176,6 +177,12 @@ resource "aws_lambda_function" "procesador" {
 
   dead_letter_config {
     target_arn = var.dlq_arn
+  }
+
+  environment {
+    variables = {
+      BLOCKCHAIN_NODE_URL = local.blockchain_service_dns != "" ? "http://${local.blockchain_service_dns}:9944" : "http://localhost:9944"
+    }
   }
 
   tracing_config {
@@ -246,6 +253,28 @@ resource "aws_iam_role_policy_attachment" "ecs_task_ecr" {
 resource "aws_iam_role_policy_attachment" "ecs_execution_task" {
   role       = aws_iam_role.ecs_execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy" "ecs_execution_service_discovery" {
+  count = var.service_discovery_namespace_id != "" ? 1 : 0
+  name = "${local.name_prefix}-ecs-execution-sd"
+  role = aws_iam_role.ecs_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "servicediscovery:DiscoverInstances",
+          "servicediscovery:GetInstances",
+          "servicediscovery:RegisterInstance",
+          "servicediscovery:DeregisterInstance"
+        ]
+        Resource = aws_service_discovery_service.blockchain[0].arn
+      }
+    ]
+  })
 }
 
 # Policy allowing ECS tasks to mount EFS filesystem
@@ -378,4 +407,39 @@ resource "aws_ecs_service" "blockchain" {
     enable   = true
     rollback = true
   }
+
+  dynamic "service_registries" {
+    for_each = var.service_discovery_namespace_id != "" ? [1] : []
+    content {
+      registry_arn = aws_service_discovery_service.blockchain[0].arn
+    }
+  }
+}
+
+# Service Discovery for blockchain node (stable DNS endpoint)
+resource "aws_service_discovery_service" "blockchain" {
+  count = var.service_discovery_namespace_id != "" ? 1 : 0
+
+  name = "blockchain"
+
+  dns_config {
+    namespace_id = var.service_discovery_namespace_id
+    dns_records {
+      type = "A"
+      ttl  = 60
+    }
+    routing_policy = "MULTIVALUE"
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-blockchain-sd"
+  }
+}
+
+locals {
+  blockchain_service_dns = var.service_discovery_namespace_id != "" ? "blockchain.${var.service_discovery_namespace_name}" : ""
+}
+
+output "blockchain_service_dns" {
+  value = local.blockchain_service_dns
 }

@@ -102,6 +102,11 @@ async fn main() -> Result<(), Error> {
 
     let blockchain_node_url = std::env::var("BLOCKCHAIN_NODE_URL")
         .unwrap_or_else(|_| "http://localhost:9944".to_string());
+    let blockchain_node_url = if blockchain_node_url.trim().is_empty() {
+        "http://localhost:9944".to_string()
+    } else {
+        blockchain_node_url
+    };
 
     let shared_state = Arc::new(SharedState {
         db_pool,

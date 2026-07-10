@@ -80,3 +80,13 @@ variable "lambda_reserved_concurrent_executions" {
   type    = number
   default = null
 }
+
+variable "service_discovery_namespace_id" {
+  type    = string
+  default = ""
+}
+
+variable "service_discovery_namespace_name" {
+  type    = string
+  default = ""
+}

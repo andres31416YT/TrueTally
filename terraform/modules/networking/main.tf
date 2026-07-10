@@ -168,11 +168,11 @@ resource "aws_security_group" "blockchain" {
   }
 
   ingress {
-    from_port = 2049
-    to_port   = 2049
-    protocol  = "tcp"
-    self      = true
-    description = "Allow NFS communication for blockchain"
+    from_port       = 2049
+    to_port         = 2049
+    protocol        = "tcp"
+    self            = true
+    description     = "Allow NFS communication for blockchain"
   }
 
   ingress {
@@ -196,6 +196,15 @@ resource "aws_security_group" "blockchain" {
   }
 }
 
+resource "aws_service_discovery_private_dns_namespace" "main" {
+  name = "${local.name_prefix}.local"
+  vpc  = aws_vpc.main.id
+
+  tags = {
+    Name = "${local.name_prefix}-sd-namespace"
+  }
+}
+
 output "vpc_id" { value = aws_vpc.main.id }
 output "public_subnet_ids" { value = [for s in aws_subnet.public : s.id] }
 output "compute_subnet_ids" { value = [for s in aws_subnet.compute : s.id] }
@@ -206,6 +215,8 @@ output "lambda_security_group_id" { value = aws_security_group.lambda.id }
 output "lambda_sg_arn" { value = aws_security_group.lambda.arn }
 output "database_sg_id" { value = aws_security_group.database.id }
 output "blockchain_sg_id" { value = aws_security_group.blockchain.id }
+output "service_discovery_namespace_id" { value = aws_service_discovery_private_dns_namespace.main.id }
+output "service_discovery_namespace_name" { value = aws_service_discovery_private_dns_namespace.main.name }
 
 # VPC Endpoints
 resource "aws_vpc_endpoint" "s3" {
