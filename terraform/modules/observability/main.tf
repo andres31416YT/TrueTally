@@ -37,6 +37,41 @@ resource "aws_security_group" "observability" {
   }
 }
 
+# Security Group for Grafana ALB
+resource "aws_security_group" "grafana_alb" {
+  name        = "${local.name_prefix}-grafana-alb-sg"
+  description = "Security group for Grafana Application Load Balancer"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTP from anywhere"
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTPS from anywhere"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-grafana-alb-sg"
+  }
+}
+
 
 
 # ECS Cluster for Observability
@@ -46,6 +81,56 @@ resource "aws_ecs_cluster" "observability" {
   setting {
     name  = "containerInsights"
     value = "enabled"
+  }
+}
+
+# Application Load Balancer for Grafana
+resource "aws_lb" "grafana" {
+  name               = "${local.name_prefix}-grafana-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.grafana_alb.id]
+  subnets            = var.subnet_ids
+
+  enable_deletion_protection = false
+
+  tags = {
+    Name = "${local.name_prefix}-grafana-alb"
+  }
+}
+
+# Target Group for Grafana
+resource "aws_lb_target_group" "grafana" {
+  name        = "${local.name_prefix}-grafana-tg"
+  port        = 3000
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    path                = "/api/health"
+    protocol            = "HTTP"
+    matcher             = "200"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-grafana-tg"
+  }
+}
+
+# HTTP Listener for Grafana
+resource "aws_lb_listener" "grafana" {
+  load_balancer_arn = aws_lb.grafana.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.grafana.arn
   }
 }
 
@@ -70,6 +155,40 @@ resource "aws_iam_role" "ecs_task" {
 resource "aws_iam_role_policy_attachment" "ecs_task_ssm" {
   role       = aws_iam_role.ecs_task.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy" "ecs_task_cloudwatch" {
+  name = "${local.name_prefix}-observability-ecs-task-cloudwatch-policy"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:GetMetricData",
+          "cloudwatch:GetMetricStatistics",
+          "cloudwatch:ListMetrics",
+          "cloudwatch:DescribeAlarmHistory",
+          "cloudwatch:DescribeAlarms"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:StartQuery",
+          "logs:GetQueryResults",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams",
+          "logs:FilterLogEvents",
+          "logs:GetLogEvents"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 # IAM role for ECS task execution
@@ -147,11 +266,11 @@ resource "aws_ecs_task_definition" "loki" {
   task_role_arn            = aws_iam_role.ecs_task.arn
 
   container_definitions = jsonencode([{
-    name                   = "loki"
-    image                  = "grafana/loki:2.9.3"
-    essential              = true
-    cpu                    = 256
-    memory                 = 512
+    name      = "loki"
+    image     = "grafana/loki:2.9.3"
+    essential = true
+    cpu       = 256
+    memory    = 512
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -186,11 +305,11 @@ resource "aws_ecs_task_definition" "promtail" {
   task_role_arn            = aws_iam_role.ecs_task.arn
 
   container_definitions = jsonencode([{
-    name                   = "promtail"
-    image                  = "grafana/promtail:2.9.3"
-    essential              = true
-    cpu                    = 256
-    memory                 = 512
+    name      = "promtail"
+    image     = "grafana/promtail:2.9.3"
+    essential = true
+    cpu       = 256
+    memory    = 512
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -221,11 +340,11 @@ resource "aws_ecs_task_definition" "prometheus" {
   task_role_arn            = aws_iam_role.ecs_task.arn
 
   container_definitions = jsonencode([{
-    name                   = "prometheus"
-    image                  = "prom/prometheus:v2.47.0"
-    essential              = true
-    cpu                    = 256
-    memory                 = 512
+    name      = "prometheus"
+    image     = "prom/prometheus:v2.47.0"
+    essential = true
+    cpu       = 256
+    memory    = 512
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -261,11 +380,11 @@ resource "aws_ecs_task_definition" "grafana" {
   task_role_arn            = aws_iam_role.ecs_task.arn
 
   container_definitions = jsonencode([{
-    name                   = "grafana"
-    image                  = "grafana/grafana:10.2.2"
-    essential              = true
-    cpu                    = 256
-    memory                 = 512
+    name      = "grafana"
+    image     = "grafana/grafana:10.2.2"
+    essential = true
+    cpu       = 256
+    memory    = 512
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -374,6 +493,12 @@ resource "aws_ecs_service" "grafana" {
     assign_public_ip = true
   }
 
+  load_balancer {
+    target_group_arn = aws_lb_target_group.grafana.arn
+    container_name   = "grafana"
+    container_port   = 3000
+  }
+
   deployment_circuit_breaker {
     enable   = true
     rollback = true
@@ -390,4 +515,16 @@ output "observability_sg_id" {
 
 output "grafana_service_name" {
   value = aws_ecs_service.grafana.name
+}
+
+output "grafana_alb_dns" {
+  value = aws_lb.grafana.dns_name
+}
+
+output "grafana_url" {
+  value = "http://${aws_lb.grafana.dns_name}"
+}
+
+output "grafana_alb_security_group_id" {
+  value = aws_security_group.grafana_alb.id
 }
