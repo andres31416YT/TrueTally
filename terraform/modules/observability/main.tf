@@ -499,6 +499,11 @@ resource "aws_ecs_service" "grafana" {
     container_port   = 3000
   }
 
+  depends_on = [
+    aws_lb_listener.grafana,
+    aws_lb_target_group.grafana
+  ]
+
   deployment_circuit_breaker {
     enable   = true
     rollback = true

@@ -124,13 +124,13 @@ resource "aws_security_group" "lambda" {
 }
 
 resource "aws_security_group_rule" "lambda_to_rds" {
-  description                     = "Allow Lambda to connect to RDS PostgreSQL"
-  type                            = "ingress"
-  from_port                       = 5432
-  to_port                         = 5432
-  protocol                        = "tcp"
-  security_group_id               = aws_security_group.lambda.id
-  source_security_group_id        = aws_security_group.lambda.id
+  description              = "Allow Lambda to connect to RDS PostgreSQL"
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.lambda.id
+  source_security_group_id = aws_security_group.lambda.id
 }
 
 resource "aws_security_group" "database" {
@@ -160,27 +160,27 @@ resource "aws_security_group" "blockchain" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port = 9944
-    to_port   = 9944
-    protocol  = "tcp"
-    self      = true
+    from_port   = 9944
+    to_port     = 9944
+    protocol    = "tcp"
+    self        = true
     description = "Allow blockchain node communication"
   }
 
   ingress {
-    from_port       = 2049
-    to_port         = 2049
-    protocol        = "tcp"
-    self            = true
-    description     = "Allow NFS communication for blockchain"
+    from_port   = 2049
+    to_port     = 2049
+    protocol    = "tcp"
+    self        = true
+    description = "Allow NFS communication for blockchain"
   }
 
   ingress {
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    self            = true
-    description     = "Allow HTTPS to ECR VPC endpoints"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    self        = true
+    description = "Allow HTTPS to ECR VPC endpoints"
   }
 
   egress {

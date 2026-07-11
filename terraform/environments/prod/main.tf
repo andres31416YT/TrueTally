@@ -1,12 +1,12 @@
 locals {
-  project_name        = var.project_name
-  env                 = var.environment
-  region              = var.aws_region
-  vpc_cidr            = var.vpc_cidr
-  azs                 = var.azs
-  db_password         = var.db_password
-  redis_auth_token    = var.redis_auth_token
-  account_id          = var.aws_account_id
+  project_name     = var.project_name
+  env              = var.environment
+  region           = var.aws_region
+  vpc_cidr         = var.vpc_cidr
+  azs              = var.azs
+  db_password      = var.db_password
+  redis_auth_token = var.redis_auth_token
+  account_id       = var.aws_account_id
 }
 
 module "networking" {
@@ -52,29 +52,29 @@ module "messaging" {
 }
 
 module "compute" {
-  source                         = "../../modules/compute"
-  project_name                   = local.project_name
-  env                            = local.env
-  vpc_id                         = module.networking.vpc_id
-  public_subnet_ids              = module.networking.public_subnet_ids
-  private_subnet_ids             = module.networking.private_subnet_ids
-  blockchain_subnet_ids          = module.networking.blockchain_subnet_ids
-  azs                            = local.azs
-  aws_region                     = local.region
-  kms_key_arn                    = module.security.kms_key_arn
-  lambda_security_group_id       = module.networking.lambda_security_group_id
-  blockchain_security_group_id   = module.networking.blockchain_sg_id
-  lambda_sg_arn                  = module.networking.lambda_sg_arn
-  db_credentials_secret_arn      = module.security.db_credentials_secret_arn
-  redis_auth_token_secret_arn    = module.security.redis_auth_token_secret_arn
-  vote_queue_arn                 = module.messaging.vote_queue_arn
-  vote_queue_url                 = module.messaging.vote_queue_url
-  ecr_repository_url             = module.security.ecr_repository_url
-  lambda_zip_path                = var.lambda_zip_path
-  dlq_arn                        = module.messaging.dlq_arn
+  source                                = "../../modules/compute"
+  project_name                          = local.project_name
+  env                                   = local.env
+  vpc_id                                = module.networking.vpc_id
+  public_subnet_ids                     = module.networking.public_subnet_ids
+  private_subnet_ids                    = module.networking.private_subnet_ids
+  blockchain_subnet_ids                 = module.networking.blockchain_subnet_ids
+  azs                                   = local.azs
+  aws_region                            = local.region
+  kms_key_arn                           = module.security.kms_key_arn
+  lambda_security_group_id              = module.networking.lambda_security_group_id
+  blockchain_security_group_id          = module.networking.blockchain_sg_id
+  lambda_sg_arn                         = module.networking.lambda_sg_arn
+  db_credentials_secret_arn             = module.security.db_credentials_secret_arn
+  redis_auth_token_secret_arn           = module.security.redis_auth_token_secret_arn
+  vote_queue_arn                        = module.messaging.vote_queue_arn
+  vote_queue_url                        = module.messaging.vote_queue_url
+  ecr_repository_url                    = module.security.ecr_repository_url
+  lambda_zip_path                       = var.lambda_zip_path
+  dlq_arn                               = module.messaging.dlq_arn
   lambda_reserved_concurrent_executions = 5
-  service_discovery_namespace_id = module.networking.service_discovery_namespace_id
-  service_discovery_namespace_name = module.networking.service_discovery_namespace_name
+  service_discovery_namespace_id        = module.networking.service_discovery_namespace_id
+  service_discovery_namespace_name      = module.networking.service_discovery_namespace_name
 }
 
 module "frontend" {
@@ -100,12 +100,12 @@ module "monitoring" {
 }
 
 module "observability" {
-  source              = "../../modules/observability"
-  project_name        = local.project_name
-  env                 = local.env
-  vpc_id              = module.networking.vpc_id
-  subnet_ids          = module.networking.public_subnet_ids
-  kms_key_arn         = module.security.kms_key_arn
-  aws_region          = local.region
-  blockchain_sg_id    = module.networking.blockchain_sg_id
+  source           = "../../modules/observability"
+  project_name     = local.project_name
+  env              = local.env
+  vpc_id           = module.networking.vpc_id
+  subnet_ids       = module.networking.public_subnet_ids
+  kms_key_arn      = module.security.kms_key_arn
+  aws_region       = local.region
+  blockchain_sg_id = module.networking.blockchain_sg_id
 }
