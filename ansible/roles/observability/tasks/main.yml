@@ -4,9 +4,7 @@
 # =============================================================================
 # Responsabilidades:
 # - Obtener informacion de acceso al stack de observabilidad (Grafana)
-# - Obtener IPs de tasks ECS (Loki, Prometheus, Promtail, Grafana)
-# - Configurar data sources de Grafana via API (CloudWatch, Loki, Prometheus)
-# - Crear/importar dashboards basicos via API
+# - Configurar data sources y dashboards de Grafana via HTTP API
 # - Mostrar credenciales y URLs de acceso
 # =============================================================================
 
@@ -21,16 +19,6 @@
 - name: Establecer URL de Grafana
   set_fact:
     grafana_url: "http://{{ grafana_alb_dns_result.stdout }}"
-
-- name: Obtener IP de la task de Grafana
-  shell: |
-    TASK_ARN=$(aws ecs list-tasks --cluster "{{ name_prefix }}-observability-cluster" --service-name "{{ name_prefix }}-observability-grafana" --query 'taskArns[0]' --output text --region "{{ aws_region }}")
-    if [ "$TASK_ARN" != "None" ] && [ -n "$TASK_ARN" ]; then
-      aws ecs describe-tasks --cluster "{{ name_prefix }}-observability-cluster" --tasks "$TASK_ARN" --query 'tasks[0].attachments[0].details[?name==`privateIPv4Address`].value | [0]' --output text --region "{{ aws_region }}"
-    else
-      echo "unknown"
-    fi
-  register: grafana_ip_result
 
 - name: Obtener IP de la task de Loki
   shell: |
@@ -62,257 +50,315 @@
   retries: 30
   delay: 10
 
-# Configurar data sources usando Basic Auth
-- name: Configurar data source CloudWatch en Grafana
-  uri:
-    url: "{{ grafana_url }}/api/datasources"
-    method: POST
-    user: "admin:admin"
-    body_format: json
-    body:
-      name: "CloudWatch"
-      type: "cloudwatch"
-      access: "proxy"
-      url: "https://monitoring.{{ aws_region }}.amazonaws.com"
-      isDefault: false
-      jsonData:
-        authType: "default"
-        defaultRegion: "{{ aws_region }}"
-    headers:
-      Content-Type: "application/json"
-  register: ds_cloudwatch
+- name: Preparar payload CloudWatch datasource
+  copy:
+    dest: /tmp/grafana-ds-cloudwatch.json
+    content: |
+      {
+        "name": "CloudWatch",
+        "type": "cloudwatch",
+        "access": "proxy",
+        "url": "https://monitoring.{{ aws_region }}.amazonaws.com",
+        "isDefault": false,
+        "jsonData": {
+          "authType": "default",
+          "defaultRegion": "{{ aws_region }}"
+        }
+      }
+
+- name: Crear data source CloudWatch en Grafana  # noqa: command-instead-of-module
+  shell: |
+    curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
+      -u "admin:admin" \
+      -X POST "{{ grafana_url }}/api/datasources" \
+      -H "Content-Type: application/json" \
+      -d @/tmp/grafana-ds-cloudwatch.json
+  register: ds_cloudwatch_status
   ignore_errors: true
 
-- name: Configurar data source Loki en Grafana
-  uri:
-    url: "{{ grafana_url }}/api/datasources"
-    method: POST
-    user: "admin:admin"
-    body_format: json
-    body:
-      name: "Loki"
-      type: "loki"
-      access: "proxy"
-      url: "http://{{ loki_ip_result.stdout }}:3100"
-      isDefault: false
-    headers:
-      Content-Type: "application/json"
-  register: ds_loki
+- name: Preparar payload Loki datasource
+  copy:
+    dest: /tmp/grafana-ds-loki.json
+    content: |
+      {
+        "name": "Loki",
+        "type": "loki",
+        "access": "proxy",
+        "url": "http://{{ loki_ip_result.stdout }}:3100",
+        "isDefault": false
+      }
+
+- name: Crear data source Loki en Grafana  # noqa: command-instead-of-module
+  shell: |
+    curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
+      -u "admin:admin" \
+      -X POST "{{ grafana_url }}/api/datasources" \
+      -H "Content-Type: application/json" \
+      -d @/tmp/grafana-ds-loki.json
+  register: ds_loki_status
   ignore_errors: true
 
-- name: Configurar data source Prometheus en Grafana
-  uri:
-    url: "{{ grafana_url }}/api/datasources"
-    method: POST
-    user: "admin:admin"
-    body_format: json
-    body:
-      name: "Prometheus"
-      type: "prometheus"
-      access: "proxy"
-      url: "http://{{ prometheus_ip_result.stdout }}:9090"
-      isDefault: true
-    headers:
-      Content-Type: "application/json"
-  register: ds_prometheus
+- name: Preparar payload Prometheus datasource
+  copy:
+    dest: /tmp/grafana-ds-prometheus.json
+    content: |
+      {
+        "name": "Prometheus",
+        "type": "prometheus",
+        "access": "proxy",
+        "url": "http://{{ prometheus_ip_result.stdout }}:9090",
+        "isDefault": true
+      }
+
+- name: Crear data source Prometheus en Grafana  # noqa: command-instead-of-module
+  shell: |
+    curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
+      -u "admin:admin" \
+      -X POST "{{ grafana_url }}/api/datasources" \
+      -H "Content-Type: application/json" \
+      -d @/tmp/grafana-ds-prometheus.json
+  register: ds_prometheus_status
   ignore_errors: true
 
-# Crear dashboards usando Basic Auth
-- name: Crear dashboard ECS Blockchain en Grafana
-  uri:
-    url: "{{ grafana_url }}/api/dashboards/db"
-    method: POST
-    user: "admin:admin"
-    body_format: json
-    body:
-      dashboard:
-        title: "ECS Blockchain - {{ name_prefix }}"
-        tags: ["truetally", "ecs", "blockchain"]
-        timezone: "browser"
-        panels:
-          - id: 1
-            title: "CPU Utilization (%)"
-            type: "timeseries"
-            gridPos:
-              x: 0
-              y: 0
-              w: 12
-              h: 8
-            targets:
-              - expr: "avg(aws_ecs_cpuutilization{cluster_name=\"{{ name_prefix }}-blockchain-cluster\"})"
-                legendFormat: "Blockchain CPU"
-            yaxes:
-              - unit: "percent"
-                min: 0
-                max: 100
-              - format: "short"
-          - id: 2
-            title: "Memory Utilization (%)"
-            type: "timeseries"
-            gridPos:
-              x: 12
-              y: 0
-              w: 12
-              h: 8
-            targets:
-              - expr: "avg(aws_ecs_memoryutilization{cluster_name=\"{{ name_prefix }}-blockchain-cluster\"})"
-                legendFormat: "Blockchain Memory"
-            yaxes:
-              - unit: "percent"
-                min: 0
-                max: 100
-              - format: "short"
-        time:
-          from: "now-6h"
-          to: "now"
-        refresh: "30s"
-      overwrite: true
-  register: dash_blockchain
+- name: Preparar dashboard ECS Blockchain
+  copy:
+    dest: /tmp/grafana-dashboard-blockchain.json
+    content: |
+      {
+        "dashboard": {
+          "title": "ECS Blockchain - {{ name_prefix }}",
+          "tags": ["truetally", "ecs", "blockchain"],
+          "timezone": "browser",
+          "panels": [
+            {
+              "id": 1,
+              "title": "CPU Utilization (%)",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+              "targets": [
+                {
+                  "expr": "avg(aws_ecs_cpuutilization{cluster_name=\"{{ name_prefix }}-blockchain-cluster\"})",
+                  "legendFormat": "Blockchain CPU"
+                }
+              ],
+              "yaxes": [
+                {"unit": "percent", "min": 0, "max": 100},
+                {"format": "short"}
+              ]
+            },
+            {
+              "id": 2,
+              "title": "Memory Utilization (%)",
+              "type": "timeseries",
+              "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+              "targets": [
+                {
+                  "expr": "avg(aws_ecs_memoryutilization{cluster_name=\"{{ name_prefix }}-blockchain-cluster\"})",
+                  "legendFormat": "Blockchain Memory"
+                }
+              ],
+              "yaxes": [
+                {"unit": "percent", "min": 0, "max": 100},
+                {"format": "short"}
+              ]
+            }
+          ],
+          "time": {"from": "now-6h", "to": "now"},
+          "refresh": "30s"
+        },
+        "overwrite": true
+      }
+
+- name: Crear dashboard ECS Blockchain en Grafana  # noqa: command-instead-of-module
+  shell: |
+    curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
+      -u "admin:admin" \
+      -X POST "{{ grafana_url }}/api/dashboards/db" \
+      -H "Content-Type: application/json" \
+      -d @/tmp/grafana-dashboard-blockchain.json
+  register: dash_blockchain_status
   ignore_errors: true
 
-- name: Crear dashboard Lambdas en Grafana
-  uri:
-    url: "{{ grafana_url }}/api/dashboards/db"
-    method: POST
-    user: "admin:admin"
-    body_format: json
-    body:
-      dashboard:
-        title: "Lambdas - {{ name_prefix }}"
-        tags: ["truetally", "lambda"]
-        timezone: "browser"
-        panels:
-          - id: 1
-            title: "Invocations"
-            type: "timeseries"
-            gridPos:
-              x: 0
-              y: 0
-              w: 12
-              h: 8
-            targets:
-              - expr: "sum(aws_lambda_invocations_sum{function_name=~\".*\"}) by (function_name)"
-                legendFormat: "{{ function_name }}"
-            yaxes:
-              - format: "short"
-              - format: "short"
-          - id: 2
-            title: "Errors"
-            type: "timeseries"
-            gridPos:
-              x: 12
-              y: 0
-              w: 12
-              h: 8
-            targets:
-              - expr: "sum(aws_lambda_errors_sum{function_name=~\".*\"}) by (function_name)"
-                legendFormat: "{{ function_name }}"
-            yaxes:
-              - format: "short"
-              - format: "short"
-        time:
-          from: "now-1h"
-          to: "now"
-        refresh: "30s"
-      overwrite: true
-  register: dash_lambda
+- name: Preparar dashboard Lambdas
+  copy:
+    dest: /tmp/grafana-dashboard-lambda.json
+    content: |
+      {
+        "dashboard": {
+          "title": "Lambdas - {{ name_prefix }}",
+          "tags": ["truetally", "lambda"],
+          "timezone": "browser",
+          "panels": [
+            {
+              "id": 1,
+              "title": "Invocations",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+              "targets": [
+                {
+                  "expr": "sum(aws_lambda_invocations_sum{function_name=~\".*\"}) by (function_name)",
+                  "legendFormat": "{{ function_name }}"
+                }
+              ],
+              "yaxes": [{"format": "short"}, {"format": "short"}]
+            },
+            {
+              "id": 2,
+              "title": "Errors",
+              "type": "timeseries",
+              "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+              "targets": [
+                {
+                  "expr": "sum(aws_lambda_errors_sum{function_name=~\".*\"}) by (function_name)",
+                  "legendFormat": "{{ function_name }}"
+                }
+              ],
+              "yaxes": [{"format": "short"}, {"format": "short"}]
+            }
+          ],
+          "time": {"from": "now-1h", "to": "now"},
+          "refresh": "30s"
+        },
+        "overwrite": true
+      }
+
+- name: Crear dashboard Lambdas en Grafana  # noqa: command-instead-of-module
+  shell: |
+    curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
+      -u "admin:admin" \
+      -X POST "{{ grafana_url }}/api/dashboards/db" \
+      -H "Content-Type: application/json" \
+      -d @/tmp/grafana-dashboard-lambda.json
+  register: dash_lambda_status
   ignore_errors: true
 
-- name: Crear dashboard RDS en Grafana
-  uri:
-    url: "{{ grafana_url }}/api/dashboards/db"
-    method: POST
-    user: "admin:admin"
-    body_format: json
-    body:
-      dashboard:
-        title: "RDS PostgreSQL - {{ name_prefix }}"
-        tags: ["truetally", "rds", "database"]
-        timezone: "browser"
-        panels:
-          - id: 1
-            title: "CPU Utilization (%)"
-            type: "timeseries"
-            gridPos:
-              x: 0
-              y: 0
-              w: 12
-              h: 8
-            targets:
-              - expr: "avg(aws_rds_cpuutilization{dbinstanceidentifier=~\".*postgres.*\"}) by (dbinstanceidentifier)"
-                legendFormat: "{{ dbinstanceidentifier }}"
-            yaxes:
-              - unit: "percent"
-                min: 0
-                max: 100
-              - format: "short"
-          - id: 2
-            title: "Free Storage (bytes)"
-            type: "timeseries"
-            gridPos:
-              x: 12
-              y: 0
-              w: 12
-              h: 8
-            targets:
-              - expr: "avg(aws_rds_free_storage{dbinstanceidentifier=~\".*postgres.*\"}) by (dbinstanceidentifier)"
-                legendFormat: "{{ dbinstanceidentifier }}"
-            yaxes:
-              - unit: "bytes"
-                min: 0
-              - format: "short"
-        time:
-          from: "now-1h"
-          to: "now"
-        refresh: "30s"
-      overwrite: true
-  register: dash_rds
+- name: Preparar dashboard RDS PostgreSQL
+  copy:
+    dest: /tmp/grafana-dashboard-rds.json
+    content: |
+      {
+        "dashboard": {
+          "title": "RDS PostgreSQL - {{ name_prefix }}",
+          "tags": ["truetally", "rds", "database"],
+          "timezone": "browser",
+          "panels": [
+            {
+              "id": 1,
+              "title": "CPU Utilization (%)",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+              "targets": [
+                {
+                  "expr": "avg(aws_rds_cpuutilization{dbinstanceidentifier=~\".*postgres.*\"}) by (dbinstanceidentifier)"
+                }
+              ],
+              "yaxes": [
+                {"unit": "percent", "min": 0, "max": 100},
+                {"format": "short"}
+              ]
+            },
+            {
+              "id": 2,
+              "title": "Free Storage (bytes)",
+              "type": "timeseries",
+              "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+              "targets": [
+                {
+                  "expr": "avg(aws_rds_free_storage{dbinstanceidentifier=~\".*postgres.*\"}) by (dbinstanceidentifier)"
+                }
+              ],
+              "yaxes": [
+                {"unit": "bytes", "min": 0},
+                {"format": "short"}
+              ]
+            }
+          ],
+          "time": {"from": "now-1h", "to": "now"},
+          "refresh": "30s"
+        },
+        "overwrite": true
+      }
+
+- name: Crear dashboard RDS PostgreSQL en Grafana  # noqa: command-instead-of-module
+  shell: |
+    curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
+      -u "admin:admin" \
+      -X POST "{{ grafana_url }}/api/dashboards/db" \
+      -H "Content-Type: application/json" \
+      -d @/tmp/grafana-dashboard-rds.json
+  register: dash_rds_status
   ignore_errors: true
 
-- name: Crear dashboard Observabilidad Stack en Grafana
-  uri:
-    url: "{{ grafana_url }}/api/dashboards/db"
-    method: POST
-    user: "admin:admin"
-    body_format: json
-    body:
-      dashboard:
-        title: "Observability Stack - {{ name_prefix }}"
-        tags: ["truetally", "observability"]
-        timezone: "browser"
-        panels:
-          - id: 1
-            title: "ECS Tasks Running"
-            type: "stat"
-            gridPos:
-              x: 0
-              y: 0
-              w: 6
-              h: 4
-            targets:
-              - expr: "count(up == 1)"
-            mappingType: 1
-            reducerFunc: "last"
-          - id: 2
-            title: "Loki Requests"
-            type: "timeseries"
-            gridPos:
-              x: 6
-              y: 0
-              w: 18
-              h: 8
-            targets:
-              - expr: "sum(rate(loki_distributor_lines_received_total[5m]))"
-                legendFormat: "Lines/sec"
-            yaxes:
-              - format: "short"
-              - format: "short"
-        time:
-          from: "now-1h"
-          to: "now"
-        refresh: "30s"
-      overwrite: true
-  register: dash_stack
+- name: Preparar dashboard Observabilidad Stack
+  copy:
+    dest: /tmp/grafana-dashboard-observability.json
+    content: |
+      {
+        "dashboard": {
+          "title": "Observability Stack - {{ name_prefix }}",
+          "tags": ["truetally", "observability"],
+          "timezone": "browser",
+          "panels": [
+            {
+              "id": 1,
+              "title": "ECS Tasks Running",
+              "type": "stat",
+              "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+              "targets": [
+                {"expr": "count(up == 1)"}
+              ],
+              "mappingType": 1,
+              "mappingTypes": [
+                {"name": "value to text", "value": 1}
+              ],
+              "pluginVersion": "10.2.2",
+              "reduceCalc": "last",
+              "fieldConfig": {
+                "defaults": {
+                  "mappings": [],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {"value": null, "color": "green"}
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  }
+                }
+              }
+            },
+            {
+              "id": 2,
+              "title": "Loki Requests",
+              "type": "timeseries",
+              "gridPos": {"x": 6, "y": 0, "w": 18, "h": 8},
+              "targets": [
+                {
+                  "expr": "sum(rate(loki_distributor_lines_received_total[5m]))",
+                  "legendFormat": "Lines/sec"
+                }
+              ],
+              "yaxes": [
+                {"format": "short"},
+                {"format": "short"}
+              ]
+            }
+          ],
+          "time": {"from": "now-1h", "to": "now"},
+          "refresh": "30s"
+        },
+        "overwrite": true
+      }
+
+- name: Crear dashboard Observabilidad Stack en Grafana  # noqa: command-instead-of-module
+  shell: |
+    curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
+      -u "admin:admin" \
+      -X POST "{{ grafana_url }}/api/dashboards/db" \
+      -H "Content-Type: application/json" \
+      -d @/tmp/grafana-dashboard-observability.json
+  register: dash_stack_status
   ignore_errors: true
 
 - name: Mostrar informacion de acceso al stack de observabilidad
@@ -328,13 +374,13 @@
       - "Prometheus URL (interno): http://{{ prometheus_ip_result.stdout }}:9090"
       - "=============================================="
       - "Dashboards creados:"
-      - "  - ECS Blockchain: {{ dash_blockchain.status == '200' or dash_blockchain.status == '201' or dash_blockchain is skipped | ternary('OK', dash_blockchain.msg | default('N/A')) }}"
-      - "  - Lambdas: {{ dash_lambda.status == '200' or dash_lambda.status == '201' or dash_lambda is skipped | ternary('OK', dash_lambda.msg | default('N/A')) }}"
-      - "  - RDS PostgreSQL: {{ dash_rds.status == '200' or dash_rds.status == '201' or dash_rds is skipped | ternary('OK', dash_rds.msg | default('N/A')) }}"
-      - "  - Observability Stack: {{ dash_stack.status == '200' or dash_stack.status == '201' or dash_stack is skipped | ternary('OK', dash_stack.msg | default('N/A')) }}"
+      - "  - ECS Blockchain: {{ dash_blockchain_status.stdout | default('N/A') }}"
+      - "  - Lambdas: {{ dash_lambda_status.stdout | default('N/A') }}"
+      - "  - RDS PostgreSQL: {{ dash_rds_status.stdout | default('N/A') }}"
+      - "  - Observability Stack: {{ dash_stack_status.stdout | default('N/A') }}"
       - "=============================================="
       - "Data Sources configurados:"
-      - "  - CloudWatch: https://monitoring.{{ aws_region }}.amazonaws.com"
-      - "  - Loki: http://{{ loki_ip_result.stdout }}:3100"
-      - "  - Prometheus: http://{{ prometheus_ip_result.stdout }}:9090"
+      - "  - CloudWatch: {{ ds_cloudwatch_status.stdout | default('N/A') }}"
+      - "  - Loki: {{ ds_loki_status.stdout | default('N/A') }}"
+      - "  - Prometheus: {{ ds_prometheus_status.stdout | default('N/A') }}"
       - "=============================================="
