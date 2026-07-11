@@ -120,6 +120,23 @@
   register: ds_prometheus_status
   ignore_errors: true
 
+- name: Obtener UID de data sources
+  uri:
+    url: "{{ grafana_url }}/api/datasources"
+    method: GET
+    user: "admin:admin"
+  register: grafana_datasources
+  until: grafana_datasources.status == 200
+  retries: 5
+  delay: 5
+
+- name: Extraer UIDs de data sources
+  set_fact:
+    ds_cloudwatch_uid: "{{ (grafana_datasources.json | selectattr('name','equalto','CloudWatch') | list | first).uid }}"
+    ds_loki_uid: "{{ (grafana_datasources.json | selectattr('name','equalto','Loki') | list | first).uid }}"
+    ds_prometheus_uid: "{{ (grafana_datasources.json | selectattr('name','equalto','Prometheus') | list | first).uid }}"
+  ignore_errors: true
+
 - name: Preparar dashboard ECS Blockchain
   copy:
     dest: /tmp/grafana-dashboard-blockchain.json
@@ -135,10 +152,16 @@
               "title": "CPU Utilization (%)",
               "type": "timeseries",
               "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
               "targets": [
                 {
-                  "expr": "avg(aws_ecs_cpuutilization{cluster_name=\"{{ name_prefix }}-blockchain-cluster\"})",
-                  "legendFormat": "Blockchain CPU"
+                  "refId": "A",
+                  "namespace": "AWS/ECS",
+                  "metricName": "CPUUtilization",
+                  "dimensions": {"ClusterName": "{{ name_prefix }}-blockchain-cluster"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
                 }
               ],
               "yaxes": [
@@ -151,10 +174,16 @@
               "title": "Memory Utilization (%)",
               "type": "timeseries",
               "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
               "targets": [
                 {
-                  "expr": "avg(aws_ecs_memoryutilization{cluster_name=\"{{ name_prefix }}-blockchain-cluster\"})",
-                  "legendFormat": "Blockchain Memory"
+                  "refId": "A",
+                  "namespace": "AWS/ECS",
+                  "metricName": "MemoryUtilization",
+                  "dimensions": {"ClusterName": "{{ name_prefix }}-blockchain-cluster"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
                 }
               ],
               "yaxes": [
@@ -194,9 +223,16 @@
               "title": "Invocations",
               "type": "timeseries",
               "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
               "targets": [
                 {
-                  "expr": "sum(aws_lambda_invocations_sum{function_name=~\".*\"}) by (function_name)"
+                  "refId": "A",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "Invocations",
+                  "dimensions": {"FunctionName": "truetally-dev-acceso"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
                 }
               ],
               "yaxes": [{"format": "short"}, {"format": "short"}]
@@ -206,9 +242,16 @@
               "title": "Errors",
               "type": "timeseries",
               "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
               "targets": [
                 {
-                  "expr": "sum(aws_lambda_errors_sum{function_name=~\".*\"}) by (function_name)"
+                  "refId": "A",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "Errors",
+                  "dimensions": {"FunctionName": "truetally-dev-acceso"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
                 }
               ],
               "yaxes": [{"format": "short"}, {"format": "short"}]
@@ -245,9 +288,16 @@
               "title": "CPU Utilization (%)",
               "type": "timeseries",
               "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
               "targets": [
                 {
-                  "expr": "avg(aws_rds_cpuutilization{dbinstanceidentifier=~\".*postgres.*\"}) by (dbinstanceidentifier)"
+                  "refId": "A",
+                  "namespace": "AWS/RDS",
+                  "metricName": "CPUUtilization",
+                  "dimensions": {"DBInstanceIdentifier": "truetally-dev-postgres"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
                 }
               ],
               "yaxes": [
@@ -260,9 +310,16 @@
               "title": "Free Storage (bytes)",
               "type": "timeseries",
               "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
               "targets": [
                 {
-                  "expr": "avg(aws_rds_free_storage{dbinstanceidentifier=~\".*postgres.*\"}) by (dbinstanceidentifier)"
+                  "refId": "A",
+                  "namespace": "AWS/RDS",
+                  "metricName": "FreeStorageSpace",
+                  "dimensions": {"DBInstanceIdentifier": "truetally-dev-postgres"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
                 }
               ],
               "yaxes": [

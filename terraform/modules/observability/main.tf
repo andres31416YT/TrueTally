@@ -320,7 +320,7 @@ resource "aws_ecs_task_definition" "promtail" {
     }
     entryPoint = ["/bin/sh", "-c"]
     command = [
-      "echo 'server:\n  http_listen_port: 9080\n  grpc_listen_port: 0\npositions:\n  filename: /tmp/positions.yaml\nclients:\n  - url: http://localhost:3100/loki/api/v1/push\nscrape_configs:\n  - job_name: promtail\n    static_configs:\n      - targets:\n          - localhost\n        labels:\n          job: promtail\n          __path__: /var/log/promtail.log' > /etc/promtail/config.yml && /usr/bin/promtail -config.file=/etc/promtail/config.yml"
+      "echo 'server:\n  http_listen_port: 9080\n  grpc_listen_port: 0\npositions:\n  filename: /tmp/positions.yaml\nclients:\n  - url: http://loki.truetally-dev.local:3100/loki/api/v1/push\nscrape_configs:\n  - job_name: promtail\n    static_configs:\n      - targets:\n          - localhost\n        labels:\n          job: promtail\n          __path__: /var/log/promtail.log' > /etc/promtail/config.yml && /usr/bin/promtail -config.file=/etc/promtail/config.yml"
     ]
   }])
 
