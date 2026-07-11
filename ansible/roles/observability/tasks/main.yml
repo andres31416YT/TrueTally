@@ -62,23 +62,7 @@
   retries: 30
   delay: 10
 
-- name: Obtener API Key de Grafana
-  uri:
-    url: "{{ grafana_url }}/api/auth/keys"
-    method: POST
-    user: "admin:admin"
-    body_format: json
-    body:
-      name: "ansible-provisioning"
-      role: "Admin"
-    headers:
-      Content-Type: "application/json"
-  register: grafana_api_key_result
-  until: grafana_api_key_result.json.key is defined and grafana_api_key_result.json.key | length > 0
-  retries: 5
-  delay: 5
-
-# Configurar data sources
+# Configurar data sources usando Basic Auth
 - name: Configurar data source CloudWatch en Grafana
   uri:
     url: "{{ grafana_url }}/api/datasources"
@@ -133,14 +117,12 @@
   register: ds_prometheus
   ignore_errors: true
 
-# Crear dashboards
+# Crear dashboards usando Basic Auth
 - name: Crear dashboard ECS Blockchain en Grafana
   uri:
     url: "{{ grafana_url }}/api/dashboards/db"
     method: POST
-    headers:
-      Authorization: "Bearer {{ grafana_api_key_result.json.key }}"
-      Content-Type: "application/json"
+    user: "admin:admin"
     body_format: json
     body:
       dashboard:
@@ -192,9 +174,7 @@
   uri:
     url: "{{ grafana_url }}/api/dashboards/db"
     method: POST
-    headers:
-      Authorization: "Bearer {{ grafana_api_key_result.json.key }}"
-      Content-Type: "application/json"
+    user: "admin:admin"
     body_format: json
     body:
       dashboard:
@@ -242,9 +222,7 @@
   uri:
     url: "{{ grafana_url }}/api/dashboards/db"
     method: POST
-    headers:
-      Authorization: "Bearer {{ grafana_api_key_result.json.key }}"
-      Content-Type: "application/json"
+    user: "admin:admin"
     body_format: json
     body:
       dashboard:
@@ -295,9 +273,7 @@
   uri:
     url: "{{ grafana_url }}/api/dashboards/db"
     method: POST
-    headers:
-      Authorization: "Bearer {{ grafana_api_key_result.json.key }}"
-      Content-Type: "application/json"
+    user: "admin:admin"
     body_format: json
     body:
       dashboard:
