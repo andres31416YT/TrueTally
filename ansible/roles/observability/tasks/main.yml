@@ -20,6 +20,14 @@
   set_fact:
     grafana_url: "http://{{ grafana_alb_dns_result.stdout }}"
 
+- name: Validar credenciales de Grafana
+  assert:
+    that:
+      - grafana_user | length > 0
+      - grafana_password | length > 0
+    fail_msg: "Faltan GRAFANA_USER o GRAFANA_PASSWORD. Verifica los secrets en GitHub Actions."
+    quiet: true
+
 - name: Obtener IP de la task de Loki
   shell: |
     TASK_ARN=$(aws ecs list-tasks --cluster "{{ name_prefix }}-observability-cluster" --service-name "{{ name_prefix }}-observability-loki" --query 'taskArns[0]' --output text --region "{{ aws_region }}")
