@@ -124,13 +124,13 @@ resource "aws_security_group" "lambda" {
 }
 
 resource "aws_security_group_rule" "lambda_to_rds" {
-  description                     = "Allow Lambda to connect to RDS PostgreSQL"
-  type                            = "ingress"
-  from_port                       = 5432
-  to_port                         = 5432
-  protocol                        = "tcp"
-  security_group_id               = aws_security_group.lambda.id
-  source_security_group_id        = aws_security_group.lambda.id
+  description              = "Allow Lambda to connect to RDS PostgreSQL"
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.lambda.id
+  source_security_group_id = aws_security_group.lambda.id
 }
 
 resource "aws_security_group" "database" {
@@ -160,27 +160,27 @@ resource "aws_security_group" "blockchain" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port = 9944
-    to_port   = 9944
-    protocol  = "tcp"
-    self      = true
+    from_port   = 9944
+    to_port     = 9944
+    protocol    = "tcp"
+    self        = true
     description = "Allow blockchain node communication"
   }
 
   ingress {
-    from_port = 2049
-    to_port   = 2049
-    protocol  = "tcp"
-    self      = true
+    from_port   = 2049
+    to_port     = 2049
+    protocol    = "tcp"
+    self        = true
     description = "Allow NFS communication for blockchain"
   }
 
   ingress {
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    self            = true
-    description     = "Allow HTTPS to ECR VPC endpoints"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    self        = true
+    description = "Allow HTTPS to ECR VPC endpoints"
   }
 
   egress {
@@ -196,6 +196,15 @@ resource "aws_security_group" "blockchain" {
   }
 }
 
+resource "aws_service_discovery_private_dns_namespace" "main" {
+  name = "${local.name_prefix}.local"
+  vpc  = aws_vpc.main.id
+
+  tags = {
+    Name = "${local.name_prefix}-sd-namespace"
+  }
+}
+
 output "vpc_id" { value = aws_vpc.main.id }
 output "public_subnet_ids" { value = [for s in aws_subnet.public : s.id] }
 output "compute_subnet_ids" { value = [for s in aws_subnet.compute : s.id] }
@@ -206,6 +215,8 @@ output "lambda_security_group_id" { value = aws_security_group.lambda.id }
 output "lambda_sg_arn" { value = aws_security_group.lambda.arn }
 output "database_sg_id" { value = aws_security_group.database.id }
 output "blockchain_sg_id" { value = aws_security_group.blockchain.id }
+output "service_discovery_namespace_id" { value = aws_service_discovery_private_dns_namespace.main.id }
+output "service_discovery_namespace_name" { value = aws_service_discovery_private_dns_namespace.main.name }
 
 # VPC Endpoints
 resource "aws_vpc_endpoint" "s3" {

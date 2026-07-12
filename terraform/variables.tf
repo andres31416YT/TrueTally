@@ -30,16 +30,6 @@ variable "redis_auth_token" {
   type      = string
 }
 
-variable "lambda_node_url_az1" {
-  default = "http://localhost:9944"
-  type    = string
-}
-
-variable "lambda_node_url_az2" {
-  default = "http://localhost:9944"
-  type    = string
-}
-
 variable "domain_name" {
   default = ""
   type    = string

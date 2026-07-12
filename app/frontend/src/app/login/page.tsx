@@ -1,10 +1,5 @@
-import dynamic from 'next/dynamic'
-
-// Importar el componente principal dinámicamente
-const VotingPage = dynamic(() => import('../page'), {
-  ssr: false
-})
+import VotingPage from '../page';
 
 export default function LoginPage() {
-  return <VotingPage />
+  return <VotingPage />;
 }

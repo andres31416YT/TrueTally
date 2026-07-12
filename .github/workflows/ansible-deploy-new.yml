@@ -85,6 +85,8 @@ jobs:
           SUDOADMIN_PASSWORD: ${{ secrets.SUDOADMIN_PASSWORD }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          GRAFANA_USER: ${{ secrets.GRAFANA_USER }}
+          GRAFANA_PASSWORD: ${{ secrets.GRAFANA_PASSWORD }}
 
        # Paso 6: desplegar Lambdas Rust desde S3
       - name: Download Lambda artifacts from S3

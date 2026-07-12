@@ -33,6 +33,19 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 1b. Frontend: unit tests
+# ---------------------------------------------------------------------------
+echo ""
+echo "🧪 Running frontend unit tests..."
+cd "$REPO_ROOT/app/frontend"
+if CI=true npm test 2>/dev/null; then
+  echo -e "${GREEN}✓ Frontend tests passed${NC}"
+else
+  echo -e "${YELLOW}⚠ Frontend tests failed${NC}"
+  fail=1
+fi
+
+# ---------------------------------------------------------------------------
 # 2. Rust: unit tests
 # ---------------------------------------------------------------------------
 echo ""

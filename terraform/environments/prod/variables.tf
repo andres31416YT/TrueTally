@@ -28,16 +28,6 @@ variable "redis_auth_token" {
   type      = string
 }
 
-variable "lambda_node_url_az1" {
-  default = "http://truetally-prod-blockchain-alb-1.elb.us-east-1.amazonaws.com"
-  type    = string
-}
-
-variable "lambda_node_url_az2" {
-  default = "http://truetally-prod-blockchain-alb-2.elb.us-east-1.amazonaws.com"
-  type    = string
-}
-
 variable "domain_name" {
   default = "andrespaganroncall.qzz.io"
   type    = string

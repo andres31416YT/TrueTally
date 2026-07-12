@@ -5,16 +5,14 @@
 # Responsabilidades:
 # - Obtener credenciales de BD desde Secrets Manager
 # - Obtener endpoint de RDS para construir DATABASE_URL
-# - Obtener IP del nodo blockchain desde ECS para BLOCKCHAIN_NODE_URL
 # - Obtener URL de la cola SQS para VOTE_QUEUE_URL
 # - Actualizar configuración de las 3 Lambdas (acceso, procesador, despachador)
-# - Corregir variables legacy (NODE_URL_AZ1/AZ2 → BLOCKCHAIN_NODE_URL)
 # - Ajustar timeout y memory size según variables de group_vars
+# - Preservar BLOCKCHAIN_NODE_URL usando el DNS estable de Cloud Map
+# - Verificar post-actualizacion que DATABASE_URL no quede vacia
 # =============================================================================
 
 - name: Obtener credenciales de DB desde Secrets Manager
-  # Lee el secreto que Terraform creó con usuario/contraseña de PostgreSQL
-  # No se hardcodean credenciales, siempre se leen de AWS Secrets Manager
   shell: |
     aws secretsmanager get-secret-value \
       --secret-id "{{ name_prefix }}/db/credentials" \
@@ -25,49 +23,34 @@
   no_log: true
 
 - name: Obtener endpoint de RDS
-  # Consulta el endpoint de la instancia RDS para armar la URL de conexión
   shell: |
     aws rds describe-db-instances --db-instance-identifier "{{ name_prefix }}-postgres" --query 'DBInstances[0].Endpoint.Address' --output text --region "{{ aws_region }}"
   register: rds_endpoint_raw
 
 - name: Parsear credenciales de DB
-  # Extrae usuario, contraseña, endpoint y puerto del JSON de Secrets Manager
-  # Estas variables se usan para construir DATABASE_URL
   set_fact:
     db_username: "{{ db_secret_raw.stdout | from_json | json_query('username') }}"
     db_password: "{{ db_secret_raw.stdout | from_json | json_query('password') }}"
     db_endpoint: "{{ rds_endpoint_raw.stdout }}"
     db_port: 5432
 
+- name: Validar credenciales de BD
+  assert:
+    that:
+      - db_username is defined and db_username | length > 0
+      - db_password is defined and db_password | length > 0
+      - db_endpoint is defined and db_endpoint | length > 0
+    fail_msg: "Credenciales de BD vacías. Verifica el secreto {{ name_prefix }}/db/credentials."
+
 - name: Construir DATABASE_URL
-  # Construye la URL de conexión PostgreSQL con password URL-encoded
-  # Ejemplo: postgres://truetally:password@host:5432/truetally
   shell: |
     python3 -c "from urllib.parse import quote; print('postgres://{{ db_username }}:' + quote('{{ db_password }}', safe='') + '@{{ db_endpoint }}:{{ db_port }}/truetally')"
   register: database_url_result
   no_log: true
 
-- name: Obtener IP del nodo blockchain desde ECS
-  # Obtiene la IP privada de la tarea ECS que corre el nodo blockchain
-  # Necesario porque en Fargate la IP cambia en cada despliegue
-  # Si no hay tarea corriendo, devuelve "unknown"
+- name: Establecer URL del nodo blockchain via Cloud Map DNS
   shell: |
-    TASK_ARN=$(aws ecs list-tasks --cluster "{{ name_prefix }}-blockchain-cluster" --service-name "{{ name_prefix }}-blockchain-service" --query 'taskArns[0]' --output text --region "{{ aws_region }}")
-    if [ "$TASK_ARN" != "None" ] && [ -n "$TASK_ARN" ]; then
-      aws ecs describe-tasks --cluster "{{ name_prefix }}-blockchain-cluster" --tasks "$TASK_ARN" --query 'tasks[0].attachments[0].details[?name==`privateIPv4Address`].value | [0]' --output text --region "{{ aws_region }}"
-    else
-      echo "unknown"
-    fi
-  register: blockchain_ip_result
-
-- name: Establecer URL del nodo blockchain
-  shell: |
-    IP="{{ blockchain_ip_result.stdout | default('') | trim }}"
-    if [ -n "$IP" ] && [ "$IP" != "None" ]; then
-      echo "http://${IP}:9944"
-    else
-      echo ""
-    fi
+    echo "http://blockchain.{{ name_prefix }}.local:9944"
   register: blockchain_node_url_raw
 
 - name: Set blockchain_node_url
@@ -75,19 +58,11 @@
     blockchain_node_url: "{{ blockchain_node_url_raw.stdout }}"
 
 - name: Obtener URL de la cola SQS
-  # Obtiene la URL de la cola SQS donde lambda-despachador encola votos
   shell: |
     aws sqs get-queue-url --queue-name "{{ name_prefix }}-vote-queue" --query 'QueueUrl' --output text --region "{{ aws_region }}"
   register: sqs_queue_url_result
 
 - name: Actualizar lambda-acceso
-  # Genera el JSON de configuración para lambda-acceso y lo guarda en /tmp
-  # Variables que se actualizan:
-  # - DATABASE_URL: conexión a PostgreSQL
-  # - Credenciales de admin desde secrets de GitHub Actions
-  # - BLOCKCHAIN_NODE_URL: IP del nodo blockchain (si está disponible)
-  # - DB_CREDENTIALS_ARN: ARN del secreto en Secrets Manager
-  # Timeout y Memory vienen de group_vars/lambda.yml
   shell: |
     python3 -c "
     import json
@@ -115,19 +90,22 @@
   no_log: true
 
 - name: Aplicar configuración a lambda-acceso
-  # Aplica la configuración generada a la función Lambda via AWS CLI
-  # Usa cli-input-json para enviar todo el bloque de configuración de una vez
   shell: |
     aws lambda update-function-configuration \
       --cli-input-json file:///tmp/lambda_acceso_config.json \
       --region "{{ aws_region }}"
 
+- name: Verificar DATABASE_URL en lambda-acceso
+  shell: |
+    aws lambda get-function-configuration \
+      --function-name "{{ name_prefix }}-acceso" \
+      --query 'Environment.Variables.DATABASE_URL' \
+      --output text \
+      --region "{{ aws_region }}"
+  register: lambda_acceso_db_url_check
+  failed_when: lambda_acceso_db_url_check.stdout == "" or lambda_acceso_db_url_check.stdout == "None"
+
 - name: Actualizar lambda-procesador
-  # Genera configuración para lambda-procesador
-  # IMPORTANTE: corrige variables legacy (NODE_URL_AZ1/AZ2)
-  # que el código Rust aún espera, además de BLOCKCHAIN_NODE_URL
-  # Timeout: 300s (5 min) porque procesa votos de la blockchain
-  # Memory: 1024MB por el volumen de datos de la blockchain
   shell: |
     python3 -c "
     import json
@@ -137,8 +115,6 @@
         'MemorySize': {{ lambda_procesador_memory_size }},
         'Environment': {
             'Variables': {
-                'NODE_URL_AZ1': '{{ blockchain_node_url }}',
-                'NODE_URL_AZ2': '{{ blockchain_node_url }}',
                 'SUDOADMIN_EMAIL': '{{ sudoadmin_email }}',
                 'SUDOADMIN_PASSWORD': '{{ sudoadmin_password }}',
                 'ADMIN_EMAIL': '{{ admin_email }}',
@@ -161,9 +137,6 @@
       --region "{{ aws_region }}"
 
 - name: Actualizar lambda-despachador
-  # Genera configuración para lambda-despachador
-  # Esta lambda recibe votos del frontend y los envía a SQS
-  # Variables clave: VOTE_QUEUE_URL (cola SQS), credenciales de admin
   shell: |
     python3 -c "
     import json

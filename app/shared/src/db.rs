@@ -2,7 +2,7 @@ use sqlx::{PgPool, Row};
 
 pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
     let pool = PgPool::connect(database_url).await?;
-    
+
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS elections (
@@ -98,9 +98,11 @@ pub async fn init_db(database_url: &str) -> Result<PgPool, sqlx::Error> {
 }
 
 async fn seed_admins(pool: &PgPool) -> Result<(), sqlx::Error> {
-    let sudo_email = std::env::var("SUDOADMIN_EMAIL").unwrap_or_else(|_| "sudoadmin@sudoadmin.com".to_string());
+    let sudo_email =
+        std::env::var("SUDOADMIN_EMAIL").unwrap_or_else(|_| "sudoadmin@sudoadmin.com".to_string());
     let sudo_pass = std::env::var("SUDOADMIN_PASSWORD").unwrap_or_else(|_| "00000000".to_string());
-    let admin_email = std::env::var("ADMIN_EMAIL").unwrap_or_else(|_| "admin@admin.com".to_string());
+    let admin_email =
+        std::env::var("ADMIN_EMAIL").unwrap_or_else(|_| "admin@admin.com".to_string());
     let admin_pass = std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "11111111".to_string());
 
     let sudo_exists = sqlx::query("SELECT 1 FROM users WHERE role = 'sudo_admin'")
@@ -155,7 +157,7 @@ pub async fn create_election(
     created_by: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     let is_official = matches!(created_by, Some("sudo_admin") | Some("admin"));
-    
+
     sqlx::query(
         r#"
         INSERT INTO elections (id, name, description, visibility, status, password, is_official, created_by, is_active, is_published, election_type, election_category)
@@ -180,7 +182,10 @@ pub async fn create_election(
     Ok(())
 }
 
-pub async fn get_election(pool: &PgPool, id: &str) -> Result<Option<(String, String, Option<String>, bool)>, sqlx::Error> {
+pub async fn get_election(
+    pool: &PgPool,
+    id: &str,
+) -> Result<Option<(String, String, Option<String>, bool)>, sqlx::Error> {
     let row = sqlx::query(
         r#"
         SELECT id, name, description, is_active FROM elections WHERE id = $1
@@ -190,15 +195,29 @@ pub async fn get_election(pool: &PgPool, id: &str) -> Result<Option<(String, Str
     .fetch_optional(pool)
     .await?;
 
-    Ok(row.map(|r| (
-        r.get::<String, _>("id"),
-        r.get::<String, _>("name"),
-        r.get::<Option<String>, _>("description"),
-        r.get::<bool, _>("is_active"),
-    )))
+    Ok(row.map(|r| {
+        (
+            r.get::<String, _>("id"),
+            r.get::<String, _>("name"),
+            r.get::<Option<String>, _>("description"),
+            r.get::<bool, _>("is_active"),
+        )
+    }))
 }
 
-pub async fn list_elections(pool: &PgPool) -> Result<Vec<(String, String, Option<String>, String, Option<String>, Option<String>)>, sqlx::Error> {
+pub async fn list_elections(
+    pool: &PgPool,
+) -> Result<
+    Vec<(
+        String,
+        String,
+        Option<String>,
+        String,
+        Option<String>,
+        Option<String>,
+    )>,
+    sqlx::Error,
+> {
     let rows = sqlx::query(
         r#"
         SELECT id, name, description, status, visibility, password FROM elections WHERE is_active = TRUE AND status IN ('Borrador', 'Publicado', 'Terminado') ORDER BY created_at DESC
@@ -207,14 +226,19 @@ pub async fn list_elections(pool: &PgPool) -> Result<Vec<(String, String, Option
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| (
-        r.get::<String, _>("id"),
-        r.get::<String, _>("name"),
-        r.get::<Option<String>, _>("description"),
-        r.get::<String, _>("status"),
-        r.get::<Option<String>, _>("visibility"),
-        r.get::<Option<String>, _>("password"),
-    )).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            (
+                r.get::<String, _>("id"),
+                r.get::<String, _>("name"),
+                r.get::<Option<String>, _>("description"),
+                r.get::<String, _>("status"),
+                r.get::<Option<String>, _>("visibility"),
+                r.get::<Option<String>, _>("password"),
+            )
+        })
+        .collect())
 }
 
 pub async fn register_voter(
@@ -293,7 +317,11 @@ pub async fn candidate_exists(
     Ok(row.get("exists"))
 }
 
-pub async fn mark_voter_voted(pool: &PgPool, election_id: &str, public_key: &str) -> Result<(), sqlx::Error> {
+pub async fn mark_voter_voted(
+    pool: &PgPool,
+    election_id: &str,
+    public_key: &str,
+) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
         UPDATE voters SET has_voted = TRUE WHERE election_id = $1 AND public_key = $2
@@ -307,7 +335,10 @@ pub async fn mark_voter_voted(pool: &PgPool, election_id: &str, public_key: &str
     Ok(())
 }
 
-pub async fn list_candidates(pool: &PgPool, election_id: &str) -> Result<Vec<(i64, String, String)>, sqlx::Error> {
+pub async fn list_candidates(
+    pool: &PgPool,
+    election_id: &str,
+) -> Result<Vec<(i64, String, String)>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
         SELECT id, code, name FROM candidates WHERE election_id = $1 ORDER BY id
@@ -317,11 +348,16 @@ pub async fn list_candidates(pool: &PgPool, election_id: &str) -> Result<Vec<(i6
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| (
-        r.get::<i64, _>("id"),
-        r.get::<String, _>("code"),
-        r.get::<String, _>("name"),
-    )).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            (
+                r.get::<i64, _>("id"),
+                r.get::<String, _>("code"),
+                r.get::<String, _>("name"),
+            )
+        })
+        .collect())
 }
 
 pub async fn add_candidate(
@@ -347,7 +383,11 @@ pub async fn add_candidate(
     Ok(row.get("id"))
 }
 
-pub async fn update_candidate(pool: &PgPool, candidate_id: i64, name: &str) -> Result<(), sqlx::Error> {
+pub async fn update_candidate(
+    pool: &PgPool,
+    candidate_id: i64,
+    name: &str,
+) -> Result<(), sqlx::Error> {
     sqlx::query("UPDATE candidates SET name = $1 WHERE id = $2")
         .bind(name)
         .bind(candidate_id)
@@ -364,12 +404,15 @@ pub async fn delete_candidate(pool: &PgPool, candidate_id: i64) -> Result<(), sq
     Ok(())
 }
 
-pub async fn get_election_status(pool: &PgPool, election_id: &str) -> Result<Option<String>, sqlx::Error> {
+pub async fn get_election_status(
+    pool: &PgPool,
+    election_id: &str,
+) -> Result<Option<String>, sqlx::Error> {
     let row = sqlx::query("SELECT status FROM elections WHERE id = $1")
         .bind(election_id)
         .fetch_optional(pool)
         .await?;
-    
+
     Ok(row.map(|r| r.get::<String, _>("status")))
 }
 
@@ -406,9 +449,11 @@ pub async fn authenticate_user(
             let role: String = r.get("role");
             let public_key: Option<String> = r.get("public_key");
             let password_hash: Option<String> = r.get("password_hash");
-            
+
             if let Some(pwd) = password {
-                if password_hash.is_none() || password_hash.as_ref().map(|h| h == pwd).unwrap_or(false) {
+                if password_hash.is_none()
+                    || password_hash.as_ref().map(|h| h == pwd).unwrap_or(false)
+                {
                     Ok(Some((role, public_key, password_hash.is_some())))
                 } else {
                     Ok(None)
@@ -475,9 +520,7 @@ pub async fn update_user_role(
     Ok(())
 }
 
-pub async fn list_users(
-    pool: &PgPool,
-) -> Result<Vec<(String, String)>, sqlx::Error> {
+pub async fn list_users(pool: &PgPool) -> Result<Vec<(String, String)>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
         SELECT email, role FROM users ORDER BY created_at DESC
@@ -486,13 +529,16 @@ pub async fn list_users(
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| (
-        r.get::<String, _>("email"),
-        r.get::<String, _>("role"),
-    )).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| (r.get::<String, _>("email"), r.get::<String, _>("role")))
+        .collect())
 }
 
-pub async fn get_election_creator(pool: &PgPool, election_id: &str) -> Result<Option<String>, sqlx::Error> {
+pub async fn get_election_creator(
+    pool: &PgPool,
+    election_id: &str,
+) -> Result<Option<String>, sqlx::Error> {
     let row = sqlx::query(
         r#"
         SELECT created_by FROM elections WHERE id = $1
@@ -502,10 +548,15 @@ pub async fn get_election_creator(pool: &PgPool, election_id: &str) -> Result<Op
     .fetch_optional(pool)
     .await?;
 
-    Ok(row.map(|r| r.get::<Option<String>, _>("created_by")).flatten())
+    Ok(row
+        .map(|r| r.get::<Option<String>, _>("created_by"))
+        .flatten())
 }
 
-pub async fn get_election_by_status(pool: &PgPool, election_id: &str) -> Result<Option<String>, sqlx::Error> {
+pub async fn get_election_by_status(
+    pool: &PgPool,
+    election_id: &str,
+) -> Result<Option<String>, sqlx::Error> {
     let row = sqlx::query(
         r#"
         SELECT status FROM elections WHERE id = $1
@@ -560,7 +611,7 @@ pub async fn update_election(
     query.push_str(&format!(" WHERE id = ${}", param_count));
 
     let mut builder = sqlx::query(&query);
-    
+
     if let Some(n) = name {
         builder = builder.bind(n);
     }
@@ -596,7 +647,7 @@ pub async fn hard_delete_election(pool: &PgPool, election_id: &str) -> Result<()
         .bind(election_id)
         .execute(pool)
         .await?;
-    
+
     sqlx::query("DELETE FROM elections WHERE id = $1")
         .bind(election_id)
         .execute(pool)
@@ -605,7 +656,21 @@ pub async fn hard_delete_election(pool: &PgPool, election_id: &str) -> Result<()
     Ok(())
 }
 
-pub async fn list_elections_by_creator(pool: &PgPool, created_by: &str, search: Option<&str>) -> Result<Vec<(String, String, Option<String>, String, String, Option<String>)>, sqlx::Error> {
+pub async fn list_elections_by_creator(
+    pool: &PgPool,
+    created_by: &str,
+    search: Option<&str>,
+) -> Result<
+    Vec<(
+        String,
+        String,
+        Option<String>,
+        String,
+        String,
+        Option<String>,
+    )>,
+    sqlx::Error,
+> {
     let query = if search.map(|s| !s.is_empty()).unwrap_or(false) {
         sqlx::query(
             r#"
@@ -621,25 +686,46 @@ pub async fn list_elections_by_creator(pool: &PgPool, created_by: &str, search: 
             "#,
         )
     };
-    
+
     let rows = if let Some(search) = search {
         let search_pattern = format!("%{}%", search);
-        query.bind(created_by).bind(&search_pattern).fetch_all(pool).await?
+        query
+            .bind(created_by)
+            .bind(&search_pattern)
+            .fetch_all(pool)
+            .await?
     } else {
         query.bind(created_by).fetch_all(pool).await?
     };
 
-    Ok(rows.into_iter().map(|r| (
-        r.get::<String, _>("id"),
-        r.get::<String, _>("name"),
-        r.get::<Option<String>, _>("description"),
-        r.get::<String, _>("status"),
-        r.get::<String, _>("visibility"),
-        r.get::<Option<String>, _>("password"),
-    )).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            (
+                r.get::<String, _>("id"),
+                r.get::<String, _>("name"),
+                r.get::<Option<String>, _>("description"),
+                r.get::<String, _>("status"),
+                r.get::<String, _>("visibility"),
+                r.get::<Option<String>, _>("password"),
+            )
+        })
+        .collect())
 }
 
-pub async fn list_all_elections(pool: &PgPool) -> Result<Vec<(String, String, Option<String>, String, String, Option<String>)>, sqlx::Error> {
+pub async fn list_all_elections(
+    pool: &PgPool,
+) -> Result<
+    Vec<(
+        String,
+        String,
+        Option<String>,
+        String,
+        String,
+        Option<String>,
+    )>,
+    sqlx::Error,
+> {
     let rows = sqlx::query(
         r#"
         SELECT id, name, description, status, visibility, password FROM elections WHERE status IN ('Borrador', 'Publicado', 'Terminado') ORDER BY created_at DESC
@@ -648,12 +734,17 @@ pub async fn list_all_elections(pool: &PgPool) -> Result<Vec<(String, String, Op
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| (
-        r.get::<String, _>("id"),
-        r.get::<String, _>("name"),
-        r.get::<Option<String>, _>("description"),
-        r.get::<String, _>("status"),
-        r.get::<String, _>("visibility"),
-        r.get::<Option<String>, _>("password"),
-    )).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            (
+                r.get::<String, _>("id"),
+                r.get::<String, _>("name"),
+                r.get::<Option<String>, _>("description"),
+                r.get::<String, _>("status"),
+                r.get::<String, _>("visibility"),
+                r.get::<Option<String>, _>("password"),
+            )
+        })
+        .collect())
 }

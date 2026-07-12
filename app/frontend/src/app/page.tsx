@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { usePathname } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
-import { generateKeyPair, signMessage, createVotePayload } from '@/lib/crypto';
+import { generateKeyPair, signMessage, createVotePayload, getValidKeyPair, sanitizeStoredSecretKey } from '@/lib/crypto';
 import { api, Election, NewElection, Candidate, AuthResponse } from '@/lib/api';
 
 interface KeyPair {
@@ -45,7 +45,8 @@ function ResultsView({ election, onBack }: { election: Election; onBack: () => v
       setResults(resultsData);
     }
     if (candidatesRes.success && candidatesRes.data) {
-      setCandidates(candidatesRes.data);
+      const candidates = Array.isArray(candidatesRes.data) ? candidatesRes.data : (candidatesRes.data as any).candidates || [];
+      setCandidates(candidates);
     }
     setLoading(false);
   };
@@ -231,23 +232,18 @@ export default function VotingPage() {
   useEffect(() => {
     loadElections();
     const savedSession = localStorage.getItem('user_session');
-    const savedSecretKey = localStorage.getItem('user_secret_key');
     if (savedSession) {
       try {
         const parsed = JSON.parse(savedSession);
         setSession(parsed);
         if (parsed.public_key) {
-          if (savedSecretKey) {
-            setKeyPair({ publicKey: parsed.public_key, secretKey: savedSecretKey });
-          } else {
-            const keys = generateKeyPair();
-            localStorage.setItem('user_secret_key', keys.secretKey);
-            setKeyPair({ publicKey: parsed.public_key, secretKey: keys.secretKey });
-          }
+          sanitizeStoredSecretKey();
+          const keys = getValidKeyPair(parsed.public_key);
+          setKeyPair(keys);
         } else {
           const keys = generateKeyPair();
           localStorage.setItem('user_secret_key', keys.secretKey);
-          setKeyPair({ publicKey: keys.publicKey, secretKey: keys.secretKey });
+          setKeyPair(keys);
         }
       } catch (e) {
         localStorage.removeItem('user_session');
@@ -269,7 +265,8 @@ export default function VotingPage() {
   const loadElections = async () => {
     const res = await api.listElections();
     if (res.success && res.data) {
-      setElections(res.data);
+      const electionArray = Array.isArray(res.data) ? res.data : (res.data as any)?.elections ?? [];
+      setElections(electionArray);
     }
   };
 
@@ -299,7 +296,8 @@ export default function VotingPage() {
   const loadCandidates = async (electionId: string) => {
     const res = await api.getCandidates(electionId);
     if (res.success && res.data) {
-      setCandidates(res.data);
+      const candidates = Array.isArray(res.data) ? res.data : (res.data as any).candidates || [];
+      setCandidates(candidates);
     }
   };
 
@@ -315,7 +313,8 @@ export default function VotingPage() {
     if (!session) return;
     const res = await api.listMyElections(session.email, searchTerm || undefined);
     if (res.success && res.data) {
-      setMyElections(res.data);
+      const electionArray = Array.isArray(res.data) ? res.data : (res.data as any)?.elections ?? [];
+      setMyElections(electionArray);
     }
   };
 
@@ -333,7 +332,8 @@ export default function VotingPage() {
   const loadElectionCandidates = async (electionId: string) => {
     const res = await api.getCandidates(electionId);
     if (res.success && res.data) {
-      setElectionCandidates(res.data);
+      const candidates = Array.isArray(res.data) ? res.data : (res.data as any).candidates || [];
+      setElectionCandidates(candidates);
     }
   };
 
@@ -547,9 +547,9 @@ export default function VotingPage() {
           localStorage.setItem('user_session', JSON.stringify(newSession));
 
           if (authDataResponse.public_key) {
-            localStorage.setItem('user_secret_key', 'sk_session_active');
-            setKeyPair({ publicKey: authDataResponse.public_key, secretKey: 'sk_session_active' });
-          }
+              const keys = getValidKeyPair(authDataResponse.public_key);
+              setKeyPair(keys);
+            }
 
           setStep('home');
           setError(null);
@@ -595,10 +595,8 @@ export default function VotingPage() {
   const handleSubmitVote = async () => {
     if (!keyPair || !selectedElection) {
       if (!keyPair) {
-        const keys = generateKeyPair();
-        localStorage.setItem('user_secret_key', keys.secretKey);
-        setKeyPair({ publicKey: keys.publicKey, secretKey: keys.secretKey });
-        return;
+        const keys = getValidKeyPair();
+        setKeyPair(keys);
       }
       return;
     }

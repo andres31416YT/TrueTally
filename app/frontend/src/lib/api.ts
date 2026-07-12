@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_URL = 'https://ev4hb6gfud.execute-api.us-east-1.amazonaws.com';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -6,7 +6,7 @@ interface ApiResponse<T> {
   error?: string;
 }
 
-function getAuthHeaders(): Record<string, string> {
+export function getAuthHeaders(): Record<string, string> {
   const sessionData = typeof window !== 'undefined' ? localStorage.getItem('user_session') : null;
   if (!sessionData) return {};
 

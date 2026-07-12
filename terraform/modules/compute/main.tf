@@ -120,7 +120,8 @@ resource "aws_lambda_function" "acceso" {
 
   environment {
     variables = {
-      DB_CREDENTIALS_ARN = var.db_credentials_secret_arn
+      DB_CREDENTIALS_ARN  = var.db_credentials_secret_arn
+      BLOCKCHAIN_NODE_URL = local.blockchain_service_dns != "" ? "http://${local.blockchain_service_dns}:9944" : "http://localhost:9944"
     }
   }
 
@@ -180,14 +181,22 @@ resource "aws_lambda_function" "procesador" {
 
   environment {
     variables = {
-      NODE_URL_AZ1 = var.lambda_node_url_az1
-      NODE_URL_AZ2 = var.lambda_node_url_az2
+      BLOCKCHAIN_NODE_URL = local.blockchain_service_dns != "" ? "http://${local.blockchain_service_dns}:9944" : "http://localhost:9944"
     }
   }
 
   tracing_config {
     mode = "Active"
   }
+}
+
+# Event Source Mapping: SQS vote queue -> lambda-procesador
+# Consume los votos encolados por lambda-despachador y los escribe en la blockchain.
+resource "aws_lambda_event_source_mapping" "procesador_vote" {
+  event_source_arn        = var.vote_queue_arn
+  function_name           = aws_lambda_function.procesador.arn
+  batch_size              = 5
+  function_response_types = ["ReportBatchItemFailures"]
 }
 
 # ECS Cluster for Blockchain node
@@ -244,6 +253,27 @@ resource "aws_iam_role_policy_attachment" "ecs_task_ecr" {
 resource "aws_iam_role_policy_attachment" "ecs_execution_task" {
   role       = aws_iam_role.ecs_execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy" "ecs_task_service_discovery" {
+  name = "${local.name_prefix}-ecs-task-sd"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "servicediscovery:DiscoverInstances",
+          "servicediscovery:GetInstances",
+          "servicediscovery:RegisterInstance",
+          "servicediscovery:DeregisterInstance"
+        ]
+        Resource = aws_service_discovery_service.blockchain.arn
+      }
+    ]
+  })
 }
 
 # Policy allowing ECS tasks to mount EFS filesystem
@@ -322,6 +352,14 @@ resource "aws_ecs_task_definition" "blockchain" {
     essential              = true
     privileged             = false
     readonlyRootFilesystem = true
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = "/ecs/${local.name_prefix}-blockchain"
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "ecs"
+      }
+    }
     portMappings = [{
       containerPort = 9944
       hostPort      = 9944
@@ -368,4 +406,33 @@ resource "aws_ecs_service" "blockchain" {
     enable   = true
     rollback = true
   }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.blockchain.arn
+  }
+}
+
+# Service Discovery for blockchain node (stable DNS endpoint)
+resource "aws_service_discovery_service" "blockchain" {
+  name = "blockchain"
+
+  dns_config {
+    namespace_id = var.service_discovery_namespace_id
+    dns_records {
+      type = "A"
+      ttl  = 60
+    }
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-blockchain-sd"
+  }
+}
+
+locals {
+  blockchain_service_dns = "blockchain.${var.service_discovery_namespace_name}"
+}
+
+output "blockchain_service_dns" {
+  value = local.blockchain_service_dns
 }

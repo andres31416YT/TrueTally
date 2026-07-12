@@ -14,6 +14,7 @@
 # - VPC Endpoints (S3, SQS, Secrets Manager)
 # - VPC Flow Logs (auditoría de tráfico)
 # - SES (servicio de email)
+# - Observabilidad (Loki, Promtail, Prometheus, Grafana)
 # =============================================================================
 
 - name: Configurar infraestructura TrueTally
@@ -110,3 +111,6 @@
 
     - role: blockchain-monitoring
       tags: [monitoring]
+
+    - role: observability
+      tags: [observability]
