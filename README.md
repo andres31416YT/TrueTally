@@ -226,6 +226,18 @@ docker compose logs --tail=100
 docker compose restart
 ```
 
+## Monitoreo y Observabilidad
+
+En producción (AWS) el sistema cuenta con el siguiente stack de observabilidad, aprovisionado con Terraform (`terraform/modules/observability` y `terraform/modules/monitoring`) y configurado con Ansible (`ansible/roles/observability`):
+
+- **Amazon CloudWatch**: logs (grupos de log para las Lambdas y el nodo blockchain ECS, retención 365 días, cifrado KMS) y métricas/alarmas de Lambdas, ECS, RDS y SQS.
+- **Prometheus**: recolección de métricas en ECS Fargate (scrape cada 15 s, retención 7 días).
+- **Loki**: almacenamiento de logs en ECS Fargate (puerto 3100).
+- **Promtail**: agente que envía los logs a Loki (puerto 9080).
+- **Grafana**: panel de visualización (ECS Fargate detrás de un ALB en el puerto 3000) con data sources CloudWatch, Loki y Prometheus, y dashboards para ECS Blockchain, Lambdas, SQS, RDS PostgreSQL y el Observability Stack.
+
+> Nota: AWS X-Ray fue removido del proyecto porque no estaba completamente instrumentado.
+
 ## Tecnologías
 
 - **Frontend**: Next.js 14, TypeScript, Tailwind CSS, Recharts
@@ -233,6 +245,7 @@ docker compose restart
 - **Blockchain**: Implementación personalizada en Rust
 - **Criptografía**: TweetNaCl (NaCl)
 - **Infraestructura**: Docker, Docker Compose
+- **Observabilidad**: CloudWatch, Prometheus, Loki, Promtail, Grafana (AWS)
 
 ## Licencia
 

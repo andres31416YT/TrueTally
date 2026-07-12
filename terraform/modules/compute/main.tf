@@ -36,11 +36,6 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
-resource "aws_iam_role_policy_attachment" "lambda_xray" {
-  role       = aws_iam_role.lambda.name
-  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
-}
-
 # Lambda IAM policy for SSM, Secrets Manager, and SQS access
 resource "aws_iam_role_policy" "lambda_ssm" {
   name = "${local.name_prefix}-lambda-ssm"
@@ -124,10 +119,6 @@ resource "aws_lambda_function" "acceso" {
       BLOCKCHAIN_NODE_URL = local.blockchain_service_dns != "" ? "http://${local.blockchain_service_dns}:9944" : "http://localhost:9944"
     }
   }
-
-  tracing_config {
-    mode = "Active"
-  }
 }
 
 # Lambda despachador: receives votes from frontend and sends to SQS queue
@@ -154,10 +145,6 @@ resource "aws_lambda_function" "despachador" {
       VOTE_QUEUE_URL = var.vote_queue_url
     }
   }
-
-  tracing_config {
-    mode = "Active"
-  }
 }
 
 # Lambda procesador: processes votes from SQS and updates blockchain
@@ -183,10 +170,6 @@ resource "aws_lambda_function" "procesador" {
     variables = {
       BLOCKCHAIN_NODE_URL = local.blockchain_service_dns != "" ? "http://${local.blockchain_service_dns}:9944" : "http://localhost:9944"
     }
-  }
-
-  tracing_config {
-    mode = "Active"
   }
 }
 
