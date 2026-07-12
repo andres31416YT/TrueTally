@@ -69,7 +69,7 @@
 - name: Crear data source CloudWatch en Grafana  # noqa: command-instead-of-module
   shell: |
     curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
-      -u "admin:admin" \
+      -u "{{ grafana_user }}:{{ grafana_password }}" \
       -X POST "{{ grafana_url }}/api/datasources" \
       -H "Content-Type: application/json" \
       -d @/tmp/grafana-ds-cloudwatch.json
@@ -91,7 +91,7 @@
 - name: Crear data source Loki en Grafana  # noqa: command-instead-of-module
   shell: |
     curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
-      -u "admin:admin" \
+      -u "{{ grafana_user }}:{{ grafana_password }}" \
       -X POST "{{ grafana_url }}/api/datasources" \
       -H "Content-Type: application/json" \
       -d @/tmp/grafana-ds-loki.json
@@ -113,7 +113,7 @@
 - name: Crear data source Prometheus en Grafana  # noqa: command-instead-of-module
   shell: |
     curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
-      -u "admin:admin" \
+      -u "{{ grafana_user }}:{{ grafana_password }}" \
       -X POST "{{ grafana_url }}/api/datasources" \
       -H "Content-Type: application/json" \
       -d @/tmp/grafana-ds-prometheus.json
@@ -122,7 +122,7 @@
 
 - name: Obtener UID de data sources  # noqa: command-instead-of-module
   shell: |
-    curl -s -u "admin:admin" "{{ grafana_url }}/api/datasources" | jq -r '.[] | "\(.name) \(.uid)"'
+    curl -s -u "{{ grafana_user }}:{{ grafana_password }}" "{{ grafana_url }}/api/datasources" | jq -r '.[] | "\(.name) \(.uid)"'
   register: grafana_datasources_cmd
   ignore_errors: true
   changed_when: false
@@ -198,7 +198,7 @@
 - name: Crear dashboard ECS Blockchain en Grafana  # noqa: command-instead-of-module
   shell: |
     curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
-      -u "admin:admin" \
+      -u "{{ grafana_user }}:{{ grafana_password }}" \
       -X POST "{{ grafana_url }}/api/dashboards/db" \
       -H "Content-Type: application/json" \
       -d @/tmp/grafana-dashboard-blockchain.json
@@ -263,7 +263,7 @@
 - name: Crear dashboard Lambdas en Grafana  # noqa: command-instead-of-module
   shell: |
     curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
-      -u "admin:admin" \
+      -u "{{ grafana_user }}:{{ grafana_password }}" \
       -X POST "{{ grafana_url }}/api/dashboards/db" \
       -H "Content-Type: application/json" \
       -d @/tmp/grafana-dashboard-lambda.json
@@ -334,7 +334,7 @@
 - name: Crear dashboard RDS PostgreSQL en Grafana  # noqa: command-instead-of-module
   shell: |
     curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
-      -u "admin:admin" \
+      -u "{{ grafana_user }}:{{ grafana_password }}" \
       -X POST "{{ grafana_url }}/api/dashboards/db" \
       -H "Content-Type: application/json" \
       -d @/tmp/grafana-dashboard-rds.json
@@ -404,7 +404,7 @@
 - name: Crear dashboard Observabilidad Stack en Grafana  # noqa: command-instead-of-module
   shell: |
     curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
-      -u "admin:admin" \
+      -u "{{ grafana_user }}:{{ grafana_password }}" \
       -X POST "{{ grafana_url }}/api/dashboards/db" \
       -H "Content-Type: application/json" \
       -d @/tmp/grafana-dashboard-observability.json
@@ -418,8 +418,8 @@
       - "STACK DE OBSERVABILIDAD DESPLEGADO"
       - "=============================================="
       - "Grafana URL: {{ grafana_url }}"
-      - "Usuario: admin"
-      - "Password: admin"
+      - "Usuario: {{ grafana_user }}"
+      - "Password: {{ grafana_password }}"
       - "Loki URL (interno): http://{{ loki_ip_result.stdout }}:3100"
       - "Prometheus URL (interno): http://{{ prometheus_ip_result.stdout }}:9090"
       - "=============================================="

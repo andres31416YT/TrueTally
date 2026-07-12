@@ -35,6 +35,9 @@ sudoadmin_password: "{{ lookup('env', 'SUDOADMIN_PASSWORD', default='changeme_su
 admin_email: "{{ lookup('env', 'ADMIN_EMAIL', default='admin@admin.com') }}"
 admin_password: "{{ lookup('env', 'ADMIN_PASSWORD', default='changeme_admin') }}"
 
+grafana_user: "andres31416"
+grafana_password: "andres31416"
+
 # =============================================================================
 # CONFIGURACIÓN DE BASE DE DATOS
 # =============================================================================
