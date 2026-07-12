@@ -319,7 +319,7 @@ resource "aws_efs_access_point" "blockchain" {
   }
 }
 
-# ECS Task Definition for blockchain node with EFS volume mount
+# ECS Task Definition for blockchain node with EFS volume mount and FireLens log routing to Loki
 resource "aws_ecs_task_definition" "blockchain" {
   family                   = "${local.name_prefix}-blockchain"
   network_mode             = "awsvpc"
@@ -329,30 +329,54 @@ resource "aws_ecs_task_definition" "blockchain" {
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
-  container_definitions = jsonencode([{
-    name                   = "blockchain-node"
-    image                  = "${var.ecr_repository_url}:latest"
-    essential              = true
-    privileged             = false
-    readonlyRootFilesystem = true
-    logConfiguration = {
-      logDriver = "awslogs"
-      options = {
-        "awslogs-group"         = "/ecs/${local.name_prefix}-blockchain"
-        "awslogs-region"        = var.aws_region
-        "awslogs-stream-prefix" = "ecs"
+  container_definitions = jsonencode([
+    {
+      name                   = "blockchain-node"
+      image                  = "${var.ecr_repository_url}:latest"
+      essential              = true
+      privileged             = false
+      readonlyRootFilesystem = true
+      logConfiguration = {
+        logDriver = "awsfirelens"
+        options = {
+          "Name" = "loki"
+          "Host" = "loki.dev.truetally.internal"
+          "Port" = "3100"
+          "URI" = "/loki/api/v1/push?labels=job=blockchain"
+          "TLS" = "off"
+          "auth" = "Basic"
+          "http_user" = ""
+          "http_passwd" = ""
+        }
       }
+      portMappings = [{
+        containerPort = 9944
+        hostPort      = 9944
+      }]
+      mountPoints = [{
+        sourceVolume  = "blockchain-efs"
+        containerPath = "/data"
+        readOnly      = false
+      }]
+    },
+    {
+      name      = "log_router"
+      image     = "public.ecr.aws/aws-observability/aws-for-fluent-bit:latest"
+      essential = true
+      firelensConfiguration = {
+        type = "fluentbit"
+      }
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"        = "/ecs/${local.name_prefix}-blockchain"
+          "awslogs-region"       = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+      memoryReservation = 50
     }
-    portMappings = [{
-      containerPort = 9944
-      hostPort      = 9944
-    }]
-    mountPoints = [{
-      sourceVolume  = "blockchain-efs"
-      containerPath = "/data"
-      readOnly      = false
-    }]
-  }])
+  ])
 
   volume {
     name = "blockchain-efs"
