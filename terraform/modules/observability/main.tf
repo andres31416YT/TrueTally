@@ -1,5 +1,6 @@
 locals {
   name_prefix = "${var.project_name}-${var.env}"
+  loki_fqdn   = "loki.${var.env}.truetally.internal"
 }
 
 data "aws_vpc" "selected" {
@@ -81,6 +82,24 @@ resource "aws_ecs_cluster" "observability" {
   setting {
     name  = "containerInsights"
     value = "enabled"
+  }
+}
+
+resource "aws_service_discovery_private_dns_namespace" "observability" {
+  name        = "${var.env}.truetally.internal"
+  vpc         = var.vpc_id
+  description = "Private DNS namespace for observability stack"
+}
+
+resource "aws_service_discovery_service" "loki" {
+  name = "loki"
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.observability.id
+    dns_records {
+      type = "A"
+      ttl  = 60
+    }
   }
 }
 
@@ -320,7 +339,7 @@ resource "aws_ecs_task_definition" "promtail" {
     }
     entryPoint = ["/bin/sh", "-c"]
     command = [
-      "echo 'server:\n  http_listen_port: 9080\n  grpc_listen_port: 0\npositions:\n  filename: /tmp/positions.yaml\nclients:\n  - url: http://loki.truetally-dev.local:3100/loki/api/v1/push\nscrape_configs:\n  - job_name: promtail\n    static_configs:\n      - targets:\n          - localhost\n        labels:\n          job: promtail\n          __path__: /var/log/promtail.log' > /etc/promtail/config.yml && /usr/bin/promtail -config.file=/etc/promtail/config.yml"
+      "echo 'server:\n  http_listen_port: 9080\n  grpc_listen_port: 0\npositions:\n  filename: /tmp/positions.yaml\nclients:\n  - url: http://${local.loki_fqdn}:3100/loki/api/v1/push\nscrape_configs:\n  - job_name: promtail\n    static_configs:\n      - targets:\n          - localhost\n        labels:\n          job: promtail\n          __path__: /var/log/promtail.log' > /etc/promtail/config.yml && /usr/bin/promtail -config.file=/etc/promtail/config.yml"
     ]
   }])
 
@@ -436,6 +455,10 @@ resource "aws_ecs_service" "loki" {
   deployment_circuit_breaker {
     enable   = true
     rollback = true
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.loki.arn
   }
 }
 

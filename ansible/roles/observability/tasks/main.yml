@@ -28,16 +28,6 @@
     fail_msg: "Faltan GRAFANA_USER o GRAFANA_PASSWORD. Verifica los secrets en GitHub Actions."
     quiet: true
 
-- name: Obtener IP de la task de Loki
-  shell: |
-    TASK_ARN=$(aws ecs list-tasks --cluster "{{ name_prefix }}-observability-cluster" --service-name "{{ name_prefix }}-observability-loki" --query 'taskArns[0]' --output text --region "{{ aws_region }}")
-    if [ "$TASK_ARN" != "None" ] && [ -n "$TASK_ARN" ]; then
-      aws ecs describe-tasks --cluster "{{ name_prefix }}-observability-cluster" --tasks "$TASK_ARN" --query 'tasks[0].attachments[0].details[?name==`privateIPv4Address`].value | [0]' --output text --region "{{ aws_region }}"
-    else
-      echo "unknown"
-    fi
-  register: loki_ip_result
-
 - name: Obtener IP de la task de Prometheus
   shell: |
     TASK_ARN=$(aws ecs list-tasks --cluster "{{ name_prefix }}-observability-cluster" --service-name "{{ name_prefix }}-observability-prometheus" --query 'taskArns[0]' --output text --region "{{ aws_region }}")
@@ -92,7 +82,7 @@
         "name": "Loki",
         "type": "loki",
         "access": "proxy",
-        "url": "http://{{ loki_ip_result.stdout }}:3100",
+        "url": "http://loki.{{ truetally_env }}.truetally.internal:3100",
         "isDefault": false
       }
 
@@ -762,7 +752,7 @@
       - "Grafana URL: {{ grafana_url }}"
       - "Usuario: {{ grafana_user }}"
       - "Password: {{ grafana_password }}"
-      - "Loki URL (interno): http://{{ loki_ip_result.stdout }}:3100"
+      - "Loki URL (interno): http://loki.{{ truetally_env }}.truetally.internal:3100"
       - "Prometheus URL (interno): http://{{ prometheus_ip_result.stdout }}:9090"
       - "=============================================="
       - "Dashboards creados:"
