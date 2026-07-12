@@ -227,7 +227,7 @@
               "id": 1,
               "title": "Invocations",
               "type": "timeseries",
-              "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+              "gridPos": {"x": 0, "y": 0, "w": 12, "h": 6},
               "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
               "targets": [
                 {
@@ -235,6 +235,24 @@
                   "namespace": "AWS/Lambda",
                   "metricName": "Invocations",
                   "dimensions": {"FunctionName": "truetally-dev-acceso"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "B",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "Invocations",
+                  "dimensions": {"FunctionName": "truetally-dev-despachador"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "C",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "Invocations",
+                  "dimensions": {"FunctionName": "truetally-dev-procesador"},
                   "statistics": ["Sum"],
                   "period": "300",
                   "region": "{{ aws_region }}"
@@ -246,7 +264,7 @@
               "id": 2,
               "title": "Errors",
               "type": "timeseries",
-              "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+              "gridPos": {"x": 12, "y": 0, "w": 12, "h": 6},
               "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
               "targets": [
                 {
@@ -257,12 +275,104 @@
                   "statistics": ["Sum"],
                   "period": "300",
                   "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "B",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "Errors",
+                  "dimensions": {"FunctionName": "truetally-dev-despachador"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "C",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "Errors",
+                  "dimensions": {"FunctionName": "truetally-dev-procesador"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "yaxes": [{"format": "short"}, {"format": "short"}]
+            },
+            {
+              "id": 3,
+              "title": "Duration (avg ms)",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 6, "w": 12, "h": 6},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "Duration",
+                  "dimensions": {"FunctionName": "truetally-dev-acceso"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "B",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "Duration",
+                  "dimensions": {"FunctionName": "truetally-dev-despachador"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "C",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "Duration",
+                  "dimensions": {"FunctionName": "truetally-dev-procesador"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "yaxes": [{"unit": "ms", "format": "short"}, {"format": "short"}]
+            },
+            {
+              "id": 4,
+              "title": "Throttles",
+              "type": "timeseries",
+              "gridPos": {"x": 12, "y": 6, "w": 12, "h": 6},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "Throttles",
+                  "dimensions": {"FunctionName": "truetally-dev-acceso"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "B",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "Throttles",
+                  "dimensions": {"FunctionName": "truetally-dev-despachador"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "C",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "Throttles",
+                  "dimensions": {"FunctionName": "truetally-dev-procesador"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
                 }
               ],
               "yaxes": [{"format": "short"}, {"format": "short"}]
             }
           ],
-          "time": {"from": "now-1h", "to": "now"},
+          "time": {"from": "now-6h", "to": "now"},
           "refresh": "30s"
         },
         "overwrite": true
@@ -276,6 +386,109 @@
       -H "Content-Type: application/json" \
       -d @/tmp/grafana-dashboard-lambda.json
   register: dash_lambda_status
+  ignore_errors: true
+
+- name: Preparar dashboard SQS
+  copy:
+    dest: /tmp/grafana-dashboard-sqs.json
+    content: |
+      {
+        "dashboard": {
+          "title": "SQS - {{ name_prefix }}",
+          "tags": ["truetally", "sqs"],
+          "timezone": "browser",
+          "panels": [
+            {
+              "id": 1,
+              "title": "Messages Sent",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/SQS",
+                  "metricName": "NumberOfMessagesSent",
+                  "dimensions": {"QueueName": "truetally-dev-vote-queue"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "yaxes": [{"format": "short"}, {"format": "short"}]
+            },
+            {
+              "id": 2,
+              "title": "Messages Received",
+              "type": "timeseries",
+              "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/SQS",
+                  "metricName": "NumberOfMessagesReceived",
+                  "dimensions": {"QueueName": "truetally-dev-vote-queue"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "yaxes": [{"format": "short"}, {"format": "short"}]
+            },
+            {
+              "id": 3,
+              "title": "Visible Messages",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/SQS",
+                  "metricName": "ApproximateNumberOfMessagesVisible",
+                  "dimensions": {"QueueName": "truetally-dev-vote-queue"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "yaxes": [{"format": "short"}, {"format": "short"}]
+            },
+            {
+              "id": 4,
+              "title": "Oldest Message Age (s)",
+              "type": "timeseries",
+              "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/SQS",
+                  "metricName": "ApproximateAgeOfOldestMessage",
+                  "dimensions": {"QueueName": "truetally-dev-vote-queue"},
+                  "statistics": ["Maximum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "yaxes": [{"unit": "s", "format": "short"}, {"format": "short"}]
+            }
+          ],
+          "time": {"from": "now-6h", "to": "now"},
+          "refresh": "30s"
+        },
+        "overwrite": true
+      }
+
+- name: Crear dashboard SQS en Grafana  # noqa: command-instead-of-module
+  shell: |
+    curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
+      -u "{{ grafana_user }}:{{ grafana_password }}" \
+      -X POST "{{ grafana_url }}/api/dashboards/db" \
+      -H "Content-Type: application/json" \
+      -d @/tmp/grafana-dashboard-sqs.json
+  register: dash_sqs_status
   ignore_errors: true
 
 - name: Preparar dashboard RDS PostgreSQL
@@ -312,9 +525,28 @@
             },
             {
               "id": 2,
-              "title": "Free Storage (bytes)",
+              "title": "Database Connections",
               "type": "timeseries",
               "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/RDS",
+                  "metricName": "DatabaseConnections",
+                  "dimensions": {"DBInstanceIdentifier": "truetally-dev-postgres"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "yaxes": [{"format": "short"}, {"format": "short"}]
+            },
+            {
+              "id": 3,
+              "title": "Free Storage (bytes)",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
               "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
               "targets": [
                 {
@@ -331,9 +563,37 @@
                 {"unit": "bytes", "min": 0},
                 {"format": "short"}
               ]
+            },
+            {
+              "id": 4,
+              "title": "Read/Write Latency (s)",
+              "type": "timeseries",
+              "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/RDS",
+                  "metricName": "ReadLatency",
+                  "dimensions": {"DBInstanceIdentifier": "truetally-dev-postgres"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "B",
+                  "namespace": "AWS/RDS",
+                  "metricName": "WriteLatency",
+                  "dimensions": {"DBInstanceIdentifier": "truetally-dev-postgres"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "yaxes": [{"unit": "s", "format": "short"}, {"format": "short"}]
             }
           ],
-          "time": {"from": "now-1h", "to": "now"},
+          "time": {"from": "now-6h", "to": "now"},
           "refresh": "30s"
         },
         "overwrite": true
@@ -363,7 +623,7 @@
               "id": 1,
               "title": "Up Jobs (Prometheus)",
               "type": "stat",
-              "gridPos": {"x": 0, "y": 0, "w": 12, "h": 6},
+              "gridPos": {"x": 0, "y": 0, "w": 8, "h": 6},
               "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
               "targets": [
                 {
@@ -390,9 +650,83 @@
             },
             {
               "id": 2,
+              "title": "Lambda Invocations (sum)",
+              "type": "timeseries",
+              "gridPos": {"x": 8, "y": 0, "w": 8, "h": 6},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "Invocations",
+                  "dimensions": {"FunctionName": "truetally-dev-acceso"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "B",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "Invocations",
+                  "dimensions": {"FunctionName": "truetally-dev-despachador"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "C",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "Invocations",
+                  "dimensions": {"FunctionName": "truetally-dev-procesador"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "yaxes": [{"format": "short"}, {"format": "short"}]
+            },
+            {
+              "id": 3,
+              "title": "SQS Messages",
+              "type": "timeseries",
+              "gridPos": {"x": 16, "y": 0, "w": 8, "h": 6},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/SQS",
+                  "metricName": "NumberOfMessagesSent",
+                  "dimensions": {"QueueName": "truetally-dev-vote-queue"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "B",
+                  "namespace": "AWS/SQS",
+                  "metricName": "NumberOfMessagesReceived",
+                  "dimensions": {"QueueName": "truetally-dev-vote-queue"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "C",
+                  "namespace": "AWS/SQS",
+                  "metricName": "ApproximateNumberOfMessagesVisible",
+                  "dimensions": {"QueueName": "truetally-dev-vote-queue"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "yaxes": [{"format": "short"}, {"format": "short"}]
+            },
+            {
+              "id": 4,
               "title": "Promtail Log Volume",
               "type": "timeseries",
-              "gridPos": {"x": 12, "y": 0, "w": 12, "h": 6},
+              "gridPos": {"x": 0, "y": 6, "w": 24, "h": 8},
               "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
               "targets": [
                 {
@@ -403,7 +737,7 @@
               "yaxes": [{"format": "short"}, {"format": "short"}]
             }
           ],
-          "time": {"from": "now-1h", "to": "now"},
+          "time": {"from": "now-6h", "to": "now"},
           "refresh": "30s"
         },
         "overwrite": true
@@ -434,6 +768,7 @@
       - "Dashboards creados:"
       - "  - ECS Blockchain: {{ dash_blockchain_status.stdout | default('N/A') }}"
       - "  - Lambdas: {{ dash_lambda_status.stdout | default('N/A') }}"
+      - "  - SQS: {{ dash_sqs_status.stdout | default('N/A') }}"
       - "  - RDS PostgreSQL: {{ dash_rds_status.stdout | default('N/A') }}"
       - "  - Observability Stack: {{ dash_stack_status.stdout | default('N/A') }}"
       - "=============================================="
