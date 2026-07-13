@@ -827,6 +827,60 @@
   register: dash_logs_status
   ignore_errors: true
 
+- name: Preparar dashboard Logs - Lambdas
+  copy:
+    dest: /tmp/grafana-dashboard-lambdas.json
+    content: |
+      {
+        "dashboard": {
+          "title": "Logs - Lambdas - {{ name_prefix }}",
+          "tags": ["truetally", "logs", "loki", "lambda"],
+          "timezone": "browser",
+          "panels": [
+            {
+              "id": 1,
+              "title": "Log Volume",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 0, "w": 24, "h": 6},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(count_over_time({job=\"lambda\"}[5m]))"
+                }
+              ],
+              "yaxes": [{"format": "short"}, {"format": "short"}]
+            },
+            {
+              "id": 2,
+              "title": "Lambda Logs",
+              "type": "logs",
+              "gridPos": {"x": 0, "y": 6, "w": 24, "h": 14},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "{job=\"lambda\"}"
+                }
+              ]
+            }
+          ],
+          "time": {"from": "now-6h", "to": "now"},
+          "refresh": "30s"
+        },
+        "overwrite": true
+      }
+
+- name: Crear dashboard Logs - Lambdas en Grafana  # noqa: command-instead-of-module
+  shell: |
+    curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
+      -u "{{ grafana_user }}:{{ grafana_password }}" \
+      -X POST "{{ grafana_url }}/api/dashboards/db" \
+      -H "Content-Type: application/json" \
+      -d @/tmp/grafana-dashboard-lambdas.json
+  register: dash_lambdas_status
+  ignore_errors: true
+
 - name: Mostrar informacion de acceso al stack de observabilidad
   debug:
     msg:
@@ -846,6 +900,7 @@
       - "  - RDS PostgreSQL: {{ dash_rds_status.stdout | default('N/A') }}"
       - "  - Observability Stack: {{ dash_stack_status.stdout | default('N/A') }}"
       - "  - Logs - Blockchain: {{ dash_logs_status.stdout | default('N/A') }}"
+      - "  - Logs - Lambdas: {{ dash_lambdas_status.stdout | default('N/A') }}"
       - "=============================================="
       - "Data Sources configurados:"
       - "  - CloudWatch: {{ ds_cloudwatch_status.stdout | default('N/A') }}"

@@ -204,6 +204,122 @@ resource "aws_lambda_event_source_mapping" "procesador_vote" {
   function_response_types = ["ReportBatchItemFailures"]
 }
 
+# ---------------------------------------------------------------------------
+# CloudWatch Logs -> Loki forwarder
+# ---------------------------------------------------------------------------
+# Las funciones Lambda escriben sus logs en CloudWatch (/aws/lambda/...), pero
+# Loki no los ingiere. Este forwarder recibe los eventos de suscripcion de
+# CloudWatch Logs y los reenvia al endpoint de ingesta de Loki, etiquetandolos
+# con job=lambda para que sean consultables en Grafana con {job="lambda"}.
+# ---------------------------------------------------------------------------
+data "aws_caller_identity" "current" {}
+
+data "archive_file" "loki_forwarder" {
+  type        = "zip"
+  source_file = "${path.module}/loki_forwarder.py"
+  output_path = "${path.module}/build/loki_forwarder.zip"
+}
+
+resource "aws_iam_role" "loki_forwarder" {
+  name = "${local.name_prefix}-loki-forwarder-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "loki_forwarder" {
+  name = "${local.name_prefix}-loki-forwarder-policy"
+  role = aws_iam_role.loki_forwarder.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:*:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_lambda_function" "loki_forwarder" {
+  function_name                  = "${local.name_prefix}-loki-forwarder"
+  filename                       = data.archive_file.loki_forwarder.output_path
+  source_code_hash               = data.archive_file.loki_forwarder.output_base64sha256
+  role                           = aws_iam_role.loki_forwarder.arn
+  handler                        = "loki_forwarder.lambda_handler"
+  runtime                        = "python3.12"
+  timeout                       = 30
+  memory_size                   = 128
+  kms_key_arn                    = var.kms_key_arn
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
+
+  vpc_config {
+    subnet_ids         = var.private_subnet_ids
+    security_group_ids = [var.lambda_security_group_id]
+  }
+
+  environment {
+    variables = {
+      LOKI_URL = "http://loki.${var.env}.truetally.internal:3100/loki/api/v1/push"
+    }
+  }
+}
+
+# Suscripcion de CloudWatch Logs para cada Lambda de aplicacion.
+locals {
+  loki_forwarder_log_groups = [
+    "${local.name_prefix}-acceso",
+    "${local.name_prefix}-despachador",
+    "${local.name_prefix}-procesador",
+  ]
+}
+
+resource "aws_lambda_permission" "loki_forwarder_invoke" {
+  for_each = toset(local.loki_forwarder_log_groups)
+
+  statement_id  = "AllowCloudWatchLogs${replace(each.value, "-", "")}"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.loki_forwarder.function_name
+  principal     = "logs.${var.aws_region}.amazonaws.com"
+  source_arn    = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${each.value}:*"
+}
+
+resource "aws_cloudwatch_log_subscription_filter" "loki_forwarder" {
+  for_each = toset(local.loki_forwarder_log_groups)
+
+  name            = "${each.value}-to-loki"
+  log_group_name  = "/aws/lambda/${each.value}"
+  filter_pattern  = ""
+  destination_arn = aws_lambda_function.loki_forwarder.arn
+
+  depends_on = [aws_lambda_permission.loki_forwarder_invoke]
+}
+
 # ECS Cluster for Blockchain node
 resource "aws_ecs_cluster" "blockchain" {
   name = "${local.name_prefix}-blockchain-cluster"
