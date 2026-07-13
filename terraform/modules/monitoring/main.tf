@@ -33,16 +33,6 @@ resource "aws_cloudwatch_log_group" "lambda_procesador" {
   }
 }
 
-resource "aws_cloudwatch_log_group" "ecs_blockchain" {
-  name              = "/ecs/${local.name_prefix}-blockchain"
-  retention_in_days = 365
-  kms_key_id        = var.kms_key_arn
-
-  tags = {
-    Environment = var.env
-  }
-}
-
 output "log_group_acceso" {
   value = aws_cloudwatch_log_group.lambda_acceso.name
 }

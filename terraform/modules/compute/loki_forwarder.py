@@ -37,6 +37,11 @@ def lambda_handler(event, context):
         if not message.strip():
             skipped += 1
             continue
+        if log_group.startswith("/aws/lambda/") and message.startswith(
+            ("START ", "END ", "REPORT ", "INIT_START ")
+        ):
+            skipped += 1
+            continue
         ts_ns = str(int(entry["timestamp"]) * 1_000_000)
         values.append([ts_ns, message])
 

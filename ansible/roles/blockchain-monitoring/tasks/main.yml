@@ -9,7 +9,7 @@
 
 - name: Create CloudWatch log group para blockchain
   shell: |
-    aws logs create-log-group --log-group-name "/ecs/{{ name_prefix }}-blockchain" --retention-in-days {{ monitoring.log_retention_days }} --region "{{ aws_region }}" 2>/dev/null || true
+    aws logs create-log-group --log-group-name "/ecs/{{ name_prefix }}-blockchain-node" --retention-in-days {{ monitoring.log_retention_days }} --region "{{ aws_region }}" 2>/dev/null || true
 
 - name: Configurar alarma de CPU
   shell: |
