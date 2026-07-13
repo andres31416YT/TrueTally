@@ -344,9 +344,6 @@ resource "aws_ecs_task_definition" "blockchain" {
           "Port" = "3100"
           "URI" = "/loki/api/v1/push?labels=job=blockchain"
           "TLS" = "off"
-          "auth" = "Basic"
-          "http_user" = ""
-          "http_passwd" = ""
         }
       }
       portMappings = [{

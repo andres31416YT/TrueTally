@@ -714,17 +714,30 @@
             },
             {
               "id": 4,
-              "title": "Promtail Log Volume",
+              "title": "Log Volume (Loki)",
               "type": "timeseries",
               "gridPos": {"x": 0, "y": 6, "w": 24, "h": 8},
               "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
               "targets": [
                 {
                   "refId": "A",
-                  "expr": "sum(count_over_time({job=\"promtail\"}[5m]))"
+                  "expr": "sum(count_over_time({job=~\".+\"}[5m]))"
                 }
               ],
               "yaxes": [{"format": "short"}, {"format": "short"}]
+            },
+            {
+              "id": 5,
+              "title": "Blockchain Logs (Loki)",
+              "type": "logs",
+              "gridPos": {"x": 0, "y": 14, "w": 24, "h": 10},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "{job=\"blockchain\"}"
+                }
+              ]
             }
           ],
           "time": {"from": "now-6h", "to": "now"},
@@ -741,6 +754,60 @@
       -H "Content-Type: application/json" \
       -d @/tmp/grafana-dashboard-observability.json
   register: dash_stack_status
+  ignore_errors: true
+
+- name: Preparar dashboard Logs - Blockchain
+  copy:
+    dest: /tmp/grafana-dashboard-logs.json
+    content: |
+      {
+        "dashboard": {
+          "title": "Logs - Blockchain - {{ name_prefix }}",
+          "tags": ["truetally", "logs", "loki", "blockchain"],
+          "timezone": "browser",
+          "panels": [
+            {
+              "id": 1,
+              "title": "Log Volume",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 0, "w": 24, "h": 6},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(count_over_time({job=\"blockchain\"}[5m]))"
+                }
+              ],
+              "yaxes": [{"format": "short"}, {"format": "short"}]
+            },
+            {
+              "id": 2,
+              "title": "Blockchain Logs",
+              "type": "logs",
+              "gridPos": {"x": 0, "y": 6, "w": 24, "h": 14},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "{job=\"blockchain\"}"
+                }
+              ]
+            }
+          ],
+          "time": {"from": "now-6h", "to": "now"},
+          "refresh": "30s"
+        },
+        "overwrite": true
+      }
+
+- name: Crear dashboard Logs - Blockchain en Grafana  # noqa: command-instead-of-module
+  shell: |
+    curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
+      -u "{{ grafana_user }}:{{ grafana_password }}" \
+      -X POST "{{ grafana_url }}/api/dashboards/db" \
+      -H "Content-Type: application/json" \
+      -d @/tmp/grafana-dashboard-logs.json
+  register: dash_logs_status
   ignore_errors: true
 
 - name: Mostrar informacion de acceso al stack de observabilidad
@@ -761,6 +828,7 @@
       - "  - SQS: {{ dash_sqs_status.stdout | default('N/A') }}"
       - "  - RDS PostgreSQL: {{ dash_rds_status.stdout | default('N/A') }}"
       - "  - Observability Stack: {{ dash_stack_status.stdout | default('N/A') }}"
+      - "  - Logs - Blockchain: {{ dash_logs_status.stdout | default('N/A') }}"
       - "=============================================="
       - "Data Sources configurados:"
       - "  - CloudWatch: {{ ds_cloudwatch_status.stdout | default('N/A') }}"

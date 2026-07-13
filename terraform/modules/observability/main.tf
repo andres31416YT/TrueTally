@@ -103,6 +103,18 @@ resource "aws_service_discovery_service" "loki" {
   }
 }
 
+resource "aws_service_discovery_service" "promtail" {
+  name = "promtail"
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.observability.id
+    dns_records {
+      type = "A"
+      ttl  = 60
+    }
+  }
+}
+
 # Application Load Balancer for Grafana
 resource "aws_lb" "grafana" {
   name               = "${local.name_prefix}-grafana-alb"
@@ -379,7 +391,7 @@ resource "aws_ecs_task_definition" "prometheus" {
     }]
     entryPoint = ["/bin/sh", "-c"]
     command = [
-      "echo 'global:\n  scrape_interval: 15s\nscrape_configs:\n  - job_name: prometheus\n    static_configs:\n      - targets: [localhost:9090]\n  - job_name: loki\n    static_configs:\n      - targets: [localhost:3100]\n  - job_name: promtail\n    static_configs:\n      - targets: [localhost:9080]' > /etc/prometheus/prometheus.yml && /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=7d"
+      "echo 'global:\n  scrape_interval: 15s\nscrape_configs:\n  - job_name: prometheus\n    static_configs:\n      - targets: [localhost:9090]\n  - job_name: loki\n    static_configs:\n      - targets: [loki.${var.env}.truetally.internal:3100]\n  - job_name: promtail\n    static_configs:\n      - targets: [promtail.${var.env}.truetally.internal:9080]' > /etc/prometheus/prometheus.yml && /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=7d"
     ]
   }])
 
@@ -479,6 +491,10 @@ resource "aws_ecs_service" "promtail" {
   deployment_circuit_breaker {
     enable   = true
     rollback = true
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.promtail.arn
   }
 }
 
