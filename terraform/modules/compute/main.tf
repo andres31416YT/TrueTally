@@ -6,6 +6,28 @@ locals {
     for i, az in var.azs :
     az => var.blockchain_subnet_ids[i]
   }
+
+  fluent_bit_config = <<-EOS
+    [SERVICE]
+        Flush        1
+        Daemon       Off
+        Log_Level    info
+
+    [INPUT]
+        Name              forward
+        Listen            0.0.0.0
+        Port              24224
+
+    [OUTPUT]
+        Name              loki
+        Match             *
+        Host              loki.dev.truetally.internal
+        Port              3100
+        Labels            job=blockchain
+        TLS               off
+        TLS.Verify        Off
+        Retry_Limit       False
+  EOS
 }
 
 # IAM Role for Lambda functions
@@ -362,12 +384,16 @@ resource "aws_ecs_task_definition" "blockchain" {
       essential = true
       firelensConfiguration = {
         type = "fluentbit"
+        options = {
+          "config-file-type"  = "text"
+          "config-file-value" = local.fluent_bit_config
+        }
       }
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"        = "/ecs/${local.name_prefix}-blockchain"
-          "awslogs-region"       = var.aws_region
+          "awslogs-group"         = "/ecs/${local.name_prefix}-blockchain"
+          "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "ecs"
         }
       }
