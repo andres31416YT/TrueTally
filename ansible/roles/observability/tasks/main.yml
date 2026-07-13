@@ -171,15 +171,26 @@
                   "namespace": "AWS/ECS",
                   "metricName": "CPUUtilization",
                   "dimensions": {"ClusterName": "{{ name_prefix }}-blockchain-cluster"},
-                  "statistics": ["Average"],
+                  "statistics": ["Average", "Maximum"],
                   "period": "300",
                   "region": "{{ aws_region }}"
                 }
               ],
-              "yaxes": [
-                {"unit": "percent", "min": 0, "max": 100},
-                {"format": "short"}
-              ]
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "min": 0,
+                  "max": 100,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {"value": 0, "color": "green"},
+                      {"value": 70, "color": "yellow"},
+                      {"value": 90, "color": "red"}
+                    ]
+                  }
+                }
+              }
             },
             {
               "id": 2,
@@ -193,15 +204,165 @@
                   "namespace": "AWS/ECS",
                   "metricName": "MemoryUtilization",
                   "dimensions": {"ClusterName": "{{ name_prefix }}-blockchain-cluster"},
+                  "statistics": ["Average", "Maximum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "min": 0,
+                  "max": 100,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {"value": 0, "color": "green"},
+                      {"value": 70, "color": "yellow"},
+                      {"value": 90, "color": "red"}
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "id": 3,
+              "title": "Network In/Out (bytes)",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/ECS",
+                  "metricName": "NetworkRxBytes",
+                  "dimensions": {"ClusterName": "{{ name_prefix }}-blockchain-cluster"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "B",
+                  "namespace": "AWS/ECS",
+                  "metricName": "NetworkTxBytes",
+                  "dimensions": {"ClusterName": "{{ name_prefix }}-blockchain-cluster"},
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes",
+                  "custom": {
+                    "scale": {"type": "byte"}
+                  }
+                }
+              }
+            },
+            {
+              "id": 4,
+              "title": "Service Events",
+              "type": "table",
+              "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/ECS",
+                  "metricName": "ServiceEvents",
+                  "dimensions": {
+                    "ClusterName": "{{ name_prefix }}-blockchain-cluster",
+                    "ServiceName": "{{ name_prefix }}-blockchain-service"
+                  },
+                  "statistics": ["Sum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ]
+            },
+            {
+              "id": 5,
+              "title": "Running / Pending Tasks",
+              "type": "stat",
+              "gridPos": {"x": 0, "y": 16, "w": 12, "h": 6},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/ECS",
+                  "metricName": "RunningTaskCount",
+                  "dimensions": {"ClusterName": "{{ name_prefix }}-blockchain-cluster"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "B",
+                  "namespace": "AWS/ECS",
+                  "metricName": "PendingTaskCount",
+                  "dimensions": {"ClusterName": "{{ name_prefix }}-blockchain-cluster"},
                   "statistics": ["Average"],
                   "period": "300",
                   "region": "{{ aws_region }}"
                 }
               ],
-              "yaxes": [
-                {"unit": "percent", "min": 0, "max": 100},
-                {"format": "short"}
-              ]
+              "reduceCalc": "last",
+              "fieldConfig": {
+                "defaults": {
+                  "mappings": [],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {"value": 0, "color": "red"},
+                      {"value": 1, "color": "green"}
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  }
+                }
+              }
+            },
+            {
+              "id": 6,
+              "title": "Service Health",
+              "type": "stat",
+              "gridPos": {"x": 12, "y": 16, "w": 12, "h": 6},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/ECS",
+                  "metricName": "HealthCheckStatus",
+                  "dimensions": {
+                    "ClusterName": "{{ name_prefix }}-blockchain-cluster",
+                    "ServiceName": "{{ name_prefix }}-blockchain-service"
+                  },
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "reduceCalc": "last",
+              "fieldConfig": {
+                "defaults": {
+                  "mappings": [
+                    {"type": "value", "value": "0", "text": "Unhealthy", "color": "red"},
+                    {"type": "value", "value": "1", "text": "Healthy", "color": "green"}
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {"value": 0, "color": "red"},
+                      {"value": 1, "color": "green"}
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  }
+                }
+              }
             }
           ],
           "time": {"from": "now-6h", "to": "now"},
@@ -232,9 +393,9 @@
           "panels": [
             {
               "id": 1,
-              "title": "Invocations",
+              "title": "Invocations (Sum)",
               "type": "timeseries",
-              "gridPos": {"x": 0, "y": 0, "w": 12, "h": 6},
+              "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
               "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
               "targets": [
                 {
@@ -265,13 +426,17 @@
                   "region": "{{ aws_region }}"
                 }
               ],
-              "yaxes": [{"format": "short"}, {"format": "short"}]
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                }
+              }
             },
             {
               "id": 2,
-              "title": "Errors",
+              "title": "Errors (Sum)",
               "type": "timeseries",
-              "gridPos": {"x": 12, "y": 0, "w": 12, "h": 6},
+              "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
               "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
               "targets": [
                 {
@@ -302,13 +467,27 @@
                   "region": "{{ aws_region }}"
                 }
               ],
-              "yaxes": [{"format": "short"}, {"format": "short"}]
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {"value": 0, "color": "green"},
+                      {"value": 1, "color": "red"}
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  }
+                }
+              }
             },
             {
               "id": 3,
-              "title": "Duration (avg ms)",
+              "title": "Duration (Average / p99 ms)",
               "type": "timeseries",
-              "gridPos": {"x": 0, "y": 6, "w": 12, "h": 6},
+              "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
               "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
               "targets": [
                 {
@@ -316,7 +495,7 @@
                   "namespace": "AWS/Lambda",
                   "metricName": "Duration",
                   "dimensions": {"FunctionName": "truetally-dev-acceso"},
-                  "statistics": ["Average"],
+                  "statistics": ["Average", "p99"],
                   "period": "300",
                   "region": "{{ aws_region }}"
                 },
@@ -325,7 +504,7 @@
                   "namespace": "AWS/Lambda",
                   "metricName": "Duration",
                   "dimensions": {"FunctionName": "truetally-dev-despachador"},
-                  "statistics": ["Average"],
+                  "statistics": ["Average", "p99"],
                   "period": "300",
                   "region": "{{ aws_region }}"
                 },
@@ -334,18 +513,22 @@
                   "namespace": "AWS/Lambda",
                   "metricName": "Duration",
                   "dimensions": {"FunctionName": "truetally-dev-procesador"},
-                  "statistics": ["Average"],
+                  "statistics": ["Average", "p99"],
                   "period": "300",
                   "region": "{{ aws_region }}"
                 }
               ],
-              "yaxes": [{"unit": "ms", "format": "short"}, {"format": "short"}]
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ms"
+                }
+              }
             },
             {
               "id": 4,
-              "title": "Throttles",
+              "title": "Throttles (Sum)",
               "type": "timeseries",
-              "gridPos": {"x": 12, "y": 6, "w": 12, "h": 6},
+              "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
               "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
               "targets": [
                 {
@@ -376,7 +559,103 @@
                   "region": "{{ aws_region }}"
                 }
               ],
-              "yaxes": [{"format": "short"}, {"format": "short"}]
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {"value": 0, "color": "green"},
+                      {"value": 1, "color": "red"}
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  }
+                }
+              }
+            },
+            {
+              "id": 5,
+              "title": "ConcurrentExecutions (Maximum)",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "ConcurrentExecutions",
+                  "dimensions": {"FunctionName": "truetally-dev-acceso"},
+                  "statistics": ["Maximum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "B",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "ConcurrentExecutions",
+                  "dimensions": {"FunctionName": "truetally-dev-despachador"},
+                  "statistics": ["Maximum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "C",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "ConcurrentExecutions",
+                  "dimensions": {"FunctionName": "truetally-dev-procesador"},
+                  "statistics": ["Maximum"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                }
+              }
+            },
+            {
+              "id": 6,
+              "title": "IteratorAge (Average ms)",
+              "type": "timeseries",
+              "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "IteratorAge",
+                  "dimensions": {"FunctionName": "truetally-dev-acceso"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "B",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "IteratorAge",
+                  "dimensions": {"FunctionName": "truetally-dev-despachador"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                },
+                {
+                  "refId": "C",
+                  "namespace": "AWS/Lambda",
+                  "metricName": "IteratorAge",
+                  "dimensions": {"FunctionName": "truetally-dev-procesador"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ms"
+                }
+              }
             }
           ],
           "time": {"from": "now-6h", "to": "now"},
@@ -657,15 +936,49 @@
             },
             {
               "id": 2,
-              "title": "Lambda Invocations (sum)",
-              "type": "timeseries",
+              "title": "ECS Running Tasks",
+              "type": "stat",
               "gridPos": {"x": 8, "y": 0, "w": 8, "h": 6},
               "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
               "targets": [
                 {
                   "refId": "A",
+                  "namespace": "AWS/ECS",
+                  "metricName": "RunningTaskCount",
+                  "dimensions": {"ClusterName": "{{ name_prefix }}-blockchain-cluster"},
+                  "statistics": ["Average"],
+                  "period": "300",
+                  "region": "{{ aws_region }}"
+                }
+              ],
+              "reduceCalc": "last",
+              "fieldConfig": {
+                "defaults": {
+                  "mappings": [],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {"value": 0, "color": "red"},
+                      {"value": 1, "color": "green"}
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  }
+                }
+              }
+            },
+            {
+              "id": 3,
+              "title": "Lambda Errors",
+              "type": "timeseries",
+              "gridPos": {"x": 16, "y": 0, "w": 8, "h": 6},
+              "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
+              "targets": [
+                {
+                  "refId": "A",
                   "namespace": "AWS/Lambda",
-                  "metricName": "Invocations",
+                  "metricName": "Errors",
                   "dimensions": {"FunctionName": "truetally-dev-acceso"},
                   "statistics": ["Sum"],
                   "period": "300",
@@ -674,7 +987,7 @@
                 {
                   "refId": "B",
                   "namespace": "AWS/Lambda",
-                  "metricName": "Invocations",
+                  "metricName": "Errors",
                   "dimensions": {"FunctionName": "truetally-dev-despachador"},
                   "statistics": ["Sum"],
                   "period": "300",
@@ -683,20 +996,34 @@
                 {
                   "refId": "C",
                   "namespace": "AWS/Lambda",
-                  "metricName": "Invocations",
+                  "metricName": "Errors",
                   "dimensions": {"FunctionName": "truetally-dev-procesador"},
                   "statistics": ["Sum"],
                   "period": "300",
                   "region": "{{ aws_region }}"
                 }
               ],
-              "yaxes": [{"format": "short"}, {"format": "short"}]
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {"value": 0, "color": "green"},
+                      {"value": 1, "color": "red"}
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  }
+                }
+              }
             },
             {
-              "id": 3,
+              "id": 4,
               "title": "SQS Messages",
               "type": "timeseries",
-              "gridPos": {"x": 16, "y": 0, "w": 8, "h": 6},
+              "gridPos": {"x": 0, "y": 6, "w": 8, "h": 6},
               "datasource": {"type": "cloudwatch", "uid": "{{ ds_cloudwatch_uid }}"},
               "targets": [
                 {
@@ -730,10 +1057,10 @@
               "yaxes": [{"format": "short"}, {"format": "short"}]
             },
             {
-              "id": 4,
+              "id": 5,
               "title": "Log Volume (Loki)",
               "type": "timeseries",
-              "gridPos": {"x": 0, "y": 6, "w": 24, "h": 8},
+              "gridPos": {"x": 8, "y": 6, "w": 16, "h": 6},
               "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
               "targets": [
                 {
@@ -744,10 +1071,10 @@
               "yaxes": [{"format": "short"}, {"format": "short"}]
             },
             {
-              "id": 5,
+              "id": 6,
               "title": "Blockchain Logs (Loki)",
               "type": "logs",
-              "gridPos": {"x": 0, "y": 14, "w": 24, "h": 10},
+              "gridPos": {"x": 0, "y": 12, "w": 24, "h": 10},
               "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
               "targets": [
                 {
@@ -775,7 +1102,7 @@
 
 - name: Preparar dashboard Logs - Blockchain
   copy:
-    dest: /tmp/grafana-dashboard-logs.json
+    dest: /tmp/grafana-dashboard-logs-blockchain.json
     content: |
       {
         "dashboard": {
@@ -785,28 +1112,28 @@
           "panels": [
             {
               "id": 1,
-              "title": "Log Volume",
+              "title": "Log Volume por funcion Lambda",
               "type": "timeseries",
               "gridPos": {"x": 0, "y": 0, "w": 24, "h": 6},
-              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}",
               "targets": [
                 {
                   "refId": "A",
-                  "expr": "sum(count_over_time({job=\"blockchain\"}[5m]))"
+                  "expr": "sum(count_over_time({job=\"lambda\"}[5m])) by (function)"
                 }
               ],
               "yaxes": [{"format": "short"}, {"format": "short"}]
             },
             {
               "id": 2,
-              "title": "Blockchain Logs",
+              "title": "Logs de aplicacion blockchain",
               "type": "logs",
               "gridPos": {"x": 0, "y": 6, "w": 24, "h": 14},
               "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
               "targets": [
                 {
                   "refId": "A",
-                  "expr": "{job=\"blockchain\"}"
+                  "expr": "{job=\"blockchain\"} |= \"\" !~ \"^(START |END |REPORT |INIT_START |REPORT RequestId)\" | line_format \"{{ .logGroup | regexp \"/ecs/.+blockchain.+\" | replace \"/ecs/.+blockchain.+\" \"blockchain-node\" | regexp \"/aws/lambda/\" | replace \"/aws/lambda/\" \"\" | regexp \"^([^_]+)_\" | replace \"^([^_]+)_\" \"$1\" | regexp \"^([a-z]+)\" | replace \"^([a-z]+)\" \"$1\" }}\""
                 }
               ]
             }
@@ -823,13 +1150,13 @@
       -u "{{ grafana_user }}:{{ grafana_password }}" \
       -X POST "{{ grafana_url }}/api/dashboards/db" \
       -H "Content-Type: application/json" \
-      -d @/tmp/grafana-dashboard-logs.json
+      -d @/tmp/grafana-dashboard-logs-blockchain.json
   register: dash_logs_status
   ignore_errors: true
 
 - name: Preparar dashboard Logs - Lambdas
   copy:
-    dest: /tmp/grafana-dashboard-lambdas.json
+    dest: /tmp/grafana-dashboard-lambdas-logs.json
     content: |
       {
         "dashboard": {
@@ -839,28 +1166,28 @@
           "panels": [
             {
               "id": 1,
-              "title": "Log Volume",
+              "title": "Log Volume por funcion Lambda",
               "type": "timeseries",
               "gridPos": {"x": 0, "y": 0, "w": 24, "h": 6},
               "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
               "targets": [
                 {
                   "refId": "A",
-                  "expr": "sum(count_over_time({job=\"lambda\"}[5m]))"
+                  "expr": "sum(count_over_time({job=\"lambda\"}[5m])) by (function)"
                 }
               ],
               "yaxes": [{"format": "short"}, {"format": "short"}]
             },
             {
               "id": 2,
-              "title": "Lambda Logs",
+              "title": "Logs de aplicacion Lambda",
               "type": "logs",
               "gridPos": {"x": 0, "y": 6, "w": 24, "h": 14},
               "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
               "targets": [
                 {
                   "refId": "A",
-                  "expr": "{job=\"lambda\"}"
+                  "expr": "{job=\"lambda\"} |= \"\" !~ \"^(START |END |REPORT |INIT_START |REPORT RequestId)\" | line_format \"{{ .logGroup | regexp \"/aws/lambda/\" | replace \"/aws/lambda/\" \"\" | regexp \"^([^_]+)_\" | replace \"^([^_]+)_\" \"$1\" }}\""
                 }
               ]
             }
@@ -877,7 +1204,7 @@
       -u "{{ grafana_user }}:{{ grafana_password }}" \
       -X POST "{{ grafana_url }}/api/dashboards/db" \
       -H "Content-Type: application/json" \
-      -d @/tmp/grafana-dashboard-lambdas.json
+      -d @/tmp/grafana-dashboard-lambdas-logs.json
   register: dash_lambdas_status
   ignore_errors: true
 
