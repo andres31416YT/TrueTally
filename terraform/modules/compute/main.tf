@@ -251,8 +251,8 @@ resource "aws_lambda_function" "loki_forwarder" {
   role                           = aws_iam_role.loki_forwarder.arn
   handler                        = "loki_forwarder.lambda_handler"
   runtime                        = "python3.12"
-  timeout                       = 30
-  memory_size                   = 128
+  timeout                        = 30
+  memory_size                    = 128
   kms_key_arn                    = var.kms_key_arn
   reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
@@ -482,10 +482,10 @@ resource "aws_ecs_task_definition" "blockchain" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.blockchain_node.name
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "ecs"
-          "awslogs-create-group"  = "true"
+          "awslogs-group"             = aws_cloudwatch_log_group.blockchain_node.name
+          "awslogs-region"            = var.aws_region
+          "awslogs-stream-prefix"     = "ecs"
+          "awslogs-create-group"      = "false"
           "awslogs-multiline-pattern" = "^\\S"
         }
       }
@@ -525,7 +525,7 @@ resource "aws_ecs_service" "blockchain" {
   network_configuration {
     subnets          = var.blockchain_subnet_ids
     security_groups  = [var.blockchain_security_group_id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
 
   deployment_controller {
