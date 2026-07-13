@@ -6,28 +6,6 @@ locals {
     for i, az in var.azs :
     az => var.blockchain_subnet_ids[i]
   }
-
-  fluent_bit_config = <<-EOS
-    [SERVICE]
-        Flush        1
-        Daemon       Off
-        Log_Level    info
-
-    [INPUT]
-        Name              forward
-        Listen            0.0.0.0
-        Port              24224
-
-    [OUTPUT]
-        Name              loki
-        Match             *
-        Host              loki.dev.truetally.internal
-        Port              3100
-        Labels            job=blockchain
-        TLS               off
-        TLS.Verify        Off
-        Retry_Limit       False
-  EOS
 }
 
 # IAM Role for Lambda functions
@@ -207,10 +185,10 @@ resource "aws_lambda_event_source_mapping" "procesador_vote" {
 # ---------------------------------------------------------------------------
 # CloudWatch Logs -> Loki forwarder
 # ---------------------------------------------------------------------------
-# Las funciones Lambda escriben sus logs en CloudWatch (/aws/lambda/...), pero
-# Loki no los ingiere. Este forwarder recibe los eventos de suscripcion de
-# CloudWatch Logs y los reenvia al endpoint de ingesta de Loki, etiquetandolos
-# con job=lambda para que sean consultables en Grafana con {job="lambda"}.
+# Las Lambdas (/aws/lambda/...) y el nodo blockchain (/ecs/...-blockchain-node)
+# escriben en CloudWatch. Este forwarder recibe los eventos de suscripcion de
+# CloudWatch Logs y los reenvia a Loki etiquetandolos con job=lambda o
+# job=blockchain para que sean consultables en Grafana.
 # ---------------------------------------------------------------------------
 data "aws_caller_identity" "current" {}
 
@@ -290,30 +268,44 @@ resource "aws_lambda_function" "loki_forwarder" {
   }
 }
 
-# Suscripcion de CloudWatch Logs para cada Lambda de aplicacion.
+# Suscripcion de CloudWatch Logs para las Lambdas de aplicacion y el nodo
+# blockchain. Todas se reenvian a Loki etiquetadas con el job correspondiente.
 locals {
-  loki_forwarder_log_groups = [
-    "${local.name_prefix}-acceso",
-    "${local.name_prefix}-despachador",
-    "${local.name_prefix}-procesador",
-  ]
+  loki_forwarder_targets = {
+    acceso = {
+      log_group = "/aws/lambda/${local.name_prefix}-acceso"
+      job       = "lambda"
+    }
+    despachador = {
+      log_group = "/aws/lambda/${local.name_prefix}-despachador"
+      job       = "lambda"
+    }
+    procesador = {
+      log_group = "/aws/lambda/${local.name_prefix}-procesador"
+      job       = "lambda"
+    }
+    blockchain = {
+      log_group = aws_cloudwatch_log_group.blockchain_node.name
+      job       = "blockchain"
+    }
+  }
 }
 
 resource "aws_lambda_permission" "loki_forwarder_invoke" {
-  for_each = toset(local.loki_forwarder_log_groups)
+  for_each = local.loki_forwarder_targets
 
-  statement_id  = "AllowCloudWatchLogs${replace(each.value, "-", "")}"
+  statement_id  = "AllowCloudWatchLogs${replace(replace(each.key, "-", ""), "_", "")}"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.loki_forwarder.function_name
   principal     = "logs.${var.aws_region}.amazonaws.com"
-  source_arn    = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${each.value}:*"
+  source_arn    = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${each.value.log_group}:*"
 }
 
 resource "aws_cloudwatch_log_subscription_filter" "loki_forwarder" {
-  for_each = toset(local.loki_forwarder_log_groups)
+  for_each = local.loki_forwarder_targets
 
-  name            = "${each.value}-to-loki"
-  log_group_name  = "/aws/lambda/${each.value}"
+  name            = "${each.key}-to-loki"
+  log_group_name  = each.value.log_group
   filter_pattern  = ""
   destination_arn = aws_lambda_function.loki_forwarder.arn
 
@@ -458,6 +450,19 @@ resource "aws_efs_access_point" "blockchain" {
 }
 
 # ECS Task Definition for blockchain node with EFS volume mount and FireLens log routing to Loki
+# CloudWatch log group for the blockchain node. Suscrito al forwarder Loki
+# (job=blockchain) para llevar los logs de la aplicacion a Loki de forma
+# fiable (awslogs es mas robusto que FireLens en esta configuracion).
+resource "aws_cloudwatch_log_group" "blockchain_node" {
+  name              = "/ecs/${local.name_prefix}-blockchain-node"
+  retention_in_days = 365
+  kms_key_id        = var.kms_key_arn
+
+  tags = {
+    Environment = var.env
+  }
+}
+
 resource "aws_ecs_task_definition" "blockchain" {
   family                   = "${local.name_prefix}-blockchain"
   network_mode             = "awsvpc"
@@ -475,13 +480,13 @@ resource "aws_ecs_task_definition" "blockchain" {
       privileged             = false
       readonlyRootFilesystem = true
       logConfiguration = {
-        logDriver = "awsfirelens"
+        logDriver = "awslogs"
         options = {
-          "Name"   = "loki"
-          "Host"   = "loki.dev.truetally.internal"
-          "Port"   = "3100"
-          "Labels" = "job=blockchain"
-          "TLS"    = "off"
+          "awslogs-group"         = aws_cloudwatch_log_group.blockchain_node.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+          "awslogs-multiline-pattern" = "^\\S"
         }
       }
       portMappings = [{
@@ -493,23 +498,6 @@ resource "aws_ecs_task_definition" "blockchain" {
         containerPath = "/data"
         readOnly      = false
       }]
-    },
-    {
-      name      = "log_router"
-      image     = "public.ecr.aws/aws-observability/aws-for-fluent-bit:latest"
-      essential = true
-      firelensConfiguration = {
-        type = "fluentbit"
-      }
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = "/ecs/${local.name_prefix}-blockchain"
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "ecs"
-        }
-      }
-      memoryReservation = 50
     }
   ])
 

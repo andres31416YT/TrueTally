@@ -312,6 +312,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
     environment: development
+    timeout-minutes: 30
     env:
       TF_VAR_lambda_zip_path: ${{ github.workspace }}/terraform/artifacts
 
@@ -348,6 +349,17 @@ jobs:
         run: |
           cd terraform/environments/dev
           terraform workspace select dev || terraform workspace select -or-create dev
+
+      - name: Import existing Loki forwarder resources into Terraform state
+        run: |
+          cd terraform/environments/dev
+          terraform import module.compute.aws_lambda_function.loki_forwarder truetally-dev-loki-forwarder || true
+          terraform import 'module.compute.aws_lambda_permission.loki_forwarder_invoke["truetally-dev-acceso"]' AllowCloudWatchLogstruetallydevacceso || true
+          terraform import 'module.compute.aws_lambda_permission.loki_forwarder_invoke["truetally-dev-despachador"]' AllowCloudWatchLogstruetallydevdespachador || true
+          terraform import 'module.compute.aws_lambda_permission.loki_forwarder_invoke["truetally-dev-procesador"]' AllowCloudWatchLogstruetallydevprocesador || true
+          terraform import 'module.compute.aws_cloudwatch_log_subscription_filter.loki_forwarder["truetally-dev-acceso"]' cwlsf-2383921256 || true
+          terraform import 'module.compute.aws_cloudwatch_log_subscription_filter.loki_forwarder["truetally-dev-despachador"]' cwlsf-3108711530 || true
+          terraform import 'module.compute.aws_cloudwatch_log_subscription_filter.loki_forwarder["truetally-dev-procesador"]' cwlsf-2226504283 || true
 
       # El plan se genera en un runner distinto y los saved plans congelan los
       # data sources, por lo que el ZIP del forwarder (generado por archive_file)
@@ -391,6 +403,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
+    timeout-minutes: 30
     env:
       TF_VAR_lambda_zip_path: ${{ github.workspace }}/terraform/artifacts
 
@@ -427,6 +440,17 @@ jobs:
         run: |
           cd terraform/environments/prod
           terraform workspace select prod || terraform workspace select -or-create prod
+
+      - name: Import existing Loki forwarder resources into Terraform state
+        run: |
+          cd terraform/environments/prod
+          terraform import module.compute.aws_lambda_function.loki_forwarder truetally-prod-loki-forwarder || true
+          terraform import 'module.compute.aws_lambda_permission.loki_forwarder_invoke["truetally-prod-acceso"]' AllowCloudWatchLogstruetallyprodacceso || true
+          terraform import 'module.compute.aws_lambda_permission.loki_forwarder_invoke["truetally-prod-despachador"]' AllowCloudWatchLogstruetallyproddespachador || true
+          terraform import 'module.compute.aws_lambda_permission.loki_forwarder_invoke["truetally-prod-procesador"]' AllowCloudWatchLogstruetallyprodprocesador || true
+          terraform import 'module.compute.aws_cloudwatch_log_subscription_filter.loki_forwarder["truetally-prod-acceso"]' cwlsf-prod-acceso || true
+          terraform import 'module.compute.aws_cloudwatch_log_subscription_filter.loki_forwarder["truetally-prod-despachador"]' cwlsf-prod-despachador || true
+          terraform import 'module.compute.aws_cloudwatch_log_subscription_filter.loki_forwarder["truetally-prod-procesador"]' cwlsf-prod-procesador || true
 
       # El plan se genera en un runner distinto y los saved plans congelan los
       # data sources, por lo que el ZIP del forwarder (generado por archive_file)
