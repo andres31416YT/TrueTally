@@ -302,6 +302,35 @@ resource "aws_iam_role_policy" "ecs_task_efs" {
   })
 }
 
+resource "aws_iam_role_policy" "ecs_task_s3_fluent_bit" {
+  name = "${local.name_prefix}-ecs-s3-fluent-bit"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.fluent_bit_config.arn}/*"
+      }
+    ]
+  })
+}
+
+# S3 bucket for Fluent Bit custom configuration
+resource "aws_s3_bucket" "fluent_bit_config" {
+  bucket        = "${local.name_prefix}-fluent-bit-config"
+  force_destroy = true
+}
+
+resource "aws_s3_object" "fluent_bit_config" {
+  bucket       = aws_s3_bucket.fluent_bit_config.id
+  key          = "fluent-bit.conf"
+  content      = local.fluent_bit_config
+  content_type = "text/plain"
+}
+
 # EFS filesystem for blockchain node state persistence
 resource "aws_efs_file_system" "blockchain" {
   creation_token = "${local.name_prefix}-blockchain-efs"
@@ -385,8 +414,8 @@ resource "aws_ecs_task_definition" "blockchain" {
       firelensConfiguration = {
         type = "fluentbit"
         options = {
-          "config-file-type"  = "text"
-          "config-file-value" = local.fluent_bit_config
+          "config-file-type"  = "s3"
+          "config-file-value" = "s3://${aws_s3_bucket.fluent_bit_config.id}/${aws_s3_object.fluent_bit_config.key}"
         }
       }
       logConfiguration = {
