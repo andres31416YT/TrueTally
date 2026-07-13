@@ -455,7 +455,7 @@ resource "aws_efs_access_point" "blockchain" {
 # fiable (awslogs es mas robusto que FireLens en esta configuracion).
 resource "aws_cloudwatch_log_group" "blockchain_node" {
   name              = "/ecs/${local.name_prefix}-blockchain-node"
-  retention_in_days = 7
+  retention_in_days = 365
   kms_key_id        = var.kms_key_arn
 
   tags = {
@@ -485,6 +485,8 @@ resource "aws_ecs_task_definition" "blockchain" {
           "awslogs-group"         = aws_cloudwatch_log_group.blockchain_node.name
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+          "awslogs-multiline-pattern" = "^\\S"
         }
       }
       portMappings = [{

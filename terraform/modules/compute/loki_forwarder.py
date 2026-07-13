@@ -10,27 +10,19 @@ LOKI_URL = os.environ.get(
 
 
 def lambda_handler(event, context):
-    """Forward CloudWatch Logs subscription events to Loki.
-
-    Each invocation receives one CloudWatch Logs batch. We transform the
-    log events into the Loki push format and POST them to the Loki HTTP
-    push API. Labeled with job=lambda and the originating function name so
-    the logs are queryable in Grafana with {job="lambda"}.
-    """
     raw = event.get("awslogs", {}).get("data")
     if not raw:
         return {"status": "skipped", "reason": "no awslogs data"}
 
-    payload = json.loads(gzip.decompress(base64.b64decode(raw)))
+    try:
+        payload = json.loads(gzip.decompress(base64.b64decode(raw)))
+    except Exception as e:
+        print("LOKI_FORWARDER_ERROR decode_failed error=%s" % e)
+        return {"status": "error", "reason": "decode_failed", "error": str(e)}
 
     log_group = payload.get("logGroup", "unknown")
-    # /aws/lambda/truetally-dev-acceso -> truetally-dev-acceso
     function = log_group.split("/")[-1] or log_group
 
-    # Etiqueta job segun el origen del log:
-    #  - /aws/lambda/*  -> lambda
-    #  - /ecs/*blockchain* -> blockchain
-    #  - otro           -> app
     if log_group.startswith("/aws/lambda/"):
         job = "lambda"
     elif "blockchain" in log_group:
@@ -39,13 +31,17 @@ def lambda_handler(event, context):
         job = "app"
 
     values = []
+    skipped = 0
     for entry in payload.get("logEvents", []):
-        # Loki requires nanosecond-precision timestamps.
+        message = entry.get("message", "")
+        if not message.strip():
+            skipped += 1
+            continue
         ts_ns = str(int(entry["timestamp"]) * 1_000_000)
-        values.append([ts_ns, entry.get("message", "")])
+        values.append([ts_ns, message])
 
     if not values:
-        return {"status": "ok", "count": 0}
+        return {"status": "ok", "count": 0, "skipped_empty": skipped}
 
     body = {
         "streams": [
@@ -70,7 +66,23 @@ def lambda_handler(event, context):
 
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
-            return {"status": response.status, "count": len(values)}
-    except Exception as err:  # best-effort: logs remain in CloudWatch
-        print("LOKI_FORWARDER_ERROR url=%s error=%s" % (LOKI_URL, err))
-        return {"status": "error", "count": len(values)}
+            return {
+                "status": response.status,
+                "count": len(values),
+                "skipped_empty": skipped,
+                "log_group": log_group,
+                "job": job,
+            }
+    except Exception as err:
+        print(
+            "LOKI_FORWARDER_ERROR url=%s error=%s log_group=%s job=%s count=%d"
+            % (LOKI_URL, err, log_group, job, len(values))
+        )
+        return {
+            "status": "error",
+            "count": len(values),
+            "skipped_empty": skipped,
+            "log_group": log_group,
+            "job": job,
+            "error": str(err),
+        }

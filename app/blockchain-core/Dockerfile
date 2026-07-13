@@ -25,7 +25,7 @@ COPY --from=builder /app/target/release/blockchain-node /blockchain-node
 
 # CloudWatch agent config
 ENV PORT=9944
-ENV RUST_LOG=blockchain_core=info
+ENV RUST_LOG=blockchain_core=info,tokio=info,axum=info,tower_http=info
 
 EXPOSE ${PORT}
 
