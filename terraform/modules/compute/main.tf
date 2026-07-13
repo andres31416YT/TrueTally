@@ -380,14 +380,10 @@ resource "aws_ecs_task_definition" "blockchain" {
     },
     {
       name      = "log_router"
-      image     = var.fluent_bit_custom_image_uri
+      image     = "public.ecr.aws/aws-observability/aws-for-fluent-bit:latest"
       essential = true
       firelensConfiguration = {
         type = "fluentbit"
-        options = {
-          "config-file-type"  = "file"
-          "config-file-value" = "/fluent-bit/etc/fluent-bit.conf"
-        }
       }
       logConfiguration = {
         logDriver = "awslogs"

@@ -67,11 +67,6 @@ variable "ecr_repository_url" {
   type = string
 }
 
-variable "fluent_bit_custom_image_uri" {
-  type        = string
-  description = "Custom Fluent Bit image URI with Loki-only config (no null output)"
-}
-
 variable "lambda_zip_path" {
   type        = string
   description = "Path to lambda ZIP artifacts directory"
