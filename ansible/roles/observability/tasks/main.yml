@@ -1115,11 +1115,11 @@
               "title": "Log Volume por funcion Lambda",
               "type": "timeseries",
               "gridPos": {"x": 0, "y": 0, "w": 24, "h": 6},
-              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}",
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
               "targets": [
                 {
                   "refId": "A",
-                  "expr": "sum(count_over_time({job=\"lambda\"}[5m])) by (function)"
+                  "expr": "sum(count_over_time({job=\"blockchain\"}[5m])) by (function)"
                 }
               ],
               "yaxes": [{"format": "short"}, {"format": "short"}]
@@ -1133,7 +1133,7 @@
               "targets": [
                 {
                   "refId": "A",
-                  "expr": "{job=\"blockchain\"} |= \"\" !~ \"^(START |END |REPORT |INIT_START |REPORT RequestId)\" | line_format \"{{ .logGroup | regexp \"/ecs/.+blockchain.+\" | replace \"/ecs/.+blockchain.+\" \"blockchain-node\" | regexp \"/aws/lambda/\" | replace \"/aws/lambda/\" \"\" | regexp \"^([^_]+)_\" | replace \"^([^_]+)_\" \"$1\" | regexp \"^([a-z]+)\" | replace \"^([a-z]+)\" \"$1\" }}\""
+                  "expr": "{% raw %}{job=\"blockchain\"} |= \"\" !~ \"^(START |END |REPORT |INIT_START |REPORT RequestId)\" | line_format \"{{ .logGroup | regexp \"/ecs/.+blockchain.+\" | replace \"/ecs/.+blockchain.+\" \"blockchain-node\" | regexp \"/aws/lambda/\" | replace \"/aws/lambda/\" \"\" | regexp \"^([^_]+)_\" | replace \"^([^_]+)_\" \"$1\" | regexp \"^([a-z]+)\" | replace \"^([a-z]+)\" \"$1\" }}\"{% endraw %}"
                 }
               ]
             }
@@ -1187,7 +1187,7 @@
               "targets": [
                 {
                   "refId": "A",
-                  "expr": "{job=\"lambda\"} |= \"\" !~ \"^(START |END |REPORT |INIT_START |REPORT RequestId)\" | line_format \"{{ .logGroup | regexp \"/aws/lambda/\" | replace \"/aws/lambda/\" \"\" | regexp \"^([^_]+)_\" | replace \"^([^_]+)_\" \"$1\" }}\""
+                  "expr": "{% raw %}{job=\"lambda\"} |= \"\" !~ \"^(START |END |REPORT |INIT_START |REPORT RequestId)\" | line_format \"{{ .logGroup | regexp \"/aws/lambda/\" | replace \"/aws/lambda/\" \"\" | regexp \"^([^_]+)_\" | replace \"^([^_]+)_\" \"$1\" }}\"{% endraw %}"
                 }
               ]
             }
