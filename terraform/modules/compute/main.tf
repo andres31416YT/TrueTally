@@ -485,7 +485,6 @@ resource "aws_ecs_task_definition" "blockchain" {
           "awslogs-group"             = aws_cloudwatch_log_group.blockchain_node.name
           "awslogs-region"            = var.aws_region
           "awslogs-stream-prefix"     = "ecs"
-          "awslogs-create-group"      = "false"
           "awslogs-multiline-pattern" = "^\\S"
         }
       }
