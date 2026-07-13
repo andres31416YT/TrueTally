@@ -339,11 +339,11 @@ resource "aws_ecs_task_definition" "blockchain" {
       logConfiguration = {
         logDriver = "awsfirelens"
         options = {
-          "Name" = "loki"
-          "Host" = "loki.dev.truetally.internal"
-          "Port" = "3100"
-          "URI" = "/loki/api/v1/push?labels=job=blockchain"
-          "TLS" = "off"
+          "Name"   = "loki"
+          "Host"   = "loki.dev.truetally.internal"
+          "Port"   = "3100"
+          "Labels" = "job=blockchain"
+          "TLS"    = "off"
         }
       }
       portMappings = [{

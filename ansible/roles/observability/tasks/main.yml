@@ -104,7 +104,7 @@
         "name": "Prometheus",
         "type": "prometheus",
         "access": "proxy",
-        "url": "http://{{ prometheus_ip_result.stdout }}:9090",
+        "url": "http://prometheus.{{ truetally_env }}.truetally.internal:9090",
         "isDefault": true
       }
 
@@ -116,6 +116,23 @@
       -H "Content-Type: application/json" \
       -d @/tmp/grafana-ds-prometheus.json
   register: ds_prometheus_status
+  ignore_errors: true
+
+- name: Obtener UID del data source Prometheus  # noqa: command-instead-of-module
+  shell: |
+    curl -s -u "{{ grafana_user }}:{{ grafana_password }}" "{{ grafana_url }}/api/datasources" | jq -r '.[] | select(.name=="Prometheus") | .uid'
+  register: ds_prometheus_uid_cmd
+  ignore_errors: true
+  changed_when: false
+
+- name: Actualizar URL del data source Prometheus (DNS estable)  # noqa: command-instead-of-module
+  shell: |
+    curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
+      -u "{{ grafana_user }}:{{ grafana_password }}" \
+      -X PUT "{{ grafana_url }}/api/datasources/uid/{{ ds_prometheus_uid_cmd.stdout }}" \
+      -H "Content-Type: application/json" \
+      -d '{"id":0,"uid":"{{ ds_prometheus_uid_cmd.stdout }}","name":"Prometheus","type":"prometheus","access":"proxy","url":"http://prometheus.{{ truetally_env }}.truetally.internal:9090","isDefault":true}'
+  register: ds_prometheus_update_status
   ignore_errors: true
 
 - name: Obtener UID de data sources  # noqa: command-instead-of-module

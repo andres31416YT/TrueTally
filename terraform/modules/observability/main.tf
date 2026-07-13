@@ -115,6 +115,18 @@ resource "aws_service_discovery_service" "promtail" {
   }
 }
 
+resource "aws_service_discovery_service" "prometheus" {
+  name = "prometheus"
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.observability.id
+    dns_records {
+      type = "A"
+      ttl  = 60
+    }
+  }
+}
+
 # Application Load Balancer for Grafana
 resource "aws_lb" "grafana" {
   name               = "${local.name_prefix}-grafana-alb"
@@ -515,6 +527,10 @@ resource "aws_ecs_service" "prometheus" {
   deployment_circuit_breaker {
     enable   = true
     rollback = true
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.prometheus.arn
   }
 }
 
