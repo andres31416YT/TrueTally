@@ -27,6 +27,17 @@ def lambda_handler(event, context):
     # /aws/lambda/truetally-dev-acceso -> truetally-dev-acceso
     function = log_group.split("/")[-1] or log_group
 
+    # Etiqueta job segun el origen del log:
+    #  - /aws/lambda/*  -> lambda
+    #  - /ecs/*blockchain* -> blockchain
+    #  - otro           -> app
+    if log_group.startswith("/aws/lambda/"):
+        job = "lambda"
+    elif "blockchain" in log_group:
+        job = "blockchain"
+    else:
+        job = "app"
+
     values = []
     for entry in payload.get("logEvents", []):
         # Loki requires nanosecond-precision timestamps.
@@ -40,7 +51,7 @@ def lambda_handler(event, context):
         "streams": [
             {
                 "stream": {
-                    "job": "lambda",
+                    "job": job,
                     "function": function,
                     "log_group": log_group,
                 },
