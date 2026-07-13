@@ -1,14 +1,14 @@
 locals {
   name_prefix = "${var.project_name}-${var.env}"
 
-  # Map AZ names to subnet IDs for EFS mount targets
+  # Mapear nombres de zonas de disponibilidad a IDs de subredes para objetivos de montaje EFS
   blockchain_mount_targets = {
     for i, az in var.azs :
     az => var.blockchain_subnet_ids[i]
   }
 }
 
-# IAM Role for Lambda functions
+# Rol IAM para funciones Lambda
 resource "aws_iam_role" "lambda" {
   name = "${local.name_prefix}-lambda-role"
 
@@ -36,7 +36,7 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
-# Lambda IAM policy for SSM, Secrets Manager, and SQS access
+# Política IAM de Lambda para acceso a SSM, Secrets Manager y SQS
 resource "aws_iam_role_policy" "lambda_ssm" {
   name = "${local.name_prefix}-lambda-ssm"
   role = aws_iam_role.lambda.id
@@ -44,7 +44,7 @@ resource "aws_iam_role_policy" "lambda_ssm" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # Allow SSM session management
+      # Permitir gestión de sesiones SSM
       {
         Effect = "Allow"
         Action = [
@@ -52,7 +52,7 @@ resource "aws_iam_role_policy" "lambda_ssm" {
         ]
         Resource = "arn:aws:ssm:*:*:managed-instance/*"
       },
-      # Allow SSM command sending
+      # Permitir envío de comandos SSM
       {
         Effect = "Allow"
         Action = [
@@ -60,7 +60,7 @@ resource "aws_iam_role_policy" "lambda_ssm" {
         ]
         Resource = "arn:aws:ssm:*:*:document/*"
       },
-      # Allow reading DB credentials from Secrets Manager
+      # Permitir leer credenciales de BD desde Secrets Manager
       {
         Effect = "Allow"
         Action = [
@@ -71,7 +71,7 @@ resource "aws_iam_role_policy" "lambda_ssm" {
           var.redis_auth_token_secret_arn
         ]
       },
-      # Allow receiving messages from vote queue
+      # Permitir recibir mensajes de la cola de votos
       {
         Effect = "Allow"
         Action = [
@@ -81,7 +81,7 @@ resource "aws_iam_role_policy" "lambda_ssm" {
         ]
         Resource = var.vote_queue_arn
       },
-      # Allow sending messages to DLQ
+      # Permitir enviar mensajes a la DLQ
       {
         Effect = "Allow"
         Action = [
@@ -93,8 +93,8 @@ resource "aws_iam_role_policy" "lambda_ssm" {
   })
 }
 
-# Lambda Functions
-# Deployment is handled by Ansible after initial creation
+# Funciones Lambda
+# El despliegue se gestiona con Ansible después de la creación inicial
 resource "aws_lambda_function" "acceso" {
   function_name                  = "${local.name_prefix}-acceso"
   filename                       = "${var.lambda_zip_path}/lambda-acceso.zip"
@@ -121,7 +121,7 @@ resource "aws_lambda_function" "acceso" {
   }
 }
 
-# Lambda despachador: receives votes from frontend and sends to SQS queue
+# Lambda despachador: recibe votos del frontend y los envía a la cola SQS
 resource "aws_lambda_function" "despachador" {
   function_name                  = "${local.name_prefix}-despachador"
   filename                       = "${var.lambda_zip_path}/lambda-despachador.zip"
@@ -147,7 +147,7 @@ resource "aws_lambda_function" "despachador" {
   }
 }
 
-# Lambda procesador: processes votes from SQS and updates blockchain
+# Lambda procesador: procesa votos desde SQS y actualiza la blockchain
 resource "aws_lambda_function" "procesador" {
   function_name                  = "${local.name_prefix}-procesador"
   filename                       = "${var.lambda_zip_path}/lambda-procesador.zip"
@@ -173,7 +173,7 @@ resource "aws_lambda_function" "procesador" {
   }
 }
 
-# Event Source Mapping: SQS vote queue -> lambda-procesador
+# Mapeo de fuente de eventos: cola de votos SQS -> lambda-procesador
 # Consume los votos encolados por lambda-despachador y los escribe en la blockchain.
 resource "aws_lambda_event_source_mapping" "procesador_vote" {
   event_source_arn        = var.vote_queue_arn
@@ -183,7 +183,7 @@ resource "aws_lambda_event_source_mapping" "procesador_vote" {
 }
 
 # ---------------------------------------------------------------------------
-# CloudWatch Logs -> Loki forwarder
+# Reenvío de CloudWatch Logs -> Loki
 # ---------------------------------------------------------------------------
 # Las Lambdas (/aws/lambda/...) y el nodo blockchain (/ecs/...-blockchain-node)
 # escriben en CloudWatch. Este forwarder recibe los eventos de suscripcion de
@@ -312,7 +312,7 @@ resource "aws_cloudwatch_log_subscription_filter" "loki_forwarder" {
   depends_on = [aws_lambda_permission.loki_forwarder_invoke]
 }
 
-# ECS Cluster for Blockchain node
+# Clúster ECS para el nodo Blockchain
 resource "aws_ecs_cluster" "blockchain" {
   name = "${local.name_prefix}-blockchain-cluster"
 
@@ -322,7 +322,7 @@ resource "aws_ecs_cluster" "blockchain" {
   }
 }
 
-# IAM role for ECS tasks (blockchain container)
+# Rol IAM para tareas ECS (contenedor blockchain)
 resource "aws_iam_role" "ecs_task" {
   name = "${local.name_prefix}-ecs-task-role"
 
@@ -340,7 +340,7 @@ resource "aws_iam_role" "ecs_task" {
   })
 }
 
-# IAM role for ECS task execution (pulling images, writing logs)
+# Rol IAM para ejecución de tareas ECS (obtención de imágenes, escritura de logs)
 resource "aws_iam_role" "ecs_execution" {
   name = "${local.name_prefix}-ecs-execution-role"
 
@@ -389,7 +389,7 @@ resource "aws_iam_role_policy" "ecs_task_service_discovery" {
   })
 }
 
-# Policy allowing ECS tasks to mount EFS filesystem
+# Política que permite a tareas ECS montar el sistema de archivos EFS
 resource "aws_iam_role_policy" "ecs_task_efs" {
   name = "${local.name_prefix}-ecs-efs"
   role = aws_iam_role.ecs_task.id
@@ -410,7 +410,7 @@ resource "aws_iam_role_policy" "ecs_task_efs" {
   })
 }
 
-# EFS filesystem for blockchain node state persistence
+# Sistema de archivos EFS para la persistencia de estado del nodo blockchain
 resource "aws_efs_file_system" "blockchain" {
   creation_token = "${local.name_prefix}-blockchain-efs"
   encrypted      = true
@@ -421,7 +421,7 @@ resource "aws_efs_file_system" "blockchain" {
   }
 }
 
-# Mount targets for EFS in each availability zone
+# Objetivos de montaje para EFS en cada zona de disponibilidad
 resource "aws_efs_mount_target" "blockchain" {
   for_each = local.blockchain_mount_targets
 
@@ -430,7 +430,7 @@ resource "aws_efs_mount_target" "blockchain" {
   security_groups = [var.blockchain_security_group_id]
 }
 
-# EFS access point for ECS container mounting
+# Punto de acceso EFS para montaje de contenedores ECS
 resource "aws_efs_access_point" "blockchain" {
   file_system_id = aws_efs_file_system.blockchain.id
 
@@ -449,8 +449,8 @@ resource "aws_efs_access_point" "blockchain" {
   }
 }
 
-# ECS Task Definition for blockchain node with EFS volume mount and FireLens log routing to Loki
-# CloudWatch log group for the blockchain node. Suscrito al forwarder Loki
+# Definición de tarea ECS para el nodo blockchain con montaje de volumen EFS y enrutamiento de logs FireLens a Loki
+# Grupo de logs de CloudWatch para el nodo blockchain. Suscrito al forwarder de Loki
 # (job=blockchain) para llevar los logs de la aplicacion a Loki de forma
 # fiable (awslogs es mas robusto que FireLens en esta configuracion).
 resource "aws_cloudwatch_log_group" "blockchain_node" {
@@ -513,7 +513,7 @@ resource "aws_ecs_task_definition" "blockchain" {
   }
 }
 
-# ECS Service running the blockchain node
+# Servicio ECS ejecutando el nodo blockchain
 resource "aws_ecs_service" "blockchain" {
   name            = "${local.name_prefix}-blockchain-service"
   cluster         = aws_ecs_cluster.blockchain.id
@@ -541,7 +541,7 @@ resource "aws_ecs_service" "blockchain" {
   }
 }
 
-# Service Discovery for blockchain node (stable DNS endpoint)
+# Descubrimiento de servicios para el nodo blockchain (endpoint DNS estable)
 resource "aws_service_discovery_service" "blockchain" {
   name = "blockchain"
 

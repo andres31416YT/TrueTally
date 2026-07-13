@@ -6,7 +6,7 @@ data "aws_vpc" "selected" {
   id = var.vpc_id
 }
 
-# Security Group for Observability stack
+# Grupo de seguridad para el stack de observabilidad
 resource "aws_security_group" "observability" {
   name        = "${local.name_prefix}-observability-sg"
   description = "Security group for observability stack"
@@ -37,7 +37,7 @@ resource "aws_security_group" "observability" {
   }
 }
 
-# Security Group for Grafana ALB
+# Grupo de seguridad para el ALB de Grafana
 resource "aws_security_group" "grafana_alb" {
   name        = "${local.name_prefix}-grafana-alb-sg"
   description = "Security group for Grafana Application Load Balancer"
@@ -74,7 +74,7 @@ resource "aws_security_group" "grafana_alb" {
 
 
 
-# ECS Cluster for Observability
+# Clúster ECS para Observabilidad
 resource "aws_ecs_cluster" "observability" {
   name = "${local.name_prefix}-observability-cluster"
 
@@ -114,7 +114,7 @@ resource "aws_service_discovery_service" "prometheus" {
   }
 }
 
-# Application Load Balancer for Grafana
+# Balanceador de carga de aplicación para Grafana
 resource "aws_lb" "grafana" {
   name               = "${local.name_prefix}-grafana-alb"
   internal           = false
@@ -129,7 +129,7 @@ resource "aws_lb" "grafana" {
   }
 }
 
-# Target Group for Grafana
+# Grupo objetivo para Grafana
 resource "aws_lb_target_group" "grafana" {
   name        = "${local.name_prefix}-grafana-tg"
   port        = 3000
@@ -152,7 +152,7 @@ resource "aws_lb_target_group" "grafana" {
   }
 }
 
-# HTTP Listener for Grafana
+# Escuchador HTTP para Grafana
 resource "aws_lb_listener" "grafana" {
   load_balancer_arn = aws_lb.grafana.arn
   port              = "80"
@@ -164,7 +164,7 @@ resource "aws_lb_listener" "grafana" {
   }
 }
 
-# IAM role for ECS tasks (observability)
+# Rol IAM para tareas ECS (observabilidad)
 resource "aws_iam_role" "ecs_task" {
   name = "${local.name_prefix}-observability-ecs-task-role"
 
@@ -221,7 +221,7 @@ resource "aws_iam_role_policy" "ecs_task_cloudwatch" {
   })
 }
 
-# IAM role for ECS task execution
+# Rol IAM para ejecución de tareas ECS
 resource "aws_iam_role" "ecs_execution" {
   name = "${local.name_prefix}-observability-ecs-execution-role"
 
@@ -244,7 +244,7 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_role" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# CloudWatch Log Groups for observability services
+# Grupos de logs de CloudWatch para servicios de observabilidad
 resource "aws_cloudwatch_log_group" "loki" {
   name              = "/ecs/${local.name_prefix}-observability-loki"
   retention_in_days = 7
@@ -275,7 +275,7 @@ resource "aws_cloudwatch_log_group" "grafana" {
   }
 }
 
-# ECS Task Definition for Loki
+# Definición de tarea ECS para Loki
 resource "aws_ecs_task_definition" "loki" {
   family                   = "${local.name_prefix}-observability-loki"
   network_mode             = "awsvpc"
@@ -314,7 +314,7 @@ resource "aws_ecs_task_definition" "loki" {
   }
 }
 
-# ECS Task Definition for Prometheus
+# Definición de tarea ECS para Prometheus
 resource "aws_ecs_task_definition" "prometheus" {
   family                   = "${local.name_prefix}-observability-prometheus"
   network_mode             = "awsvpc"
@@ -354,7 +354,7 @@ resource "aws_ecs_task_definition" "prometheus" {
   }
 }
 
-# ECS Task Definition for Grafana
+# Definición de tarea ECS para Grafana
 resource "aws_ecs_task_definition" "grafana" {
   family                   = "${local.name_prefix}-observability-grafana"
   network_mode             = "awsvpc"
@@ -404,7 +404,7 @@ resource "aws_ecs_task_definition" "grafana" {
   }
 }
 
-# ECS Service for Loki
+# Servicio ECS para Loki
 resource "aws_ecs_service" "loki" {
   name            = "${local.name_prefix}-observability-loki"
   cluster         = aws_ecs_cluster.observability.id
@@ -428,7 +428,7 @@ resource "aws_ecs_service" "loki" {
   }
 }
 
-# ECS Service for Prometheus
+# Servicio ECS para Prometheus
 resource "aws_ecs_service" "prometheus" {
   name            = "${local.name_prefix}-observability-prometheus"
   cluster         = aws_ecs_cluster.observability.id
@@ -452,7 +452,7 @@ resource "aws_ecs_service" "prometheus" {
   }
 }
 
-# ECS Service for Grafana
+# Servicio ECS para Grafana
 resource "aws_ecs_service" "grafana" {
   name            = "${local.name_prefix}-observability-grafana"
   cluster         = aws_ecs_cluster.observability.id

@@ -218,7 +218,7 @@ output "blockchain_sg_id" { value = aws_security_group.blockchain.id }
 output "service_discovery_namespace_id" { value = aws_service_discovery_private_dns_namespace.main.id }
 output "service_discovery_namespace_name" { value = aws_service_discovery_private_dns_namespace.main.name }
 
-# VPC Endpoints
+# Endpoints de VPC
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${var.aws_region}.s3"

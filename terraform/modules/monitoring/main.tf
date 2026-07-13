@@ -2,7 +2,7 @@ locals {
   name_prefix = "${var.project_name}-${var.env}"
 }
 
-# CloudWatch Log Groups
+# Grupos de logs de CloudWatch
 resource "aws_cloudwatch_log_group" "lambda_acceso" {
   name              = "/aws/lambda/${local.name_prefix}-acceso"
   retention_in_days = 365
