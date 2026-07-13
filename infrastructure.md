@@ -222,10 +222,15 @@ Por cada AZ existen **tres Lambdas** funcionales (Acceso, Despachador, Procesado
 
 | Servicio | Uso |
 |----------|-----|
-| **Amazon CloudWatch** | Métricas, alarmas y logs de Lambdas, ECS, RDS, SQS, VPC. Dashboards por componente. |
-| **AWS X-Ray** | Trazabilidad distribuida de extremo a extremo (configurado en la arquitectura). |
+| **Amazon CloudWatch** | Métricas, alarmas y logs de Lambdas, ECS, RDS, SQS y VPC (retención 365 días, cifrado KMS). Consumido en Grafana vía data source CloudWatch. |
+| **Prometheus** | Recolección de métricas en ECS Fargate (scrape cada 15 s, retención 7 días). Exponde métricas de Loki, Promtail y sí mismo. |
+| **Loki** | Agregación y almacenamiento de logs en ECS Fargate (puerto 3100). Recibe los logs enviados por Promtail. |
+| **Promtail** | Agente que recolecta los logs y los envía a Loki (ECS Fargate, puerto 9080). |
+| **Grafana** | Visualización y dashboards (ECS Fargate + ALB en puerto 3000). Data sources: CloudWatch, Loki y Prometheus. Dashboards: ECS Blockchain, Lambdas, SQS, RDS PostgreSQL y Observability Stack. |
 | **SonarQube (Cloud)** | Análisis estático de código en pipeline. |
 | **Checkov** | Escaneo de seguridad en infraestructura Terraform en pipeline. |
+
+> **Nota:** AWS X-Ray fue removido del proyecto porque no estaba completamente instrumentado (solo disponía del flag de Active tracing en las Lambdas y el permiso IAM, sin daemon ni SDK). El stack de observabilidad se aprovisiona con Terraform (`modules/observability`, `modules/monitoring`) y se configura con Ansible (`roles/observability`). |
 
 ---
 

@@ -84,6 +84,36 @@ resource "aws_ecs_cluster" "observability" {
   }
 }
 
+resource "aws_service_discovery_private_dns_namespace" "observability" {
+  name        = "${var.env}.truetally.internal"
+  vpc         = var.vpc_id
+  description = "Private DNS namespace for observability stack"
+}
+
+resource "aws_service_discovery_service" "loki" {
+  name = "loki"
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.observability.id
+    dns_records {
+      type = "A"
+      ttl  = 60
+    }
+  }
+}
+
+resource "aws_service_discovery_service" "prometheus" {
+  name = "prometheus"
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.observability.id
+    dns_records {
+      type = "A"
+      ttl  = 60
+    }
+  }
+}
+
 # Application Load Balancer for Grafana
 resource "aws_lb" "grafana" {
   name               = "${local.name_prefix}-grafana-alb"
@@ -225,16 +255,6 @@ resource "aws_cloudwatch_log_group" "loki" {
   }
 }
 
-resource "aws_cloudwatch_log_group" "promtail" {
-  name              = "/ecs/${local.name_prefix}-observability-promtail"
-  retention_in_days = 7
-  kms_key_id        = var.kms_key_arn
-
-  tags = {
-    Environment = var.env
-  }
-}
-
 resource "aws_cloudwatch_log_group" "prometheus" {
   name              = "/ecs/${local.name_prefix}-observability-prometheus"
   retention_in_days = 7
@@ -294,41 +314,6 @@ resource "aws_ecs_task_definition" "loki" {
   }
 }
 
-# ECS Task Definition for Promtail
-resource "aws_ecs_task_definition" "promtail" {
-  family                   = "${local.name_prefix}-observability-promtail"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = "256"
-  memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_execution.arn
-  task_role_arn            = aws_iam_role.ecs_task.arn
-
-  container_definitions = jsonencode([{
-    name      = "promtail"
-    image     = "grafana/promtail:2.9.3"
-    essential = true
-    cpu       = 256
-    memory    = 512
-    logConfiguration = {
-      logDriver = "awslogs"
-      options = {
-        "awslogs-group"         = aws_cloudwatch_log_group.promtail.name
-        "awslogs-region"        = var.aws_region
-        "awslogs-stream-prefix" = "ecs"
-      }
-    }
-    entryPoint = ["/bin/sh", "-c"]
-    command = [
-      "echo 'server:\n  http_listen_port: 9080\n  grpc_listen_port: 0\npositions:\n  filename: /tmp/positions.yaml\nclients:\n  - url: http://loki.truetally-dev.local:3100/loki/api/v1/push\nscrape_configs:\n  - job_name: promtail\n    static_configs:\n      - targets:\n          - localhost\n        labels:\n          job: promtail\n          __path__: /var/log/promtail.log' > /etc/promtail/config.yml && /usr/bin/promtail -config.file=/etc/promtail/config.yml"
-    ]
-  }])
-
-  tags = {
-    Name = "${local.name_prefix}-observability-promtail"
-  }
-}
-
 # ECS Task Definition for Prometheus
 resource "aws_ecs_task_definition" "prometheus" {
   family                   = "${local.name_prefix}-observability-prometheus"
@@ -360,7 +345,7 @@ resource "aws_ecs_task_definition" "prometheus" {
     }]
     entryPoint = ["/bin/sh", "-c"]
     command = [
-      "echo 'global:\n  scrape_interval: 15s\nscrape_configs:\n  - job_name: prometheus\n    static_configs:\n      - targets: [localhost:9090]\n  - job_name: loki\n    static_configs:\n      - targets: [localhost:3100]\n  - job_name: promtail\n    static_configs:\n      - targets: [localhost:9080]' > /etc/prometheus/prometheus.yml && /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=7d"
+      "echo 'global:\n  scrape_interval: 15s\nscrape_configs:\n  - job_name: prometheus\n    static_configs:\n      - targets: [localhost:9090]\n  - job_name: loki\n    static_configs:\n      - targets: [loki.${var.env}.truetally.internal:3100]' > /etc/prometheus/prometheus.yml && /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=7d"
     ]
   }])
 
@@ -437,25 +422,9 @@ resource "aws_ecs_service" "loki" {
     enable   = true
     rollback = true
   }
-}
 
-# ECS Service for Promtail
-resource "aws_ecs_service" "promtail" {
-  name            = "${local.name_prefix}-observability-promtail"
-  cluster         = aws_ecs_cluster.observability.id
-  task_definition = aws_ecs_task_definition.promtail.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets          = var.subnet_ids
-    security_groups  = [aws_security_group.observability.id]
-    assign_public_ip = true
-  }
-
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
+  service_registries {
+    registry_arn = aws_service_discovery_service.loki.arn
   }
 }
 
@@ -476,6 +445,10 @@ resource "aws_ecs_service" "prometheus" {
   deployment_circuit_breaker {
     enable   = true
     rollback = true
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.prometheus.arn
   }
 }
 

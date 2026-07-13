@@ -6,6 +6,28 @@ locals {
     for i, az in var.azs :
     az => var.blockchain_subnet_ids[i]
   }
+
+  fluent_bit_config = <<-EOS
+    [SERVICE]
+        Flush        1
+        Daemon       Off
+        Log_Level    info
+
+    [INPUT]
+        Name              forward
+        Listen            0.0.0.0
+        Port              24224
+
+    [OUTPUT]
+        Name              loki
+        Match             *
+        Host              loki.dev.truetally.internal
+        Port              3100
+        Labels            job=blockchain
+        TLS               off
+        TLS.Verify        Off
+        Retry_Limit       False
+  EOS
 }
 
 # IAM Role for Lambda functions
@@ -34,11 +56,6 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 resource "aws_iam_role_policy_attachment" "lambda_vpc" {
   role       = aws_iam_role.lambda.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-}
-
-resource "aws_iam_role_policy_attachment" "lambda_xray" {
-  role       = aws_iam_role.lambda.name
-  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
 }
 
 # Lambda IAM policy for SSM, Secrets Manager, and SQS access
@@ -124,10 +141,6 @@ resource "aws_lambda_function" "acceso" {
       BLOCKCHAIN_NODE_URL = local.blockchain_service_dns != "" ? "http://${local.blockchain_service_dns}:9944" : "http://localhost:9944"
     }
   }
-
-  tracing_config {
-    mode = "Active"
-  }
 }
 
 # Lambda despachador: receives votes from frontend and sends to SQS queue
@@ -153,10 +166,6 @@ resource "aws_lambda_function" "despachador" {
     variables = {
       VOTE_QUEUE_URL = var.vote_queue_url
     }
-  }
-
-  tracing_config {
-    mode = "Active"
   }
 }
 
@@ -184,10 +193,6 @@ resource "aws_lambda_function" "procesador" {
       BLOCKCHAIN_NODE_URL = local.blockchain_service_dns != "" ? "http://${local.blockchain_service_dns}:9944" : "http://localhost:9944"
     }
   }
-
-  tracing_config {
-    mode = "Active"
-  }
 }
 
 # Event Source Mapping: SQS vote queue -> lambda-procesador
@@ -197,6 +202,122 @@ resource "aws_lambda_event_source_mapping" "procesador_vote" {
   function_name           = aws_lambda_function.procesador.arn
   batch_size              = 5
   function_response_types = ["ReportBatchItemFailures"]
+}
+
+# ---------------------------------------------------------------------------
+# CloudWatch Logs -> Loki forwarder
+# ---------------------------------------------------------------------------
+# Las funciones Lambda escriben sus logs en CloudWatch (/aws/lambda/...), pero
+# Loki no los ingiere. Este forwarder recibe los eventos de suscripcion de
+# CloudWatch Logs y los reenvia al endpoint de ingesta de Loki, etiquetandolos
+# con job=lambda para que sean consultables en Grafana con {job="lambda"}.
+# ---------------------------------------------------------------------------
+data "aws_caller_identity" "current" {}
+
+data "archive_file" "loki_forwarder" {
+  type        = "zip"
+  source_file = "${path.module}/loki_forwarder.py"
+  output_path = "${path.module}/build/loki_forwarder.zip"
+}
+
+resource "aws_iam_role" "loki_forwarder" {
+  name = "${local.name_prefix}-loki-forwarder-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "loki_forwarder" {
+  name = "${local.name_prefix}-loki-forwarder-policy"
+  role = aws_iam_role.loki_forwarder.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:*:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_lambda_function" "loki_forwarder" {
+  function_name                  = "${local.name_prefix}-loki-forwarder"
+  filename                       = data.archive_file.loki_forwarder.output_path
+  source_code_hash               = data.archive_file.loki_forwarder.output_base64sha256
+  role                           = aws_iam_role.loki_forwarder.arn
+  handler                        = "loki_forwarder.lambda_handler"
+  runtime                        = "python3.12"
+  timeout                       = 30
+  memory_size                   = 128
+  kms_key_arn                    = var.kms_key_arn
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
+
+  vpc_config {
+    subnet_ids         = var.private_subnet_ids
+    security_group_ids = [var.lambda_security_group_id]
+  }
+
+  environment {
+    variables = {
+      LOKI_URL = "http://loki.${var.env}.truetally.internal:3100/loki/api/v1/push"
+    }
+  }
+}
+
+# Suscripcion de CloudWatch Logs para cada Lambda de aplicacion.
+locals {
+  loki_forwarder_log_groups = [
+    "${local.name_prefix}-acceso",
+    "${local.name_prefix}-despachador",
+    "${local.name_prefix}-procesador",
+  ]
+}
+
+resource "aws_lambda_permission" "loki_forwarder_invoke" {
+  for_each = toset(local.loki_forwarder_log_groups)
+
+  statement_id  = "AllowCloudWatchLogs${replace(each.value, "-", "")}"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.loki_forwarder.function_name
+  principal     = "logs.${var.aws_region}.amazonaws.com"
+  source_arn    = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${each.value}:*"
+}
+
+resource "aws_cloudwatch_log_subscription_filter" "loki_forwarder" {
+  for_each = toset(local.loki_forwarder_log_groups)
+
+  name            = "${each.value}-to-loki"
+  log_group_name  = "/aws/lambda/${each.value}"
+  filter_pattern  = ""
+  destination_arn = aws_lambda_function.loki_forwarder.arn
+
+  depends_on = [aws_lambda_permission.loki_forwarder_invoke]
 }
 
 # ECS Cluster for Blockchain node
@@ -336,7 +457,7 @@ resource "aws_efs_access_point" "blockchain" {
   }
 }
 
-# ECS Task Definition for blockchain node with EFS volume mount
+# ECS Task Definition for blockchain node with EFS volume mount and FireLens log routing to Loki
 resource "aws_ecs_task_definition" "blockchain" {
   family                   = "${local.name_prefix}-blockchain"
   network_mode             = "awsvpc"
@@ -346,30 +467,51 @@ resource "aws_ecs_task_definition" "blockchain" {
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
-  container_definitions = jsonencode([{
-    name                   = "blockchain-node"
-    image                  = "${var.ecr_repository_url}:latest"
-    essential              = true
-    privileged             = false
-    readonlyRootFilesystem = true
-    logConfiguration = {
-      logDriver = "awslogs"
-      options = {
-        "awslogs-group"         = "/ecs/${local.name_prefix}-blockchain"
-        "awslogs-region"        = var.aws_region
-        "awslogs-stream-prefix" = "ecs"
+  container_definitions = jsonencode([
+    {
+      name                   = "blockchain-node"
+      image                  = "${var.ecr_repository_url}:latest"
+      essential              = true
+      privileged             = false
+      readonlyRootFilesystem = true
+      logConfiguration = {
+        logDriver = "awsfirelens"
+        options = {
+          "Name"   = "loki"
+          "Host"   = "loki.dev.truetally.internal"
+          "Port"   = "3100"
+          "Labels" = "job=blockchain"
+          "TLS"    = "off"
+        }
       }
+      portMappings = [{
+        containerPort = 9944
+        hostPort      = 9944
+      }]
+      mountPoints = [{
+        sourceVolume  = "blockchain-efs"
+        containerPath = "/data"
+        readOnly      = false
+      }]
+    },
+    {
+      name      = "log_router"
+      image     = "public.ecr.aws/aws-observability/aws-for-fluent-bit:latest"
+      essential = true
+      firelensConfiguration = {
+        type = "fluentbit"
+      }
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/${local.name_prefix}-blockchain"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+      memoryReservation = 50
     }
-    portMappings = [{
-      containerPort = 9944
-      hostPort      = 9944
-    }]
-    mountPoints = [{
-      sourceVolume  = "blockchain-efs"
-      containerPath = "/data"
-      readOnly      = false
-    }]
-  }])
+  ])
 
   volume {
     name = "blockchain-efs"

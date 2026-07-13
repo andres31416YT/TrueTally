@@ -578,6 +578,19 @@ Ansible descubre las instancias por tags, se conecta via SSM y aplica el playboo
 
 ---
 
+## 10. Monitoreo y Observabilidad del Proyecto
+
+TrueTally en AWS usa el siguiente stack de observabilidad (aprovisionado con Terraform y configurado con Ansible después del `apply`):
+
+- **CloudWatch**: logs y métricas de Lambdas, ECS, RDS y SQS (consumidos en Grafana vía data source CloudWatch).
+- **Prometheus**: recolección de métricas en ECS Fargate (scrape cada 15 s, retención 7 días).
+- **Loki** + **Promtail**: agregación y envío de logs (ECS Fargate, puertos 3100 y 9080).
+- **Grafana**: dashboards detrás de un ALB (puerto 3000) con data sources CloudWatch, Loki y Prometheus.
+
+> AWS X-Ray fue removido del proyecto porque no estaba completamente instrumentado (solo tenía el flag de Active tracing en las Lambdas y el permiso IAM, sin daemon ni SDK).
+
+---
+
 > 🔁 **Recuerda**
 >
 > Los pipelines son código. Versiónalos, pruébalos y mejóralos igual que el resto de tu proyecto.
