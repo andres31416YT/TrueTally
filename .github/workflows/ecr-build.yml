@@ -110,3 +110,9 @@ jobs:
 
       - name: Image pushed
         run: echo "Image pushed"
+
+      - name: Force ECS deployment
+        run: |
+          CLUSTER=${{ github.ref == 'refs/heads/main' && 'truetally-prod-blockchain-cluster' || 'truetally-dev-blockchain-cluster' }}
+          SERVICE=${{ github.ref == 'refs/heads/main' && 'truetally-prod-blockchain-service' || 'truetally-dev-blockchain-service' }}
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment --region ${{ env.AWS_REGION }}
