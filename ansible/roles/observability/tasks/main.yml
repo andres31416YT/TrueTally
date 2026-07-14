@@ -1072,16 +1072,22 @@
             },
             {
               "id": 6,
-              "title": "Blockchain Logs (Loki)",
-              "type": "logs",
-              "gridPos": {"x": 0, "y": 12, "w": 24, "h": 10},
+              "title": "Error Rate por Job (Loki)",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 12, "w": 24, "h": 8},
               "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
               "targets": [
                 {
                   "refId": "A",
-                  "expr": "{job=\"blockchain\"}"
+                  "expr": "sum(rate({job=~\".+\"} |~ \"(?i)(error|panic|exception|fail)\" [5m])) by (job)"
                 }
-              ]
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {"drawStyle": "line", "fillOpacity": 10}
+                }
+              }
             }
           ],
           "time": {"from": "now-6h", "to": "now"},
@@ -1100,42 +1106,192 @@
   register: dash_stack_status
   ignore_errors: true
 
-- name: Preparar dashboard Logs - Blockchain
+- name: Preparar dashboard Prometheus Avanzado
   copy:
-    dest: /tmp/grafana-dashboard-logs-blockchain.json
+    dest: /tmp/grafana-dashboard-prometheus-advanced.json
     content: |
       {
         "dashboard": {
-          "title": "Logs - Blockchain - {{ name_prefix }}",
-          "tags": ["truetally", "logs", "loki", "blockchain"],
+          "title": "Prometheus Avanzado - {{ name_prefix }}",
+          "tags": ["truetally", "prometheus", "observability", "advanced"],
           "timezone": "browser",
           "panels": [
             {
               "id": 1,
-              "title": "Log Volume por funcion Lambda",
-              "type": "timeseries",
-              "gridPos": {"x": 0, "y": 0, "w": 24, "h": 6},
-              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
-              "targets": [
-                {
-                  "refId": "A",
-                  "expr": "sum(count_over_time({job=\"blockchain\"}[5m])) by (function)"
+              "title": "Targets Up",
+              "type": "stat",
+              "gridPos": {"x": 0, "y": 0, "w": 8, "h": 6},
+              "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
+              "targets": [{"refId": "A", "expr": "sum(up)"}],
+              "reduceCalc": "last",
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}]},
+                  "color": {"mode": "thresholds"}
                 }
-              ],
-              "yaxes": [{"format": "short"}, {"format": "short"}]
+              }
             },
             {
               "id": 2,
-              "title": "Logs de aplicacion blockchain",
-              "type": "logs",
-              "gridPos": {"x": 0, "y": 6, "w": 24, "h": 14},
-              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
-              "targets": [
-                {
-                  "refId": "A",
-                  "expr": "{% raw %}{job=\"blockchain\"} |= \"\" !~ \"^(START |END |REPORT |INIT_START |REPORT RequestId)\" | line_format \"{{ .logGroup | regexp \"/ecs/.+blockchain.+\" | replace \"/ecs/.+blockchain.+\" \"blockchain-node\" | regexp \"/aws/lambda/\" | replace \"/aws/lambda/\" \"\" | regexp \"^([^_]+)_\" | replace \"^([^_]+)_\" \"$1\" | regexp \"^([a-z]+)\" | replace \"^([a-z]+)\" \"$1\" }}\"{% endraw %}"
+              "title": "Targets Totales",
+              "type": "stat",
+              "gridPos": {"x": 8, "y": 0, "w": 8, "h": 6},
+              "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
+              "targets": [{"refId": "A", "expr": "count(up)"}],
+              "reduceCalc": "last",
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "blue"}]},
+                  "color": {"mode": "thresholds"}
                 }
-              ]
+              }
+            },
+            {
+              "id": 3,
+              "title": "Scrape Health (%)",
+              "type": "stat",
+              "gridPos": {"x": 16, "y": 0, "w": 8, "h": 6},
+              "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
+              "targets": [{"refId": "A", "expr": "avg(up) * 100"}],
+              "reduceCalc": "last",
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "min": 0,
+                  "max": 100,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {"value": 0, "color": "red"},
+                      {"value": 99.9, "color": "yellow"},
+                      {"value": 100, "color": "green"}
+                    ]
+                  },
+                  "color": {"mode": "thresholds"}
+                }
+              }
+            },
+            {
+              "id": 4,
+              "title": "Estado de targets (up)",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 6, "w": 12, "h": 8},
+              "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
+              "targets": [{"refId": "A", "expr": "up", "legendFormat": "{% raw %}{{job}}{% endraw %}"}],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "min": 0,
+                  "max": 1,
+                  "custom": {"drawStyle": "line", "lineInterpolation": "stepAfter", "fillOpacity": 10}
+                }
+              }
+            },
+            {
+              "id": 5,
+              "title": "Duracion de scrape por job",
+              "type": "timeseries",
+              "gridPos": {"x": 12, "y": 6, "w": 12, "h": 8},
+              "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
+              "targets": [{"refId": "A", "expr": "scrape_duration_seconds", "legendFormat": "{% raw %}{{job}}{% endraw %}"}],
+              "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 10}}}
+            },
+            {
+              "id": 6,
+              "title": "Goroutines por job",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 14, "w": 12, "h": 8},
+              "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
+              "targets": [{"refId": "A", "expr": "go_goroutines", "legendFormat": "{% raw %}{{job}}{% endraw %}"}],
+              "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10}}}
+            },
+            {
+              "id": 7,
+              "title": "Uso de CPU (%) por job",
+              "type": "timeseries",
+              "gridPos": {"x": 12, "y": 14, "w": 12, "h": 8},
+              "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
+              "targets": [{"refId": "A", "expr": "rate(process_cpu_seconds_total[5m]) * 100", "legendFormat": "{% raw %}{{job}}{% endraw %}"}],
+              "fieldConfig": {"defaults": {"unit": "percent", "custom": {"drawStyle": "line", "fillOpacity": 10}}}
+            },
+            {
+              "id": 8,
+              "title": "Memoria Prometheus (RSS)",
+              "type": "gauge",
+              "gridPos": {"x": 0, "y": 22, "w": 8, "h": 6},
+              "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
+              "targets": [{"refId": "A", "expr": "process_resident_memory_bytes{job=\"prometheus\"}"}],
+              "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}}
+            },
+            {
+              "id": 9,
+              "title": "Memoria Loki (RSS)",
+              "type": "gauge",
+              "gridPos": {"x": 8, "y": 22, "w": 8, "h": 6},
+              "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
+              "targets": [{"refId": "A", "expr": "process_resident_memory_bytes{job=\"loki\"}"}],
+              "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}}
+            },
+            {
+              "id": 10,
+              "title": "TSDB Head Series",
+              "type": "stat",
+              "gridPos": {"x": 16, "y": 22, "w": 8, "h": 6},
+              "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
+              "targets": [{"refId": "A", "expr": "prometheus_tsdb_head_series"}],
+              "reduceCalc": "last",
+              "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "blue"}]}}}
+            },
+            {
+              "id": 11,
+              "title": "Tasa de ingesta TSDB (samples/s)",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 28, "w": 12, "h": 8},
+              "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
+              "targets": [{"refId": "A", "expr": "rate(prometheus_tsdb_head_samples_appended_total[5m])"}],
+              "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 15}}}
+            },
+            {
+              "id": 12,
+              "title": "Tasa de ingesta Loki (bytes/s)",
+              "type": "timeseries",
+              "gridPos": {"x": 12, "y": 28, "w": 12, "h": 8},
+              "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
+              "targets": [{"refId": "A", "expr": "sum(rate(loki_distributor_bytes_received_total[5m]))"}],
+              "fieldConfig": {"defaults": {"unit": "Bps", "custom": {"drawStyle": "line", "fillOpacity": 15}}}
+            },
+            {
+              "id": 13,
+              "title": "Latencia de requests a Loki (heatmap)",
+              "type": "heatmap",
+              "gridPos": {"x": 0, "y": 36, "w": 12, "h": 8},
+              "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
+              "targets": [{"refId": "A", "expr": "sum(rate(loki_request_duration_seconds_bucket[5m])) by (le)", "format": "heatmap", "legendFormat": "{% raw %}{{le}}{% endraw %}"}],
+              "options": {"calculate": false},
+              "fieldConfig": {"defaults": {"unit": "s"}}
+            },
+            {
+              "id": 14,
+              "title": "Latencia Loki p50 / p95 / p99",
+              "type": "timeseries",
+              "gridPos": {"x": 12, "y": 36, "w": 12, "h": 8},
+              "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
+              "targets": [
+                {"refId": "A", "expr": "histogram_quantile(0.50, sum(rate(loki_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50"},
+                {"refId": "B", "expr": "histogram_quantile(0.95, sum(rate(loki_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95"},
+                {"refId": "C", "expr": "histogram_quantile(0.99, sum(rate(loki_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p99"}
+              ],
+              "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "line", "fillOpacity": 5}}}
+            },
+            {
+              "id": 15,
+              "title": "Muestras por scrape (por job)",
+              "type": "table",
+              "gridPos": {"x": 0, "y": 44, "w": 24, "h": 7},
+              "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
+              "targets": [{"refId": "A", "expr": "scrape_samples_scraped", "format": "table", "instant": true}]
             }
           ],
           "time": {"from": "now-6h", "to": "now"},
@@ -1144,52 +1300,139 @@
         "overwrite": true
       }
 
-- name: Crear dashboard Logs - Blockchain en Grafana  # noqa: command-instead-of-module
+- name: Crear dashboard Prometheus Avanzado en Grafana  # noqa: command-instead-of-module
   shell: |
     curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
       -u "{{ grafana_user }}:{{ grafana_password }}" \
       -X POST "{{ grafana_url }}/api/dashboards/db" \
       -H "Content-Type: application/json" \
-      -d @/tmp/grafana-dashboard-logs-blockchain.json
-  register: dash_logs_status
+      -d @/tmp/grafana-dashboard-prometheus-advanced.json
+  register: dash_prometheus_adv_status
   ignore_errors: true
 
-- name: Preparar dashboard Logs - Lambdas
+- name: Preparar dashboard Loki Avanzado
   copy:
-    dest: /tmp/grafana-dashboard-lambdas-logs.json
+    dest: /tmp/grafana-dashboard-loki-advanced.json
     content: |
       {
         "dashboard": {
-          "title": "Logs - Lambdas - {{ name_prefix }}",
-          "tags": ["truetally", "logs", "loki", "lambda"],
+          "title": "Loki Avanzado - {{ name_prefix }}",
+          "tags": ["truetally", "loki", "logs", "advanced"],
           "timezone": "browser",
           "panels": [
             {
               "id": 1,
-              "title": "Log Volume por funcion Lambda",
-              "type": "timeseries",
-              "gridPos": {"x": 0, "y": 0, "w": 24, "h": 6},
+              "title": "Lineas de log (1h)",
+              "type": "stat",
+              "gridPos": {"x": 0, "y": 0, "w": 8, "h": 6},
               "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
-              "targets": [
-                {
-                  "refId": "A",
-                  "expr": "sum(count_over_time({job=\"lambda\"}[5m])) by (function)"
-                }
-              ],
-              "yaxes": [{"format": "short"}, {"format": "short"}]
+              "targets": [{"refId": "A", "expr": "sum(count_over_time({job=~\".+\"}[1h]))"}],
+              "reduceCalc": "last",
+              "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "blue"}]}}}
             },
             {
               "id": 2,
-              "title": "Logs de aplicacion Lambda",
-              "type": "logs",
-              "gridPos": {"x": 0, "y": 6, "w": 24, "h": 14},
+              "title": "Lineas de error (1h)",
+              "type": "stat",
+              "gridPos": {"x": 8, "y": 0, "w": 8, "h": 6},
               "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
-              "targets": [
-                {
-                  "refId": "A",
-                  "expr": "{% raw %}{job=\"lambda\"} |= \"\" !~ \"^(START |END |REPORT |INIT_START |REPORT RequestId)\" | line_format \"{{ .logGroup | regexp \"/aws/lambda/\" | replace \"/aws/lambda/\" \"\" | regexp \"^([^_]+)_\" | replace \"^([^_]+)_\" \"$1\" }}\"{% endraw %}"
+              "targets": [{"refId": "A", "expr": "sum(count_over_time({job=~\".+\"} |~ \"(?i)(error|panic|exception|fail)\" [1h]))"}],
+              "reduceCalc": "last",
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "color": {"mode": "thresholds"},
+                  "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "green"}, {"value": 1, "color": "red"}]}
                 }
-              ]
+              }
+            },
+            {
+              "id": 3,
+              "title": "Jobs activos",
+              "type": "stat",
+              "gridPos": {"x": 16, "y": 0, "w": 8, "h": 6},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "targets": [{"refId": "A", "expr": "count(sum by (job) (count_over_time({job=~\".+\"}[15m])))"}],
+              "reduceCalc": "last",
+              "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"value": null, "color": "green"}]}}}
+            },
+            {
+              "id": 4,
+              "title": "Volumen de logs por job (lineas/5m)",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 6, "w": 12, "h": 8},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "targets": [{"refId": "A", "expr": "sum(count_over_time({job=~\".+\"}[5m])) by (job)"}],
+              "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 20, "stacking": {"mode": "normal"}}}}
+            },
+            {
+              "id": 5,
+              "title": "Volumen de logs por funcion (lineas/5m)",
+              "type": "timeseries",
+              "gridPos": {"x": 12, "y": 6, "w": 12, "h": 8},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "targets": [{"refId": "A", "expr": "sum(count_over_time({job=~\".+\"}[5m])) by (function)"}],
+              "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 20, "stacking": {"mode": "normal"}}}}
+            },
+            {
+              "id": 6,
+              "title": "Tasa de errores por job (errores/min)",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 14, "w": 12, "h": 8},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "targets": [{"refId": "A", "expr": "sum(rate({job=~\".+\"} |~ \"(?i)(error|panic|exception|fail)\" [5m])) by (job) * 60"}],
+              "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10}}}
+            },
+            {
+              "id": 7,
+              "title": "Actividad del nodo blockchain (lineas/5m)",
+              "type": "timeseries",
+              "gridPos": {"x": 12, "y": 14, "w": 12, "h": 8},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "targets": [{"refId": "A", "expr": "sum(count_over_time({job=\"blockchain\"}[5m]))", "legendFormat": "blockchain-node"}],
+              "fieldConfig": {"defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 25}}}
+            },
+            {
+              "id": 8,
+              "title": "Distribucion de logs por job (1h)",
+              "type": "piechart",
+              "gridPos": {"x": 0, "y": 22, "w": 8, "h": 8},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "targets": [{"refId": "A", "expr": "sum(count_over_time({job=~\".+\"}[1h])) by (job)", "instant": true}]
+            },
+            {
+              "id": 9,
+              "title": "Distribucion de logs por funcion (1h)",
+              "type": "piechart",
+              "gridPos": {"x": 8, "y": 22, "w": 8, "h": 8},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "targets": [{"refId": "A", "expr": "sum(count_over_time({job=~\".+\"}[1h])) by (function)", "instant": true}]
+            },
+            {
+              "id": 10,
+              "title": "Top funciones por volumen (1h)",
+              "type": "bargauge",
+              "gridPos": {"x": 16, "y": 22, "w": 8, "h": 8},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "targets": [{"refId": "A", "expr": "topk(8, sum(count_over_time({job=~\".+\"}[1h])) by (function))", "instant": true}],
+              "fieldConfig": {"defaults": {"unit": "short"}}
+            },
+            {
+              "id": 11,
+              "title": "Throughput de ingesta (bytes/s) por job",
+              "type": "timeseries",
+              "gridPos": {"x": 0, "y": 30, "w": 12, "h": 8},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "targets": [{"refId": "A", "expr": "sum(bytes_rate({job=~\".+\"}[5m])) by (job)"}],
+              "fieldConfig": {"defaults": {"unit": "Bps", "custom": {"drawStyle": "line", "fillOpacity": 10}}}
+            },
+            {
+              "id": 12,
+              "title": "Volumen de logs por log_group (1h)",
+              "type": "table",
+              "gridPos": {"x": 12, "y": 30, "w": 12, "h": 8},
+              "datasource": {"type": "loki", "uid": "{{ ds_loki_uid }}"},
+              "targets": [{"refId": "A", "expr": "sum(count_over_time({job=~\".+\"}[1h])) by (log_group)", "instant": true}]
             }
           ],
           "time": {"from": "now-6h", "to": "now"},
@@ -1198,14 +1441,14 @@
         "overwrite": true
       }
 
-- name: Crear dashboard Logs - Lambdas en Grafana  # noqa: command-instead-of-module
+- name: Crear dashboard Loki Avanzado en Grafana  # noqa: command-instead-of-module
   shell: |
     curl -s -o /tmp/grafana-resp.json -w "%{http_code}" \
       -u "{{ grafana_user }}:{{ grafana_password }}" \
       -X POST "{{ grafana_url }}/api/dashboards/db" \
       -H "Content-Type: application/json" \
-      -d @/tmp/grafana-dashboard-lambdas-logs.json
-  register: dash_lambdas_status
+      -d @/tmp/grafana-dashboard-loki-advanced.json
+  register: dash_loki_adv_status
   ignore_errors: true
 
 - name: Mostrar informacion de acceso al stack de observabilidad
@@ -1226,8 +1469,8 @@
       - "  - SQS: {{ dash_sqs_status.stdout | default('N/A') }}"
       - "  - RDS PostgreSQL: {{ dash_rds_status.stdout | default('N/A') }}"
       - "  - Observability Stack: {{ dash_stack_status.stdout | default('N/A') }}"
-      - "  - Logs - Blockchain: {{ dash_logs_status.stdout | default('N/A') }}"
-      - "  - Logs - Lambdas: {{ dash_lambdas_status.stdout | default('N/A') }}"
+      - "  - Prometheus Avanzado: {{ dash_prometheus_adv_status.stdout | default('N/A') }}"
+      - "  - Loki Avanzado: {{ dash_loki_adv_status.stdout | default('N/A') }}"
       - "=============================================="
       - "Data Sources configurados:"
       - "  - CloudWatch: {{ ds_cloudwatch_status.stdout | default('N/A') }}"
