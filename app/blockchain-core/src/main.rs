@@ -10,31 +10,28 @@ use axum::{
 };
 use blockchain_core::{Block, Blockchain, Vote};
 use chrono::Utc;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 const CHAIN_DATA_PATH: &str = "/data/db/chain.json";
 
-static BLOCKCHAIN: Lazy<Arc<Mutex<Blockchain>>> = Lazy::new(|| {
+type SharedBlockchain = Arc<Mutex<Option<Blockchain>>>;
+
+fn load_blockchain() -> Blockchain {
     let chain_path = PathBuf::from(CHAIN_DATA_PATH);
     if chain_path.exists() {
         info!("Loading blockchain from {}", CHAIN_DATA_PATH);
-        Arc::new(Mutex::new(Blockchain::load_from_file(
-            &chain_path,
-            2,
-            false,
-        )))
+        Blockchain::load_from_file(&chain_path, 2, false)
     } else {
         info!("Creating new blockchain");
-        Arc::new(Mutex::new(Blockchain::new(2, false)))
+        Blockchain::new(2, false)
     }
-});
+}
 
 #[derive(Serialize)]
 struct ApiResponse<T> {
@@ -100,9 +97,11 @@ struct VoteResult {
 }
 
 async fn add_vote(
-    State(blockchain): State<Arc<Mutex<Blockchain>>>,
+    State(blockchain): State<SharedBlockchain>,
     Json(payload): Json<VoteRequest>,
 ) -> Response {
+    let mut chain = blockchain.lock().await;
+    let chain = chain.as_mut().expect("Blockchain not loaded yet");
     info!(
         "Received vote: election={}, candidate={}, voter={}",
         payload.election_id, payload.candidate_id, payload.voter_public_key
@@ -115,8 +114,6 @@ async fn add_vote(
         signature: payload.signature,
         timestamp: Utc::now(),
     };
-
-    let mut chain = blockchain.lock().await;
 
     match chain.add_block(vote) {
         Ok(block) => {
@@ -143,8 +140,9 @@ async fn add_vote(
     }
 }
 
-async fn get_blocks(State(blockchain): State<Arc<Mutex<Blockchain>>>) -> Response {
+async fn get_blocks(State(blockchain): State<SharedBlockchain>) -> Response {
     let chain = blockchain.lock().await;
+    let chain = chain.as_ref().expect("Blockchain not loaded yet");
     let blocks: Vec<BlockResponse> = chain
         .chain
         .iter()
@@ -155,10 +153,11 @@ async fn get_blocks(State(blockchain): State<Arc<Mutex<Blockchain>>>) -> Respons
 }
 
 async fn get_block(
-    State(blockchain): State<Arc<Mutex<Blockchain>>>,
+    State(blockchain): State<SharedBlockchain>,
     Path(index): Path<u64>,
 ) -> Response {
     let chain = blockchain.lock().await;
+    let chain = chain.as_ref().expect("Blockchain not loaded yet");
 
     match chain.chain.get(index as usize) {
         Some(block) => (
@@ -177,17 +176,19 @@ async fn get_block(
 }
 
 async fn get_results(
-    State(state): State<Arc<Mutex<Blockchain>>>,
+    State(state): State<SharedBlockchain>,
     Path(election_id): Path<String>,
 ) -> Response {
     let chain = state.lock().await;
+    let chain = chain.as_ref().expect("Blockchain not loaded yet");
     let results = chain.get_results_for_election(&election_id);
 
     (StatusCode::OK, Json(ApiResponse::success(results))).into_response()
 }
 
-async fn validate_chain(State(state): State<Arc<Mutex<Blockchain>>>) -> Response {
+async fn validate_chain(State(state): State<SharedBlockchain>) -> Response {
     let chain = state.lock().await;
+    let chain = chain.as_ref().expect("Blockchain not loaded yet");
 
     match chain.validate_chain() {
         Ok(_) => (
@@ -237,6 +238,7 @@ async fn shutdown_signal() {
 
 #[tokio::main]
 async fn main() {
+    eprintln!("blockchain-node starting");
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -256,7 +258,7 @@ async fn main() {
 
     info!("Starting blockchain core on port {}", port);
 
-    let blockchain = Arc::clone(&*BLOCKCHAIN);
+    let blockchain: SharedBlockchain = Arc::new(Mutex::new(None));
 
     let app = Router::new()
         .route("/health", get(health_check))
@@ -265,7 +267,7 @@ async fn main() {
         .route("/blocks/:index", get(get_block))
         .route("/results/:election_id", get(get_results))
         .route("/validate", get(validate_chain))
-        .with_state(blockchain);
+        .with_state(blockchain.clone());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     info!("Blockchain node running on http://{}", addr);
@@ -273,6 +275,21 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .expect("Failed to bind to port");
+
+    let blockchain_for_load = blockchain.clone();
+    tokio::spawn(async move {
+        let chain = match tokio::task::spawn_blocking(load_blockchain)
+            .await
+        {
+            Ok(chain) => chain,
+            Err(e) => {
+                error!(error = %e, "Failed to load blockchain");
+                Blockchain::new(2, false)
+            }
+        };
+        *blockchain_for_load.lock().await = Some(chain);
+        info!("Blockchain loaded and ready");
+    });
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
