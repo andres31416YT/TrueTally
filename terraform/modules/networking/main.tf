@@ -123,14 +123,18 @@ resource "aws_security_group" "lambda" {
   tags = { Name = "${local.name_prefix}-lambda-sg" }
 }
 
-resource "aws_security_group_rule" "lambda_to_rds" {
-  description              = "Allow PostgreSQL access from Lambda"
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.database.id
-  source_security_group_id = aws_security_group.lambda.id
+# Recurso moderno (no el legado aws_security_group_rule): usa el
+# security_group_rule_id nativo de AWS como id, sin hash calculado del
+# lado del cliente, y soporta actualizar la descripcion in-place. El
+# legado aws_security_group_rule recalculaba su id en cada plan/apply y
+# provocaba destroy+create espurios que chocaban con la regla real en AWS.
+resource "aws_vpc_security_group_ingress_rule" "lambda_to_rds" {
+  security_group_id            = aws_security_group.database.id
+  description                  = "Allow PostgreSQL access from Lambda"
+  ip_protocol                  = "tcp"
+  from_port                    = 5432
+  to_port                      = 5432
+  referenced_security_group_id = aws_security_group.lambda.id
 }
 
 resource "aws_security_group" "database" {
@@ -138,8 +142,8 @@ resource "aws_security_group" "database" {
   description = "Security group for PostgreSQL (RDS)"
   vpc_id      = aws_vpc.main.id
   # Nota: el ingress desde Lambda se gestiona con el recurso independiente
-  # aws_security_group_rule.lambda_to_rds. No declarar reglas in-line aqui:
-  # mezclar reglas in-line con aws_security_group_rule en el mismo SG hace que
+  # aws_vpc_security_group_ingress_rule.lambda_to_rds. No declarar reglas
+  # in-line aqui: mezclarlas con reglas standalone en el mismo SG hace que
   # Terraform revoque y re-autorice el mismo permiso en cada apply.
   egress {
     from_port   = 0
