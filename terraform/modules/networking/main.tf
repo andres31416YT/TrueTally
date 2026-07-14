@@ -124,7 +124,7 @@ resource "aws_security_group" "lambda" {
 }
 
 resource "aws_security_group_rule" "lambda_to_rds" {
-  description              = "Allow Lambda to connect to RDS PostgreSQL"
+  description              = "Allow PostgreSQL access from Lambda"
   type                     = "ingress"
   from_port                = 5432
   to_port                  = 5432
