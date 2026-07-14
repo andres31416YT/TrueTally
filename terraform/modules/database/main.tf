@@ -78,7 +78,7 @@ resource "aws_db_instance" "main" {
 
   final_snapshot_identifier = var.skip_final_snapshot ? null : "${local.name_prefix}-postgres-final"
 
-  vpc_security_group_ids = [var.lambda_security_group_id]
+  vpc_security_group_ids = [var.database_sg_id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
   multi_az               = true
 
