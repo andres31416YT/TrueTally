@@ -258,7 +258,7 @@ async fn main() {
         .route("/health", get(health_check))
         .route("/vote", post(add_vote))
         .route("/blocks", get(get_blocks))
-        .route("/blocks/{index}", get(get_block))
+        .route("/blocks/:index", get(get_block))
         .route("/results/:election_id", get(get_results))
         .route("/validate", get(validate_chain))
         .with_state(blockchain);
