@@ -129,7 +129,7 @@ resource "aws_security_group_rule" "lambda_to_rds" {
   from_port                = 5432
   to_port                  = 5432
   protocol                 = "tcp"
-  security_group_id        = aws_security_group.lambda.id
+  security_group_id        = aws_security_group.database.id
   source_security_group_id = aws_security_group.lambda.id
 }
 
@@ -137,13 +137,10 @@ resource "aws_security_group" "database" {
   name        = "${local.name_prefix}-database-sg"
   description = "Security group for PostgreSQL (RDS)"
   vpc_id      = aws_vpc.main.id
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.lambda.id]
-    description     = "Allow PostgreSQL access from Lambda"
-  }
+  # Nota: el ingress desde Lambda se gestiona con el recurso independiente
+  # aws_security_group_rule.lambda_to_rds. No declarar reglas in-line aqui:
+  # mezclar reglas in-line con aws_security_group_rule en el mismo SG hace que
+  # Terraform revoque y re-autorice el mismo permiso en cada apply.
   egress {
     from_port   = 0
     to_port     = 0
@@ -165,6 +162,14 @@ resource "aws_security_group" "blockchain" {
     protocol    = "tcp"
     self        = true
     description = "Allow blockchain node communication"
+  }
+
+  ingress {
+    from_port       = 9944
+    to_port         = 9944
+    protocol        = "tcp"
+    security_groups = [aws_security_group.lambda.id]
+    description     = "Allow Lambda (procesador/acceso) to reach the blockchain node RPC"
   }
 
   ingress {
