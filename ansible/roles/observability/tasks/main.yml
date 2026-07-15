@@ -1223,7 +1223,21 @@
               "gridPos": {"x": 0, "y": 22, "w": 8, "h": 6},
               "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
               "targets": [{"refId": "A", "expr": "process_resident_memory_bytes{job=\"prometheus\"}"}],
-              "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}}
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes",
+                  "min": 0,
+                  "max": 536870912,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {"value": 0, "color": "green"},
+                      {"value": 375809638, "color": "yellow"},
+                      {"value": 483183820, "color": "red"}
+                    ]
+                  }
+                }
+              }
             },
             {
               "id": 9,
@@ -1232,7 +1246,21 @@
               "gridPos": {"x": 8, "y": 22, "w": 8, "h": 6},
               "datasource": {"type": "prometheus", "uid": "{{ ds_prometheus_uid }}"},
               "targets": [{"refId": "A", "expr": "process_resident_memory_bytes{job=\"loki\"}"}],
-              "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}}
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes",
+                  "min": 0,
+                  "max": 536870912,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {"value": 0, "color": "green"},
+                      {"value": 375809638, "color": "yellow"},
+                      {"value": 483183820, "color": "red"}
+                    ]
+                  }
+                }
+              }
             },
             {
               "id": 10,
