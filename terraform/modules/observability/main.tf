@@ -305,7 +305,15 @@ resource "aws_ecs_task_definition" "loki" {
       protocol      = "tcp"
     }]
     command = [
-      "-config.file=/etc/loki/local-config.yaml"
+      "-config.file=/etc/loki/local-config.yaml",
+      # Config por defecto rechaza con 500 "too many outstanding requests"
+      # apenas un dashboard con varios paneles dispara sus queries en
+      # paralelo (ej. Loki Avanzado tiene 12). Se sube la cola por-tenant
+      # para que se encolen en vez de rechazarse, y la concurrencia del
+      # querier para procesarlas un poco mas rapido con los recursos
+      # disponibles (256 CPU / 512MB).
+      "-frontend.max-outstanding-per-tenant=2048",
+      "-querier.max-concurrent=8"
     ]
   }])
 
