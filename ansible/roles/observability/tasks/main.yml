@@ -1451,6 +1451,39 @@
   register: dash_loki_adv_status
   ignore_errors: true
 
+# =============================================================================
+# Limpieza de dashboards redundantes
+# =============================================================================
+# Dashboards de logs crudos (paneles tipo "logs") y dashboards de prueba
+# manuales que quedaron huerfanos en Grafana: crear un dashboard nuevo via
+# la API no borra los viejos, asi que hay que eliminarlos explicitamente.
+# Se buscan por titulo (idempotente: si ya no existen, no hace nada).
+- name: Buscar UID de dashboards redundantes a eliminar
+  shell: |
+    curl -s -u "{{ grafana_user }}:{{ grafana_password }}" \
+      "{{ grafana_url }}/api/search?query={{ item | urlencode }}&type=dash-db" \
+      | jq -r --arg t "{{ item }} - {{ name_prefix }}" '.[] | select(.title == $t) | .uid' | head -n1
+  loop:
+    - "Logs - Blockchain"
+    - "Logs - Lambdas"
+    - "Loki Test"
+    - "Prometheus Test"
+  register: redundant_dashboard_uids
+  changed_when: false
+  ignore_errors: true
+
+- name: Eliminar dashboards redundantes en Grafana  # noqa: command-instead-of-module
+  shell: |
+    curl -s -o /dev/null -w "%{http_code}" \
+      -u "{{ grafana_user }}:{{ grafana_password }}" \
+      -X DELETE "{{ grafana_url }}/api/dashboards/uid/{{ item.stdout }}"
+  loop: "{{ redundant_dashboard_uids.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stdout is defined and item.stdout | trim | length > 0
+  register: dash_cleanup_status
+  ignore_errors: true
+
 - name: Mostrar informacion de acceso al stack de observabilidad
   debug:
     msg:
@@ -1471,6 +1504,8 @@
       - "  - Observability Stack: {{ dash_stack_status.stdout | default('N/A') }}"
       - "  - Prometheus Avanzado: {{ dash_prometheus_adv_status.stdout | default('N/A') }}"
       - "  - Loki Avanzado: {{ dash_loki_adv_status.stdout | default('N/A') }}"
+      - "=============================================="
+      - "Dashboards redundantes eliminados: {{ dash_cleanup_status.results | default([]) | selectattr('stdout', 'defined') | map(attribute='item.item') | list }}"
       - "=============================================="
       - "Data Sources configurados:"
       - "  - CloudWatch: {{ ds_cloudwatch_status.stdout | default('N/A') }}"
