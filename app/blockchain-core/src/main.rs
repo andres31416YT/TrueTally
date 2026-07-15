@@ -263,6 +263,7 @@ async fn main() {
         )
         .with(
             tracing_subscriber::fmt::layer()
+                .json()
                 .with_writer(std::io::stderr)
                 .with_ansi(false),
         )
