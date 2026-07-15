@@ -100,6 +100,7 @@ async fn add_vote(
     State(blockchain): State<SharedBlockchain>,
     Json(payload): Json<VoteRequest>,
 ) -> Response {
+    eprintln!("add_vote handler enter");
     let mut chain = blockchain.lock().await;
     let chain = chain.as_mut().expect("Blockchain not loaded yet");
     info!(
@@ -119,6 +120,7 @@ async fn add_vote(
         Ok(block) => {
             let _ = chain.save_to_file(CHAIN_DATA_PATH);
             info!("Block added: index={}, hash={}", block.index, block.hash);
+            eprintln!("add_vote block_added index={}", block.index);
             (
                 StatusCode::CREATED,
                 Json(ApiResponse::success(VoteResult {
@@ -131,6 +133,7 @@ async fn add_vote(
         }
         Err(e) => {
             warn!("Vote rejected: {}", e);
+            eprintln!("add_vote rejected err={}", e);
             (
                 StatusCode::BAD_REQUEST,
                 Json(ApiResponse::<VoteResult>::error(e)),
