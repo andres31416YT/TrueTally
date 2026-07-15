@@ -9,7 +9,7 @@ use axum::{
     Json, Router,
 };
 use blockchain_core::{Block, Blockchain, Vote};
-use chrono::Utc;
+use chrono::{Local, Utc};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -19,6 +19,18 @@ use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 const CHAIN_DATA_PATH: &str = "/data/db/chain.json";
+
+fn print_environment_details() {
+    let now = Local::now().to_rfc3339();
+    let cwd = std::env::current_dir().unwrap_or_default().to_string_lossy().to_string();
+    let workspace = std::env::var("WORKSPACE_ROOT").unwrap_or_else(|_| cwd.clone());
+
+    eprintln!("<environment_details>");
+    eprintln!("Current time: {}", now);
+    eprintln!("Working directory: {}", cwd);
+    eprintln!("Workspace root folder: {}", workspace);
+    eprintln!("</environment_details>");
+}
 
 type SharedBlockchain = Arc<Mutex<Option<Blockchain>>>;
 
@@ -242,6 +254,8 @@ async fn shutdown_signal() {
 #[tokio::main]
 async fn main() {
     eprintln!("blockchain-node starting");
+    print_environment_details();
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
