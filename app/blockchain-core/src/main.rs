@@ -246,15 +246,17 @@ async fn main() {
         )
         .with(
             tracing_subscriber::fmt::layer()
-                .with_writer(std::io::stdout)
+                .with_writer(std::io::stderr)
                 .with_ansi(false),
         )
         .init();
+    eprintln!("tracing init done");
 
     let port = std::env::var("PORT")
         .unwrap_or_else(|_| "9944".to_string())
         .parse::<u16>()
         .expect("PORT must be a valid u16");
+    eprintln!("port={}", port);
 
     info!("Starting blockchain core on port {}", port);
 
@@ -268,6 +270,7 @@ async fn main() {
         .route("/results/:election_id", get(get_results))
         .route("/validate", get(validate_chain))
         .with_state(blockchain.clone());
+    eprintln!("router built");
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     info!("Blockchain node running on http://{}", addr);
@@ -275,9 +278,11 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .expect("Failed to bind to port");
+    eprintln!("tcp listener bound");
 
     let blockchain_for_load = blockchain.clone();
     tokio::spawn(async move {
+        eprintln!("spawn_blocking start");
         let chain = match tokio::task::spawn_blocking(load_blockchain)
             .await
         {
@@ -287,6 +292,7 @@ async fn main() {
                 Blockchain::new(2, false)
             }
         };
+        eprintln!("load_blockchain done");
         *blockchain_for_load.lock().await = Some(chain);
         info!("Blockchain loaded and ready");
     });
